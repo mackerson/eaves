@@ -29,8 +29,8 @@ jobs:
       # --ignore-scripts skips the root postinstall, which rebuilds
       # better-sqlite3 against Electron's ABI, ad-hoc signs native addons for
       # macOS, and builds the plugin UI bundles. None of that is reachable
-      # from a typecheck or a test run: the suite runs on system Node, and the
-      # bundled plugins live in private sibling repos this job does not clone.
+      # from a typecheck or a test run: the suite runs on system Node, and this
+      # job does not clone the sibling plugin repos.
       - name: Install dependencies
         run: yarn install --frozen-lockfile --ignore-scripts
 

@@ -23,14 +23,16 @@ Which plugins ship in a packaged build is declared in `bundled-plugins.json`
 
 ```bash
 git clone https://github.com/mackerson/enclave-ai.git
-cd enclave
+cd enclave-ai
 yarn install          # deps + rebuild better-sqlite3 + build plugin UIs (postinstall)
 yarn setup:plugins    # clone the plugin repos as siblings + symlink into plugins/
 yarn dev
 ```
 
-`yarn setup:plugins` is **required** — without it `plugins/` is empty and no
-plugins load. `yarn setup:plugins:pull` updates every plugin checkout.
+`yarn setup:plugins` is **required** for a full build (`yarn build` copies
+bundled plugins into `dist/plugins`). The app will start in `yarn dev` without
+them; no bundled plugins load. `yarn setup:plugins:pull` updates every plugin
+checkout.
 
 ## Plugin UI build (build-on-install)
 

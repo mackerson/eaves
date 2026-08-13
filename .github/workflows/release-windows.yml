@@ -33,8 +33,6 @@ jobs:
         run: yarn config set script-shell "C:\\Program Files\\Git\\bin\\bash.exe"
 
       - name: Clone bundled plugins
-        env:
-          PLUGIN_CLONE_TOKEN: ${{ secrets.PLUGIN_CLONE_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p plugins
@@ -52,7 +50,7 @@ jobs:
             rm -rf "$dest"
             echo "Cloning $repo@$ref -> $dest"
             git clone --depth 1 --branch "$ref" \
-              "https://x-access-token:${PLUGIN_CLONE_TOKEN}@github.com/${repo}.git" \
+              "https://github.com/${repo}.git" \
               "$dest"
           done
 
