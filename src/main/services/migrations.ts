@@ -20,6 +20,9 @@ interface Migration {
   requiresForeignKeysOff?: boolean;
 }
 
+/** The single baseline every database is brought up to. */
+const BASELINE_VERSION = 75;
+
 function withTransaction(db: Database.Database, fn: () => void): void {
   db.exec('BEGIN');
   try {
@@ -48,12 +51,12 @@ function withTransaction(db: Database.Database, fn: () => void): void {
  * None of it can apply to a database created by a public build, and carrying
  * it forward would mean shipping repairs for corruption no user can have.
  *
- * Upgrade path. A database at exactly v74 runs this baseline as a no-op
- * (everything is CREATE ... IF NOT EXISTS) and is stamped to 75. Anything
- * below v74 is rejected — see MIN_SUPPORTED_VERSION. The baseline creates
- * missing *tables*, so it cannot repair a database missing a *column* added
- * between v53 and v74, and quietly running on one would produce exactly the
- * kind of half-migrated state a squash is supposed to prevent.
+ * Upgrade path. A fresh database gets the whole schema in one pass. An
+ * existing one from anywhere in v52..v74 is brought up to it by
+ * convergeExistingDatabase below — the CREATE statements here fill in missing
+ * tables, and that pass fills in missing columns, which is the half they
+ * cannot see. Below v52 is refused: that squash folded chats into channels,
+ * a structural change no column-adding reproduces.
  *
  * Future schema changes go in as new migrations at version 76+.
  */
@@ -557,6 +560,11 @@ function createBaselineSchema(db: Database.Database): void {
     );
   `);
 
+  // Before the indexes below: an existing database may be missing columns
+  // those indexes are declared over (idx_channels_task_id, idx_activities_agent),
+  // and CREATE INDEX on an absent column is a hard error, not a no-op.
+  convergeExistingDatabase(db);
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_mcp_servers_agent_id ON mcp_servers(agent_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
@@ -616,8 +624,197 @@ function createBaselineSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_sync_changes_row ON sync_changes(table_name, row_id);
   `);
 
+  // Which FTS indexes are absent *before* we create them. An external-content
+  // FTS5 table proxies COUNT(*) to its content table, so once it exists there
+  // is no cheap way to tell a populated index from an empty one.
+  const missingBefore = new Set(
+    ['messages_fts', 'memory_fts'].filter(
+      name => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?").get(name) === undefined,
+    ),
+  );
+
   createSearchIndexes(db);
   seedSyncIdentityAndTriggers(db);
+
+  // Fill any index that did not exist a moment ago from a content table that
+  // already had rows. `missingBefore` is captured above because after
+  // createSearchIndexes there is no way left to ask the question.
+  for (const [index, content] of [['messages_fts', 'messages'], ['memory_fts', 'memory_entries']] as const) {
+    if (missingBefore.has(index)) backfillSearchIndex(db, index, content);
+  }
+}
+
+/**
+ * Bring a database created by an older build up to the baseline's shape.
+ *
+ * Everything above is `CREATE ... IF NOT EXISTS`, which fills in missing
+ * tables, indexes and triggers but is blind to missing *columns* — an existing
+ * table is left exactly as it was found. That gap is why this migration
+ * originally refused anything below v74 outright.
+ *
+ * Refusing was the wrong call. v0.3.12 — the last build most installs actually
+ * received — stamps `user_version` 72, so the floor rejected the only
+ * databases in the field, and the rejection throws during `whenReady()` before
+ * a window is ever created: the app appeared to start and then showed nothing.
+ * The documented escape hatch ("run 0.3.13 first") named a build that was only
+ * ever a draft.
+ *
+ * So the baseline converges instead. Every statement here is idempotent and a
+ * no-op on a fresh database, and each one reproduces the DDL its original
+ * migration used verbatim — same types, same defaults, same CHECK constraints —
+ * so a converged database is not merely workable but byte-identical to a fresh
+ * one. `migrations.test.ts` proves that for every version from 52 to 74.
+ */
+function convergeExistingDatabase(db: Database.Database): void {
+  const columnsOf = (table: string) =>
+    (db.pragma(`table_info(${table})`) as Array<{ name: string }>).map(c => c.name);
+
+  const tableExists = (table: string) =>
+    db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?").get(table) !== undefined;
+
+  // Column DDL copied from the migration that introduced each one. Anything
+  // NOT NULL carries a default, which SQLite requires of ADD COLUMN.
+  const additions: Array<[table: string, column: string, ddl: string]> = [
+    ['settings', 'openrouter_sticky_provider', 'openrouter_sticky_provider INTEGER NOT NULL DEFAULT 1'],
+    ['settings', 'font_family', 'font_family TEXT'],
+    ['settings', 'custom_font_family', 'custom_font_family TEXT'],
+    ['settings', 'font_scale', 'font_scale REAL'],
+    ['settings', 'line_spacing', 'line_spacing REAL'],
+    ['settings', 'user_avatar', 'user_avatar TEXT'],
+    ['settings', 'memory_embedding', 'memory_embedding TEXT'],
+    ['settings', 'routines_paused', 'routines_paused INTEGER NOT NULL DEFAULT 0'],
+    ['agents', 'compaction_mode', 'compaction_mode TEXT'],
+    ['channels', 'context_summary', 'context_summary TEXT'],
+    ['channels', 'summary_through_message_id', 'summary_through_message_id TEXT'],
+    ['channels', 'summary_updated_at', 'summary_updated_at INTEGER'],
+    ['channels', 'folder_id', 'folder_id TEXT'],
+    ['activities', 'audience', "audience TEXT NOT NULL DEFAULT 'system'"],
+    ['activities', 'agent_id', 'agent_id TEXT'],
+    ['routines', 'last_status', "last_status TEXT CHECK(last_status IN ('success','failure'))"],
+    ['routines', 'last_error', 'last_error TEXT'],
+    ['routines', 'consecutive_failures', 'consecutive_failures INTEGER NOT NULL DEFAULT 0'],
+    ['routines', 'pinned', 'pinned INTEGER NOT NULL DEFAULT 0'],
+    ['workflows', 'pinned', 'pinned INTEGER NOT NULL DEFAULT 0'],
+  ];
+
+  let added = 0;
+  for (const [table, column, ddl] of additions) {
+    if (!tableExists(table)) continue; // fresh DB: the CREATE above already has it
+    if (columnsOf(table).includes(column)) continue;
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+    added++;
+  }
+
+  const rebuilt = widenChannelTypeCheck(db);
+
+  if (added > 0 || rebuilt) {
+    logger.info(
+      `[Database] Converged an existing database to the v${BASELINE_VERSION} baseline ` +
+      `(${added} column(s) added${rebuilt ? ', channels rebuilt' : ''})`,
+    );
+  }
+}
+
+/**
+ * Widen `channels.type` to admit 'work', and add the two columns a work
+ * session needs. Returns whether it did anything.
+ *
+ * A CHECK constraint cannot be altered in place, so this is SQLite's table
+ * rebuild. The runner disables foreign keys around this migration: SQLite
+ * performs an implicit `DELETE FROM` before `DROP TABLE`, so with enforcement
+ * on, dropping `channels` fires every ON DELETE CASCADE hanging off it and
+ * takes `messages` with it.
+ *
+ * Columns are copied by name intersection rather than a fixed list, because
+ * the table being rebuilt might come from anywhere in v52..v70 and they do not
+ * all have the same columns. The `additions` pass above runs first, so by the
+ * time we get here the old table has every column the new one does.
+ */
+function widenChannelTypeCheck(db: Database.Database): boolean {
+  const sql = (db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='channels'",
+  ).get() as { sql: string } | undefined)?.sql;
+  if (!sql || sql.includes("'work'")) return false;
+
+  const existing = (db.pragma('table_info(channels)') as Array<{ name: string }>).map(c => c.name);
+
+  // DROP TABLE takes every trigger on the table with it, permanently. The sync
+  // oplog rides on these, so losing them stops channel changes propagating to
+  // paired devices with nothing failing loudly. Capture them as they actually
+  // are and replay them after the rename.
+  const triggers = (db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='trigger' AND tbl_name='channels' AND sql IS NOT NULL",
+  ).all() as Array<{ sql: string }>).map(r => r.sql);
+
+  const target = [
+    'id', 'name', 'type', 'project_id', 'pinned', 'agent_id', 'archived_at',
+    'last_message_at', 'tags', 'user_persona', 'context_summary',
+    'summary_through_message_id', 'summary_updated_at', 'folder_id', 'task_id',
+    'parent_channel_id', 'created_at',
+  ];
+  const copied = target.filter(c => existing.includes(c)).join(', ');
+  const before = (db.prepare('SELECT COUNT(*) AS c FROM channels').get() as { c: number }).c;
+
+  db.exec(`
+    CREATE TABLE channels_new (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('public', 'project', 'direct', 'work')),
+      project_id TEXT,
+      pinned INTEGER DEFAULT 0,
+      agent_id TEXT,
+      archived_at INTEGER,
+      last_message_at INTEGER,
+      tags TEXT,
+      user_persona TEXT,
+      context_summary TEXT,
+      summary_through_message_id TEXT,
+      summary_updated_at INTEGER,
+      folder_id TEXT,
+      task_id TEXT,
+      parent_channel_id TEXT,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
+      FOREIGN KEY (parent_channel_id) REFERENCES channels(id) ON DELETE SET NULL
+    );
+
+    INSERT INTO channels_new (${copied}) SELECT ${copied} FROM channels;
+
+    DROP TABLE channels;
+    ALTER TABLE channels_new RENAME TO channels;
+
+    CREATE INDEX IF NOT EXISTS idx_channels_project_id ON channels(project_id);
+    CREATE INDEX IF NOT EXISTS idx_channels_type ON channels(type);
+    CREATE INDEX IF NOT EXISTS idx_channels_agent_id ON channels(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_channels_archived_at ON channels(archived_at);
+    CREATE INDEX IF NOT EXISTS idx_channels_last_message_at ON channels(last_message_at);
+    CREATE INDEX IF NOT EXISTS idx_channels_task_id ON channels(task_id);
+    CREATE INDEX IF NOT EXISTS idx_channels_parent ON channels(parent_channel_id);
+  `);
+
+  for (const t of triggers) db.exec(t);
+
+  const after = (db.prepare('SELECT COUNT(*) AS c FROM channels').get() as { c: number }).c;
+  if (after !== before) {
+    throw new Error(`channels rebuild lost rows: ${before} before, ${after} after`);
+  }
+  return true;
+}
+
+/**
+ * Rebuild an FTS index from its content table when that table has rows.
+ *
+ * An FTS5 external-content index is a shadow of its base table, so creating
+ * one over a table that already has content leaves it empty — and an empty
+ * index fails silently, returning no matches rather than an error.
+ */
+function backfillSearchIndex(db: Database.Database, index: string, content: string): void {
+  const rows = (db.prepare(`SELECT COUNT(*) AS c FROM ${content}`).get() as { c: number }).c;
+  if (rows === 0) return;
+  db.exec(`INSERT INTO ${index}(${index}) VALUES('rebuild')`);
+  logger.info(`[Database] Rebuilt ${index} over ${rows} existing row(s)`);
 }
 
 /**
@@ -736,35 +933,39 @@ function seedSyncIdentityAndTriggers(db: Database.Database): void {
 export const migrations: Migration[] = [
   {
     version: 75,
-    description: 'Baseline schema v75 (squashed from v52-v74 at the public release)',
+    description: 'Baseline schema v75 (squashed from v52-v74; converges older databases)',
+    // Converging a pre-v71 database rebuilds `channels` to widen its type
+    // CHECK, and dropping that table with foreign keys enforced would cascade
+    // through `messages`. No-op on a fresh database, but the runner has to
+    // toggle the pragma either way — it cannot know in advance.
+    requiresForeignKeysOff: true,
     migrate: createBaselineSchema,
   },
 ];
 
 /**
- * The oldest schema the v75 baseline can take over from.
+ * The oldest schema this build can take over from.
  *
- * 74 is the last version the pre-squash incremental chain produced, and the
- * baseline is `CREATE ... IF NOT EXISTS` throughout: it fills in missing
- * tables, never missing columns. Run it on a v72 database and the tables all
- * exist, nothing is created, the version is stamped to 75 — and the columns
- * v73 and v74 added are still absent, which surfaces much later as a query
- * failing against a schema that claims to be current.
+ * 52 is where the schema's own history begins: the v52 squash folded chats
+ * into channels and collapsed the calendar tables, a structural change no
+ * amount of column-adding reproduces. Its one-off transform script is long
+ * gone, so a database older than that genuinely cannot be carried forward.
  *
- * So anything below 74 is refused at startup instead. The upgrade path for a
- * pre-squash database is the 0.3.13 build, which still carries the incremental
- * chain: run it once to reach 74, then this build takes over.
+ * Everything from 52 up is converged by the baseline — see
+ * convergeExistingDatabase. This floor was briefly 74, which was a mistake
+ * that shipped: v0.3.12 stamps 72, so the check rejected the only databases
+ * that existed in the field, and it threw before the window was created, so
+ * the app started and showed nothing at all.
  */
-const MIN_SUPPORTED_VERSION = 74;
+const MIN_SUPPORTED_VERSION = 52;
 
 export function runMigrations(db: Database.Database, currentVersion: number): void {
   if (currentVersion > 0 && currentVersion < MIN_SUPPORTED_VERSION) {
     throw new Error(
       `Database schema is too old for this build (user_version=${currentVersion}, ` +
-      `minimum ${MIN_SUPPORTED_VERSION}). The incremental migrations that reach ` +
-      `v${MIN_SUPPORTED_VERSION} were squashed into the v75 baseline. Install Enclave 0.3.13 ` +
-      `and open it once to bring the database up to v${MIN_SUPPORTED_VERSION}, then return to ` +
-      `this version. A development database can just be deleted and recreated.`
+      `minimum ${MIN_SUPPORTED_VERSION}). Databases from before the chats-into-channels ` +
+      `fold cannot be upgraded automatically. Move enclave.db aside and restart to ` +
+      `begin with a fresh one, keeping the old file in case the data is wanted later.`
     );
   }
 

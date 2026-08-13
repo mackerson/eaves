@@ -8,6 +8,7 @@ vi.mock('./logger', () => ({
 }));
 
 import { migrations, runMigrations } from './migrations';
+import { legacyMigrations } from './__fixtures__/legacyChain';
 
 const HEAD = 75;
 
@@ -80,6 +81,34 @@ function v74Database(): Database.Database {
   db.exec(V74_FIXTURE);
   db.pragma('user_version = 74');
   db.pragma('foreign_keys = ON');
+  return db;
+}
+
+/**
+ * A database as some older build actually left it, built by replaying the
+ * pre-squash chain up to `version`.
+ *
+ * The chain lives in __fixtures__/legacyChain.ts precisely so this is possible:
+ * the migrations that produced v52..v74 are gone from the product, so without
+ * a frozen copy there would be nothing to generate a realistic old database
+ * from.
+ */
+function legacyDatabase(version: number): Database.Database {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  for (const m of legacyMigrations) {
+    if (m.version > version) break;
+    // Mirrors the runner: a table rebuild needs foreign keys off, and the
+    // pragma is ignored inside a transaction.
+    if (m.requiresForeignKeysOff) {
+      db.pragma('foreign_keys = OFF');
+      m.migrate(db);
+      db.pragma('foreign_keys = ON');
+    } else {
+      m.migrate(db);
+    }
+    db.pragma(`user_version = ${m.version}`);
+  }
   return db;
 }
 
@@ -168,20 +197,6 @@ describe('v75 baseline parity with the v52..v74 chain', () => {
     db.close();
   });
 
-  /**
-   * The baseline creates missing tables, never missing columns, so it cannot
-   * bring a v72 database forward — every table already exists, nothing is
-   * created, and the columns v73 and v74 added stay missing under a version
-   * that claims otherwise. Refusing at startup is the whole reason
-   * MIN_SUPPORTED_VERSION is 74 and not 52.
-   */
-  it('refuses any database older than v74 instead of half-migrating it', () => {
-    const db = new Database(':memory:');
-    for (const version of [1, 51, 52, 60, 72, 73]) {
-      expect(() => runMigrations(db, version)).toThrow(/too old for this build/);
-    }
-    db.close();
-  });
 });
 
 describe('conversations: channels, chats and folders share one table', () => {
@@ -605,6 +620,108 @@ describe('full-text search indexes', () => {
     ).all() as Array<{ table_name: string }>).map(r => r.table_name);
 
     expect(tables).not.toContain('messages_fts');
+    db.close();
+  });
+});
+
+/**
+ * The bug this suite exists for.
+ *
+ * The baseline shipped in 0.4.0 refused anything below v74. v0.3.12 — the
+ * build most installs actually had — stamps 72, so the check rejected the only
+ * databases in the field, and it threw inside whenReady() before createWindow()
+ * ran: the app started, spawned its processes, and never showed a window.
+ *
+ * Every version the chain could have left behind is exercised, not a
+ * representative sample, because "which versions are in the wild" is exactly
+ * the question that was answered wrongly the first time.
+ */
+describe('converging a database from any older build', () => {
+  const LEGACY_VERSIONS = legacyMigrations.map(m => m.version);
+
+  it('covers every version the pre-squash chain could produce', () => {
+    expect(LEGACY_VERSIONS[0]).toBe(52);
+    expect(LEGACY_VERSIONS[LEGACY_VERSIONS.length - 1]).toBe(74);
+    expect(LEGACY_VERSIONS).toHaveLength(23);
+  });
+
+  it.each(LEGACY_VERSIONS)('brings a v%i database to the v75 baseline exactly', (version) => {
+    const db = legacyDatabase(version);
+    expect(db.pragma('user_version', { simple: true })).toBe(version);
+
+    runMigrations(db, version);
+
+    expect(db.pragma('user_version', { simple: true })).toBe(HEAD);
+
+    const fresh = freshDatabase();
+    const converged = schemaOf(db);
+    const expected = schemaOf(fresh);
+
+    expect([...converged.keys()].sort()).toEqual([...expected.keys()].sort());
+    for (const [name, sql] of expected) {
+      expect(`${name}: ${converged.get(name)}`).toBe(`${name}: ${sql}`);
+    }
+    db.close();
+    fresh.close();
+  });
+
+  // The failure that started this: v0.3.12's database, on the build that
+  // replaced it.
+  it('keeps the data in a v72 database — the version 0.3.12 shipped', () => {
+    const db = legacyDatabase(72);
+    db.prepare(`INSERT INTO projects (id, name, description, created_at) VALUES ('p','P','',1)`).run();
+    db.prepare(`INSERT INTO agents (id, name, description, system_prompt, model, provider, color, created_at) VALUES ('a','A','','','m','anthropic','#fff',1)`).run();
+    db.prepare(`INSERT INTO channels (id, name, type, project_id, created_at) VALUES ('c','general','public','p',1)`).run();
+    for (let i = 0; i < 5; i++) {
+      db.prepare(`INSERT INTO messages (id, channel_id, sender_id, sender_type, content, timestamp) VALUES (?, 'c', 'u', 'human', ?, ?)`)
+        .run(`m-${i}`, `message ${i}`, i);
+    }
+
+    runMigrations(db, 72);
+
+    expect(db.prepare('SELECT COUNT(*) c FROM messages').get()).toEqual({ c: 5 });
+    expect(db.prepare('SELECT COUNT(*) c FROM channels').get()).toEqual({ c: 1 });
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    // Foreign keys must be back on afterwards — the runner turns them off for
+    // the channels rebuild.
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    db.close();
+  });
+
+  // An FTS5 external-content index over a table that already has rows starts
+  // empty, and an empty index fails silently — no error, just no results.
+  it('makes transcripts written before the index searchable', () => {
+    const db = legacyDatabase(73); // messages_fts arrives at 74
+    db.prepare(`INSERT INTO channels (id, name, type, created_at) VALUES ('c','general','public',1)`).run();
+    db.prepare(`INSERT INTO messages (id, channel_id, sender_id, sender_type, content, timestamp) VALUES ('m','c','u','human','a decision about pangolins',1)`).run();
+
+    runMigrations(db, 73);
+
+    const hits = db.prepare(`SELECT COUNT(*) AS n FROM messages_fts WHERE messages_fts MATCH ?`).get('pangolins') as { n: number };
+    expect(hits.n).toBe(1);
+    db.close();
+  });
+
+  it('preserves a work session on a database that already had one', () => {
+    const db = legacyDatabase(74);
+    db.prepare(`INSERT INTO projects (id, name, description, created_at) VALUES ('p','P','',1)`).run();
+    db.prepare(`INSERT INTO agents (id, name, description, system_prompt, model, provider, color, created_at) VALUES ('a','A','','','m','anthropic','#fff',1)`).run();
+    db.prepare(`INSERT INTO tasks (id, project_id, content, created_at) VALUES ('t','p','do it',1)`).run();
+    db.prepare(`INSERT INTO channels (id, name, type, agent_id, task_id, created_at) VALUES ('ws','session','work','a','t',1)`).run();
+
+    runMigrations(db, 74);
+
+    expect(db.prepare(`SELECT type, task_id FROM channels WHERE id = 'ws'`).get())
+      .toEqual({ type: 'work', task_id: 't' });
+    db.close();
+  });
+
+  it('still refuses a database from before the chats-into-channels fold', () => {
+    const db = new Database(':memory:');
+    for (const version of [1, 37, 51]) {
+      expect(() => runMigrations(db, version)).toThrow(/too old for this build/);
+    }
     db.close();
   });
 });

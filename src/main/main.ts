@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol } from 'electron';
 import * as path from 'path';
 import { registerProtocolHandlers } from './protocols';
 import { MODULE_SHIM_SCHEME, moduleShimRedirectTarget } from './protocols/moduleShim';
@@ -346,8 +346,30 @@ app.whenReady().then(async () => {
   // open the DB from it (that's the whole point of the lock above).
   if (!gotSingleInstanceLock) return;
 
-  // Initialize database and run migration if needed
-  initializeAppState();
+  // Initialize database and run migration if needed.
+  //
+  // Guarded because everything below — including createWindow() — lives in
+  // this same callback. A throw here used to reject the promise and stop, with
+  // no window ever created and the process still running: the app looked like
+  // it had launched and then simply showed nothing. That is how a database too
+  // old for the build presented, and it took a tester and a round trip to
+  // identify something the log had already written down.
+  //
+  // A dialog is the only surface that exists this early. It is deliberately
+  // not a silent quit: a user who double-clicks and sees nothing has no reason
+  // to suspect their data, and no idea the log is worth reading.
+  try {
+    initializeAppState();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    logger.error('[Main] Fatal error during startup — cannot continue', error);
+    dialog.showErrorBox(
+      'Enclave could not start',
+      `${detail}\n\nA log with the full details is in:\n${app.getPath('userData')}/logs`,
+    );
+    app.exit(1);
+    return;
+  }
 
   // Register the core default memory-backend as the fallback floor. Must run
   // after the DB is up and BEFORE plugins load, so a plugin backend still
