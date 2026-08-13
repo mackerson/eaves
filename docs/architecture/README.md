@@ -267,7 +267,7 @@ deliberate surface, not debt:
 | Plugin sandbox internals | Code: `src/main/services/sandbox/`; overview in `CLAUDE.md` "Plugin System" and the [plugin authoring guide](../plugin-development.md). |
 | Content blocks | No current doc — `ContentBlocksBuilder.ts` and `chatHelpers.ts` are the source of truth. (`architecture-content-blocks.md` described a since-fixed gap; removed 2026-07-14) |
 | Messaging bridge | No doc yet — `src/main/services/messaging/` |
-| Work sessions (delegated agent work) | **Proposal, not built** — [work-sessions.md](./work-sessions.md) |
+| Work sessions (delegated agent work) | Code: `src/main/services/WorkSessionService.ts` + `workSessionTools.ts`; a session is a `channels` row with `type='work'`. |
 | Full IPC catalog, migration versions, loop constants | Code: `preload.ts`, `migrations.ts`, `ChannelDispatcher.ts` |
 
 ## Maintaining this doc

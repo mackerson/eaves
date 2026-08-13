@@ -294,7 +294,6 @@ explicit dispatch, which is what keeps multi-agent rooms from looping. See
 | Document | What's in it |
 |---|---|
 | [docs/architecture/README.md](docs/architecture/README.md) | Diagrams, invariants, and the architecture decision records |
-| [docs/architecture/work-sessions.md](docs/architecture/work-sessions.md) | Delegated work sessions |
 | [docs/plugin-development.md](docs/plugin-development.md) | Writing a plugin |
 | [docs/plugin-build-system.md](docs/plugin-build-system.md) | How plugin bundles are built and shipped |
 | [docs/creating-themes.md](docs/creating-themes.md) | Custom themes |

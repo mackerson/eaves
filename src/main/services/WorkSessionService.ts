@@ -1,8 +1,7 @@
 /**
  * Work sessions — one agent, one task, its own transcript.
  *
- * See docs/architecture/work-sessions.md for why these exist. The short
- * version: a channel replays its whole history into every participant on
+ * Why these exist: a channel replays its whole history into every participant on
  * every turn, so an agent doing a long task in one charges every other agent
  * rent for its scratch work, permanently. A session is a separate container
  * for that work.
@@ -17,8 +16,8 @@
  * worse, not better: a session nobody has open can sit on a pending approval
  * indefinitely with no sign of it anywhere the user is looking.
  *
- * Not yet built (phases 3–4): a `delegate_task` tool so an agent can open a
- * session for another agent, and UI.
+ * Not built: a `delegate_task` tool so one agent can open a session for
+ * another, and a UI surface for sessions.
  */
 
 import type { BrowserWindow } from 'electron';

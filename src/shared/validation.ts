@@ -784,7 +784,7 @@ export const GrantToolApprovalSchema = z.object({
   toolName: z.string().min(1).max(100),
 });
 
-/** Work sessions (docs/architecture/work-sessions.md). */
+/** Work sessions — one agent, one task, its own transcript. */
 export const StartWorkSessionSchema = z.object({
   taskId: EntityIdSchema,
   agentId: EntityIdSchema,

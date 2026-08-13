@@ -209,7 +209,7 @@ function createBaselineSchema(db: Database.Database): void {
 
     -- One table behind two UI surfaces: type='direct' is a 1:1 "chat",
     -- 'public'/'project' are rooms, and 'work' is an agent's own work session
-    -- (see docs/architecture/work-sessions.md), excluded from both lists.
+    -- excluded from both lists.
     CREATE TABLE IF NOT EXISTS channels (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

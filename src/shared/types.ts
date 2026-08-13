@@ -145,7 +145,7 @@ export interface Participant {
 export interface Channel {
   id: string;
   name: string;
-  /** 'work' is a delegated work session — one agent, one task (docs/architecture/work-sessions.md). */
+  /** 'work' is a delegated work session — one agent, one task. */
   type: 'public' | 'project' | 'direct' | 'work';
   projectId?: string;
   participants: Participant[];

@@ -37,7 +37,7 @@ const CHAT_MSG_CONFIG: MessageTableConfig = {
 /**
  * The channel surface is rooms only. `direct` rows are the chat surface's
  * projection over the same table, and `work` rows are delegated work sessions
- * (docs/architecture/work-sessions.md) — neither belongs in a channel list,
+ * — neither belongs in a channel list,
  * search result or tag filter. One rule, so a third conversation kind cannot
  * leak into the UI by being added in only two of the three places.
  */
@@ -714,8 +714,7 @@ export class ChannelRepository {
   }
 
   /**
-   * Create a work session: one agent, one task, its own transcript
-   * (docs/architecture/work-sessions.md).
+   * Create a work session: one agent, one task, its own transcript.
    *
    * `parentChannelId` records where the delegation came from so a later phase
    * can report back to it; NULL when a session is started straight from a

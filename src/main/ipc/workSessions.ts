@@ -8,7 +8,7 @@ import {
 } from '../services/WorkSessionService';
 
 /**
- * Work-session IPC (docs/architecture/work-sessions.md).
+ * Work-session IPC. See WorkSessionService for what a session is and why.
  *
  * Deliberately narrow: start, read, list. Running a turn inside a session is
  * the existing `chat-with-agent` handler — a session is a conversation, and

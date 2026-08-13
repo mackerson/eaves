@@ -222,7 +222,7 @@ contextBridge.exposeInMainWorld('electron', {
   addAgentMessage: (params: AddAgentMessageRequest): Promise<MessageResponse> => ipcRenderer.invoke('add-agent-message', params),
   addChannelParticipant: (params: AddChannelParticipantRequest): Promise<{ success: boolean }> => ipcRenderer.invoke('add-channel-participant', params),
   updateMessage: (messageId: string, content: string): Promise<{ success: boolean; contentBlocks?: ContentBlock[] | null; error?: string }> => ipcRenderer.invoke('update-message', { messageId, content }),
-  // Work sessions (docs/architecture/work-sessions.md)
+  // Work sessions — one agent, one task, its own transcript
   startWorkSession: (params: { taskId: string; agentId: string; parentChannelId?: string }): Promise<{ success: boolean; session?: Chat; error?: string }> => ipcRenderer.invoke('work-sessions:start', params),
   getWorkSession: (sessionId: string): Promise<{ success: boolean; session?: Chat; error?: string }> => ipcRenderer.invoke('work-sessions:get', sessionId),
   listWorkSessionsForTask: (taskId: string): Promise<{ success: boolean; sessions?: Chat[]; error?: string }> => ipcRenderer.invoke('work-sessions:list-for-task', taskId),
