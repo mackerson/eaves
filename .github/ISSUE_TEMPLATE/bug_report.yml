@@ -1,0 +1,96 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Enclave is alpha software — everything below
+        1.0 should be treated as such — so bug reports are genuinely useful.
+
+        **Found a security issue?** Don't file it here. See
+        [SECURITY.md](https://github.com/mackerson/enclave-ai/blob/main/SECURITY.md)
+        for private reporting.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+      placeholder: I clicked X and expected Y, but Z happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The shorter the path, the faster it gets fixed.
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Enclave version
+      description: Help → About, or the installer filename.
+      placeholder: "0.4.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - "Linux — AppImage"
+        - "Linux — deb"
+        - "Linux — rpm"
+        - "Built from source"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Which provider were you using?
+      description: Leave blank if the bug has nothing to do with a model.
+      options:
+        - "Not model-related"
+        - Anthropic
+        - OpenAI
+        - Google
+        - OpenRouter
+        - "Ollama (local)"
+        - "LM Studio (local)"
+      default: 0
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Logs live beside the database — `~/.config/enclave/logs/` on Linux,
+        `%APPDATA%\enclave\logs\` on Windows, and
+        `~/Library/Application Support/enclave/logs/` on macOS.
+
+        **Read before pasting:** logs can contain conversation text and file
+        paths. They should not contain API keys — those are encrypted at rest
+        and redacted — but check before posting.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for this
+          required: true
+        - label: I checked my log output for anything I would rather not post publicly
+          required: true

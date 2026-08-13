@@ -1,6 +1,7 @@
 {
   "name": "enclave",
   "version": "0.4.0",
+  "desktopName": "enclave-ai.desktop",
   "description": "AI chat that remembers your projects, works offline, and respects your privacy",
   "author": "Ackerson Labs <oss@ackersonlabs.com>",
   "license": "MIT",
@@ -137,7 +138,9 @@
         "private": false
       }
     ],
-    "artifactName": "Enclave-AI-${version}.${ext}",
+    "appImage": {
+      "artifactName": "Enclave-AI-${version}.${ext}"
+    },
     "files": [
       "dist/**/*"
     ],
@@ -216,6 +219,7 @@
     },
     "linux": {
       "icon": "assets/icons/",
+      "syncDesktopName": true,
       "target": [
         "AppImage",
         "deb",

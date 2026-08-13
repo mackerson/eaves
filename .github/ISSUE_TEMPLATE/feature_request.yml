@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest something Enclave should be able to do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: the [roadmap in the README](https://github.com/mackerson/enclave-ai#roadmap)
+        lists what is already planned, and a fair amount is further along than
+        it looks.
+
+        Worth knowing — Enclave has a plugin system, and plugin backends run
+        sandboxed with their own tools, views and services. If what you want
+        could live in a plugin, that path is open to you today and does not
+        need anyone's permission. See
+        [plugin-development.md](https://github.com/mackerson/enclave-ai/blob/main/docs/plugin-development.md).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        The problem, not the solution. What are you actually trying to
+        accomplish, and where does Enclave get in the way?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do instead?
+      description: If you have a shape in mind, describe it. Rough is fine.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What are you doing today instead?
+      description: >
+        Workarounds are useful signal — they show what the feature is competing
+        with, and sometimes that the workaround is good enough.
+
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: Could this be a plugin?
+      options:
+        - "I don't know"
+        - "No — it needs to be in the core"
+        - "Maybe, but I would not know where to start"
+        - "Yes, and I would consider building it"
+      default: 0

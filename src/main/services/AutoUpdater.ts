@@ -38,7 +38,15 @@ export class AutoUpdaterService {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
-    // Beta builds ship as prereleases. Drop this once releases go stable.
+    // Everything below 1.0 is alpha, and 0.x users are expected to take 0.x
+    // builds — so prereleases stay eligible. Revisit at 1.0, when "stable" and
+    // "latest" start meaning different things.
+    //
+    // This is NOT a licence to mark GitHub releases as prereleases. Doing that
+    // is what kept the update feed dark for months: electron-updater ignores
+    // drafts outright, and GitHub's /releases/latest skips prereleases, so a
+    // prerelease-flagged build is invisible to the updater and to the README's
+    // download link. Alpha is a label for the title, notes and version string.
     autoUpdater.allowPrerelease = true;
 
     // The feed is the public GitHub releases feed from build.publish.

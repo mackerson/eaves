@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # Security patches only for npm. Enclave pins Electron deliberately (32.x),
+  # and better-sqlite3 and node-pty are native modules whose ABI is tied to
+  # that pin — a routine version bump on either produces an app that builds
+  # and then dies at startup on ERR_DLOPEN_FAILED. Version updates are opened
+  # by hand, with a packaged build to verify. Security advisories are the
+  # exception worth being told about automatically.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "security"]
+    # Only security advisories reach a PR; everything else stays quiet.
+    allow:
+      - dependency-type: all
+    ignore:
+      - dependency-name: "electron"
+      - dependency-name: "better-sqlite3"
+      - dependency-name: "@lydell/node-pty*"
+      - dependency-name: "electron-builder"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: ["dependencies"]

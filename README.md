@@ -7,6 +7,7 @@
 **An AI and automation workspace that remembers your projects, works offline, and respects your privacy.**
 
 [![CI](https://github.com/mackerson/enclave-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/mackerson/enclave-ai/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mackerson/enclave-ai?label=release&color=blue)](https://github.com/mackerson/enclave-ai/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#quick-start)
 [![Electron](https://img.shields.io/badge/Electron-32-47848F.svg?logo=electron&logoColor=white)](https://www.electronjs.org/)
@@ -312,6 +313,7 @@ explicit dispatch, which is what keeps multi-agent rooms from looping. See
 | [docs/plugin-development.md](docs/plugin-development.md) | Writing a plugin |
 | [docs/plugin-build-system.md](docs/plugin-build-system.md) | How plugin bundles are built and shipped |
 | [docs/creating-themes.md](docs/creating-themes.md) | Custom themes |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
 | [CLAUDE.md](CLAUDE.md) | Build commands and patterns, oriented at contributors and coding agents |
 
 ---
