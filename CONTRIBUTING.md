@@ -12,6 +12,10 @@ By participating you agree to our [Code of Conduct](./CODE_OF_CONDUCT.md).
 - **Small fix** (typo, obvious bug, docs)? Open a PR directly.
 - **Larger change** (new feature, refactor, dependency, schema/migration)? Open
   an issue first so we can align on direction before you invest the work.
+- **Using an AI agent?** Fine — this project is built that way, see
+  [AI use](./README.md#ai-use). Disclose it with a `Co-Authored-By` trailer,
+  and hold it to the same bar as anything else here: you are accountable for
+  the diff, not the tool.
 
 ## Development setup
 

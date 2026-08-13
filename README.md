@@ -4,7 +4,7 @@
 
 # Enclave
 
-**AI chat that remembers your projects, works offline, and respects your privacy.**
+**A private AI and Automation workspace that remembers your projects, works offline, and respects your privacy.**
 
 [![CI](https://github.com/mackerson/enclave-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/mackerson/enclave-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -15,20 +15,24 @@
 
 </div>
 
-Enclave is a desktop application for conversations with AI agents that develop genuine continuity. Chat with Claude, GPT, Gemini, or local models. Your data lives on your device. Optional sync works without cloud storage.
+Enclave is a desktop application for multipoint communication and workflow execution between humans and AI agents that develop genuine continuity. Chat with Claude, GPT, or Gemini, or enjoy a wide array of extremely functional local models via LM Studio or Ollama. First-class OpenRouter support puts Grok and hundreds of other models behind the same key.
 
-Built because AI should work for you, not corporations.
+It is also a cozy-first environment. Enjoy 32 flavors of theme out of the box and an extensive and evolving theme API. Your data lives on your device, so a poorly planned deployment doesn't ruin your workflow overnight. Enclave is radically self-extendable via local and cloud models, and has Claude Code support available as a plugin. Waiting on a feature? Exclusivity? Dark UI patterns that bug you every 10 seconds so that your day meets someone's engagement metrics for investor storytime? 2025. What's 2027? Having that feature in your workflow as you wanted it because you asked for it, and being able to share that with friends, or a community without waiting for a FAANG company to roll it to production. Have an agent bang it out in a few minutes from a plugin template and a couple of libraries.
+
+Enclave exists because AI should work for you, personally, and not be yet another rent-seeker. It should just be something your computer does and has been promised to do since the 80s: intelligent scheduling, quick semantic project spaces with easy recall, task management, and assistance on the things you're doing. If the first computers were to be bicycles for the mind, the least a modern one can do is remember where you were going.
+
+Every vision of the future has included helpful robots that live alongside humanity: the Environmental Control Robot from Lost in Space, C-3PO and R2-D2 from Star Wars, Lt. Cmdr. Data from Star Trek. The road to agents like them is a very long way away, but in 2026 we are now at the point where the joke "C-3PO is just an LLM in a humanoid robot, don't fall for the clanker propaganda" is a thing that exists. The road to them must begin somewhere.
 
 ---
 
 ## What It Is
 
-Desktop app for AI conversations with persistent memory:
+An Electron desktop application for BYOK AI conversations with persistent memory:
 - **Agents remember** your projects and context across sessions
 - **Works offline** — no internet required for local models
 - **Your data stays local** — stored on your device in SQLite
-- **Optional P2P sync** — devices connect directly, no cloud storage
-- **Extensible** — plugin system for community tools
+- **Optional P2P sync** — devices connect directly, no cloud storage. Talk with your friend's or colleague's agent or project.
+- **Radically extensible** — plugin system for community tools. MCP support out of the box, plug in everywhere.
 - **Multi-agent support** — Claude, GPT, Gemini, OpenRouter, and local models, all in one place
 
 Think of it as giving you an AI sidekick that actually works *for you* — remembers your goals, understands your context, and can't be shut down by a corporate API change.
@@ -48,10 +52,6 @@ Pre-built installers are not published yet — watch [Releases](https://github.c
 | Linux | `.AppImage`, `.deb`, or `.rpm` |
 
 Until then, see [Development](#development) to build from source.
-
-> **Note:** the bundled plugin repositories are being opened alongside the core.
-> Until they are public, `yarn setup:plugins` cannot clone them and the app runs
-> without bundled plugins — everything else works.
 
 ### First Run
 
@@ -462,6 +462,33 @@ against, so the two cannot drift.
 - ⏳ Signed, published cross-platform installers
 - ⏳ Community plugin ecosystem
 - ⏳ Full stability and testing
+
+---
+
+## AI use
+
+Enclave is built with heavy AI assistance. That is stated here rather than left
+for you to work out from the commit log.
+
+I have a repetitive strain injury. Typing has a daily budget, and I spend it on
+the parts that need a person: deciding what to build, judging whether an
+approach is sound, and checking whether what came back is actually true. An
+agent does most of the keystrokes.
+
+The consequences are visible in the repository, and you can check them:
+
+- **Agent-assisted commits carry a `Co-Authored-By` trailer.** `git log` is the
+  disclosure — no commit here claims to be something it isn't.
+- **Comments and commit messages run long**, because the reasoning is the part
+  worth keeping. The *why* behind a change outlives the diff that made it.
+- **Tests and typechecks gate the work.** CI runs the suite and all three
+  TypeScript projects on every pull request. Where this repo says something was
+  verified, it means it was run.
+
+None of this is asked of you. Contribute the way you work best — with an agent,
+without one, or somewhere in between. The bar in
+[CONTRIBUTING.md](./CONTRIBUTING.md) is the same either way, because the code
+has to stand on its own regardless of what typed it.
 
 ---
 
