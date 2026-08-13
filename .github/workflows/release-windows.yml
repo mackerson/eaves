@@ -75,26 +75,36 @@ jobs:
 
       # Primary delivery: attach the installer to a DRAFT GitHub Release. Draft
       # releases don't create a git tag and don't count against the Actions
-      # artifact storage quota — so this keeps working even when the artifact
-      # store is full (its usage is only recalculated every 6-12h). The draft is
-      # private to the repo; delete it once the tester has the build.
-      - name: Publish installer to draft release
+      # artifact storage quota, and it is the release electron-updater actually
+      # reads. Draft and prerelease are both deliberately absent: electron-updater
+      # ignores drafts entirely and skips prereleases unless allowPrerelease is
+      # set, so a draft ships files nobody's installer will ever see.
+      #
+      # Uploads to the release if it already exists, because another platform
+      # (Linux, macOS) may have published the same version first. --clobber lets
+      # a re-run replace its own artifacts instead of failing.
+      - name: Publish installer to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag="v${{ steps.ver.outputs.version }}-ci.${{ github.run_number }}"
-          gh release create "$tag" \
-            --draft \
-            --prerelease \
-            --target "${{ github.sha }}" \
-            --title "Enclave ${{ steps.ver.outputs.version }} — Windows CI build ${{ github.run_number }}" \
-            --notes "Automated Windows x64 build from \`${{ github.sha }}\`. Draft (not public). Delete after the tester has the installer." \
-            release/*.exe release/*.exe.blockmap release/latest.yml
-          echo "Draft release created: $tag"
+          tag="v${{ steps.ver.outputs.version }}"
+          files=(release/*.exe release/*.exe.blockmap release/latest.yml)
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+            echo "Attached Windows x64 artifacts to existing release $tag"
+          else
+            gh release create "$tag" \
+              --target "${{ github.sha }}" \
+              --title "Enclave ${{ steps.ver.outputs.version }}" \
+              --notes "Windows x64 build from \`${{ github.sha }}\`. **Unsigned** — SmartScreen will warn on first run." \
+              "${files[@]}"
+            echo "Created release $tag"
+          fi
 
       # Fallback: also try the artifact store. Non-fatal — when the quota is full
-      # this step fails but the draft release above already has the installer.
+      # this step fails but the release above already has the installer.
       - name: Upload installer artifact (fallback)
         continue-on-error: true
         uses: actions/upload-artifact@v4
