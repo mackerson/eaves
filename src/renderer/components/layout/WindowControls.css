@@ -1,0 +1,43 @@
+/**
+ * Caption buttons for the frameless Linux window.
+ *
+ * Sized to the platform convention rather than the app's own button scale —
+ * these read as window chrome, not as app UI, so they stay square, flat, and
+ * full-height against the top edge.
+ */
+
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin-left: var(--spacing-sm);
+}
+
+.window-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.window-control:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Close is the one caption button every desktop paints as destructive on
+   hover; matching that is the difference between "themed" and "unfamiliar". */
+.window-control-close:hover {
+  background-color: #c42b1c;
+  color: #ffffff;
+}
+
+.window-control:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}

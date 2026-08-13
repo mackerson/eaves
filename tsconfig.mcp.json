@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": ["ES2022"],
+    "outDir": "./dist/main/mcp-servers",
+    "rootDir": "./src/main/mcp-servers",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo.mcp"
+  },
+  "include": ["src/main/mcp-servers/**/*"],
+  "exclude": ["**/*.test.ts", "**/*.spec.ts"]
+}

@@ -1,0 +1,432 @@
+/* Winamp-style About Modal */
+
+/* Override default dialog styles for Winamp aesthetic */
+.winamp-modal {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Hide the default Radix close (×) — DialogContent renders one absolutely
+   positioned at right-4 top-4 that lands halfway between the titlebar and
+   the content, leaving a visible sliver. We render our own close button
+   inside .winamp-titlebar instead, which fits the aesthetic. */
+.winamp-modal > button[type="button"] {
+  display: none;
+}
+
+.winamp-window {
+  background: var(--bg-secondary, #1a1a1a);
+  border: 2px solid var(--border-primary, #666);
+  border-radius: 0;
+  box-shadow:
+    inset 1px 1px 0 var(--border-highlight, rgba(255, 255, 255, 0.1)),
+    inset -1px -1px 0 var(--border-shadow, rgba(0, 0, 0, 0.5)),
+    2px 2px 8px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+/* Title bar */
+.winamp-titlebar {
+  background: linear-gradient(
+    to bottom,
+    var(--bg-tertiary, #2a2a2a),
+    var(--bg-secondary, #1a1a1a)
+  );
+  border-bottom: 1px solid var(--border-primary, #333);
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+}
+
+.winamp-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-sans, sans-serif);
+}
+
+.winamp-titlebar-close {
+  width: 16px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary, #2a2a2a);
+  border: 1px solid var(--border-primary, #555);
+  border-radius: 2px;
+  color: var(--text-primary, #fff);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-sans, sans-serif);
+}
+.winamp-titlebar-close:hover {
+  background: var(--accent-primary, #4a4a4a);
+}
+.winamp-titlebar-close:active {
+  background: var(--bg-secondary, #1a1a1a);
+}
+
+/* Main content area */
+.winamp-content {
+  padding: 12px;
+  background: var(--bg-primary, #0a0a0a);
+  min-height: 420px;
+}
+
+/* Tabs styling */
+.winamp-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.winamp-tablist {
+  background: var(--bg-secondary, #1a1a1a);
+  border: 1px solid var(--border-primary, #333);
+  border-radius: 0 !important;
+  padding: 2px;
+  gap: 2px;
+  height: auto;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
+.winamp-tab {
+  background: linear-gradient(
+    to bottom,
+    var(--bg-tertiary, #3a3a3a),
+    var(--bg-secondary, #2a2a2a)
+  );
+  border: 1px solid var(--border-primary, #555);
+  border-radius: 0 !important;
+  color: var(--text-secondary, #aaa);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 12px;
+  height: 24px;
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.1),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.3);
+  transition: all 0.1s;
+}
+
+.winamp-tab:hover {
+  background: linear-gradient(
+    to bottom,
+    var(--bg-tertiary, #4a4a4a),
+    var(--bg-secondary, #3a3a3a)
+  );
+  color: var(--text-primary, #fff);
+}
+
+.winamp-tab[data-state='active'] {
+  background: linear-gradient(
+    to bottom,
+    var(--accent-primary, #8b008b),
+    var(--accent-secondary, #6a006a)
+  );
+  color: var(--text-primary, #fff);
+  border-color: var(--accent-primary, #8b008b);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.5),
+    0 0 8px rgba(139, 0, 139, 0.5);
+}
+
+/* Tab content */
+.winamp-tabcontent {
+  background: var(--bg-primary, #0a0a0a);
+  border: 1px solid var(--border-primary, #333);
+  border-radius: var(--border-radius-sm, 2px);
+  padding: 16px;
+  min-height: 320px;
+  margin-top: 0;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Visualization container */
+.visualization-container {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+/* Minecraft-style splash text — yellow, tilted, and gently pulsing. Anchored to
+   the bottom-right of the logo so it "sticks out" the way the original does.
+   The pulse is a scale bob layered on top of a fixed tilt. */
+.splash-text {
+  position: absolute;
+  right: 18px;
+  bottom: 6px;
+  transform-origin: center;
+  color: #ffff00;
+  font-family: var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  text-shadow: 1px 1px 0 rgba(60, 60, 0, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: splash-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes splash-pulse {
+  0%, 100% { transform: rotate(-16deg) scale(1); }
+  50% { transform: rotate(-16deg) scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-text {
+    animation: none;
+    transform: rotate(-16deg);
+  }
+}
+
+/* Text content styling */
+.about-text {
+  text-align: center;
+  color: var(--text-primary, #fff);
+}
+
+.winamp-heading {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 0 0 8px 0;
+  color: var(--accent-primary, #8b008b);
+  text-shadow: 0 0 10px rgba(139, 0, 139, 0.5);
+  font-family: var(--font-sans, sans-serif);
+}
+
+.version-text {
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+  margin: 4px 0;
+  font-family: var(--font-mono, monospace);
+}
+
+.tagline-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin: 12px 0 8px 0;
+}
+
+.description-text {
+  font-size: 12px;
+  color: var(--text-secondary, #aaa);
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.copyright-text {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  margin: 16px 0 8px 0;
+}
+
+.visit-text {
+  font-size: 11px;
+  color: var(--text-secondary, #aaa);
+  margin: 4px 0;
+}
+
+/* Credits content */
+.credits-content {
+  color: var(--text-primary, #fff);
+}
+
+.winamp-subheading {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--accent-primary, #ffa500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 16px 0 8px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-primary, #333);
+}
+
+.winamp-subheading:first-child {
+  margin-top: 0;
+}
+
+.credit-line {
+  font-size: 11px;
+  color: var(--text-secondary, #aaa);
+  margin: 4px 0 4px 12px;
+  line-height: 1.5;
+}
+
+/* Open source content */
+.opensource-content {
+  color: var(--text-primary, #fff);
+}
+
+.opensource-text {
+  font-size: 11px;
+  color: var(--text-secondary, #aaa);
+  margin: 8px 0 8px 12px;
+  line-height: 1.6;
+}
+
+.opensource-cta {
+  margin-top: 24px;
+  padding: 12px;
+  background: var(--bg-secondary, #1a1a1a);
+  border: 1px solid var(--border-primary, #333);
+  border-radius: var(--border-radius-sm, 2px);
+  text-align: center;
+}
+
+.cta-text {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--accent-primary, #8b008b);
+  margin: 0 0 4px 0;
+}
+
+.cta-subtext {
+  font-size: 10px;
+  color: var(--text-muted, #666);
+  margin: 0;
+}
+
+/* Tips content */
+.tips-content {
+  color: var(--text-primary, #fff);
+}
+
+.tips-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0 0;
+}
+
+.tips-list li {
+  font-size: 11px;
+  color: var(--text-secondary, #aaa);
+  margin: 6px 0 6px 12px;
+  padding-left: 12px;
+  position: relative;
+  line-height: 1.5;
+}
+
+.tips-list li::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--accent-primary, #ffa500);
+}
+
+.tips-list code {
+  background: var(--bg-secondary, #1a1a1a);
+  border: 1px solid var(--border-primary, #333);
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--accent-primary, #ffa500);
+}
+
+/* Menu name above each derived shortcut group — quieter than
+   .winamp-subheading so the section still reads as one list. */
+.tips-group-heading {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--text-muted, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 12px 0 0 0;
+}
+
+/* Links content */
+.links-content {
+  color: var(--text-primary, #fff);
+}
+
+.links-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0 0;
+}
+
+.links-list li {
+  margin: 6px 0 6px 12px;
+}
+
+.winamp-link {
+  font-size: 11px;
+  color: var(--accent-primary, #ffa500);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.winamp-link:hover {
+  color: var(--accent-secondary, #ff8c00);
+  border-bottom-color: var(--accent-secondary, #ff8c00);
+  text-shadow: 0 0 8px rgba(255, 165, 0, 0.5);
+}
+
+/* Footer */
+.winamp-footer {
+  background: var(--bg-secondary, #1a1a1a);
+  border-top: 1px solid var(--border-primary, #333);
+  padding: 8px 12px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.winamp-button {
+  min-width: 70px;
+  height: 24px;
+  padding: 4px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 0 !important;
+  background: linear-gradient(
+    to bottom,
+    var(--bg-tertiary, #3a3a3a),
+    var(--bg-secondary, #2a2a2a)
+  );
+  border: 1px solid var(--border-primary, #555) !important;
+  color: var(--text-primary, #fff);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.1),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.3);
+  transition: all 0.1s;
+}
+
+.winamp-button:hover {
+  background: linear-gradient(
+    to bottom,
+    var(--bg-tertiary, #4a4a4a),
+    var(--bg-secondary, #3a3a3a)
+  );
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.15),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.winamp-button:active {
+  background: linear-gradient(
+    to bottom,
+    var(--bg-secondary, #2a2a2a),
+    var(--bg-tertiary, #3a3a3a)
+  );
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+  transform: translateY(1px);
+}

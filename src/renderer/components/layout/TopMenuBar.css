@@ -1,0 +1,101 @@
+.top-menu-bar {
+  display: flex;
+  align-items: center;
+  height: var(--topbar-height);
+  background-color: var(--bg-secondary);
+  border-bottom: var(--border-width) solid var(--border-primary);
+  padding: 0;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* Windows only: the app owns the caption row (see USES_TITLE_BAR_OVERLAY in
+   main.ts), so this bar has to behave like a title bar — draggable, and
+   holding its right edge clear of the native minimise/maximise/close buttons.
+   `titlebar-area-width` reports the space left over after those buttons. */
+[data-titlebar-overlay='true'] .top-menu-bar {
+  -webkit-app-region: drag;
+  padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px));
+}
+
+/* Linux has no Window Controls Overlay, so the window is fully frameless and
+   this bar is the whole title bar — draggable edge to edge, with its own
+   caption buttons at the right (see WindowControls.tsx). No reserved padding:
+   nothing is painted over us. */
+[data-custom-frame='true'] .top-menu-bar {
+  -webkit-app-region: drag;
+}
+
+/* Everything clickable has to opt back out, or the drag region swallows it.
+   Only the interactive elements themselves — opting whole containers out
+   (.logo-section, .menu-items, .user-menu) left almost nothing to grab, since
+   between them they span the bar. Their padding, their gaps, and the logo
+   glyph are not clickable and should drag the window. */
+[data-titlebar-overlay='true'] .top-menu-bar button,
+[data-titlebar-overlay='true'] .top-menu-bar a,
+[data-titlebar-overlay='true'] .top-menu-bar input,
+[data-titlebar-overlay='true'] .top-menu-bar select,
+[data-custom-frame='true'] .top-menu-bar button,
+[data-custom-frame='true'] .top-menu-bar a,
+[data-custom-frame='true'] .top-menu-bar input,
+[data-custom-frame='true'] .top-menu-bar select {
+  -webkit-app-region: no-drag;
+}
+
+/* Compact mode: this bar is the conversation header, so it gives back the
+   height the menu rows needed. It still has to be a real title bar — the
+   drag rules above apply unchanged, which is why compact swaps the contents
+   rather than the element. */
+.top-menu-bar.compact {
+  height: 34px;
+  background-color: var(--bg-tertiary);
+}
+
+.menu-items {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0 var(--spacing-md);
+}
+
+.menu-button {
+  /* The active underline below is absolutely positioned. This used to be the
+     job of a wrapper div that the Radix rewrite removed — without it the
+     underline resolves against the sticky top bar and stripes the full width. */
+  position: relative;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--border-radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.menu-button:hover {
+  background-color: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+.menu-button.active {
+  background-color: var(--bg-active);
+  color: var(--accent-primary);
+}
+
+.menu-button.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--accent-primary);
+}
+
+.spacer {
+  flex: 1;
+}

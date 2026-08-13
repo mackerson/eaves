@@ -1,0 +1,143 @@
+/**
+ * Menu bar styling.
+ *
+ * Covers both the bar and the dropdowns it opens. The base look below
+ * predates the Radix rewrite — it lived in MenuDropdown.css, alongside a
+ * component that no longer exists — and is kept verbatim so the reorg stayed
+ * a change of structure rather than of appearance.
+ */
+
+.menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  min-width: 220px;
+  background-color: var(--bg-secondary);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-xs);
+  z-index: 1000;
+  animation: menuSlideIn var(--transition-fast);
+}
+
+@keyframes menuSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menu-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--border-radius-sm);
+  transition: all var(--transition-fast);
+  gap: var(--spacing-lg);
+}
+
+.menu-dropdown-item:hover:not(.disabled) {
+  background-color: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+.menu-dropdown-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.menu-item-label {
+  flex: 1;
+}
+
+.menu-item-shortcut {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  font-family: monospace;
+}
+
+.menu-dropdown-divider {
+  height: 1px;
+  background-color: var(--border-primary);
+  margin: var(--spacing-xs) 0;
+}
+
+/* The old 220px floor predates rows carrying both a label and a chord;
+   "Toggle Detail Panel  Ctrl+Alt+\" wrapped to two lines at that width. */
+.menu-dropdown {
+  min-width: 260px;
+  /* A 32-theme Appearance submenu is taller than the window. Radix reports
+     available height as the whole viewport for a side-anchored submenu, which
+     says nothing about how far down the panel starts — so cap it outright and
+     let the panel scroll. Small enough that Radix can then shift it to fit. */
+  max-height: min(var(--radix-dropdown-menu-content-available-height, 60vh), 60vh);
+  overflow-y: auto;
+}
+
+.menu-dropdown-item {
+  /* Radix items are divs, not buttons — restate the reset the old button
+     markup got for free. */
+  user-select: none;
+  outline: none;
+  /* Never let a label wrap away from its shortcut. */
+  white-space: nowrap;
+}
+
+.menu-dropdown-item[data-highlighted] {
+  background-color: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+.menu-dropdown-item[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Checkable rows reserve a gutter so their labels align with plain rows in
+   the same menu. */
+.menu-dropdown-item-checkable {
+  justify-content: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.menu-item-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex: 0 0 14px;
+  color: var(--accent-primary);
+}
+
+.menu-dropdown-item-checkable .menu-item-label {
+  flex: 1;
+}
+
+.menu-dropdown-subtrigger[data-state='open'] {
+  background-color: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+.menu-item-chevron {
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+
+.menu-dropdown-item[data-highlighted] .menu-item-chevron,
+.menu-dropdown-subtrigger[data-state='open'] .menu-item-chevron {
+  color: var(--accent-primary);
+}

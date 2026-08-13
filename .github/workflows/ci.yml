@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# A newer push to the same branch makes the running check obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+
+      # --ignore-scripts skips the root postinstall, which rebuilds
+      # better-sqlite3 against Electron's ABI, ad-hoc signs native addons for
+      # macOS, and builds the plugin UI bundles. None of that is reachable
+      # from a typecheck or a test run: the suite runs on system Node, and the
+      # bundled plugins live in private sibling repos this job does not clone.
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --ignore-scripts
+
+      # The suite talks to a real SQLite, so the addon has to exist and match
+      # the Node ABI running vitest. Same command `pretest` uses locally.
+      - name: Build better-sqlite3 for system Node
+        run: npm rebuild better-sqlite3
+
+      # Three projects, three tsconfigs, and the renderer is the one that went
+      # unchecked for months — check all of them, not just whichever the build
+      # happens to touch.
+      - name: Typecheck (renderer)
+        run: yarn typecheck
+
+      - name: Typecheck (main)
+        run: npx tsc -p tsconfig.main.json --noEmit
+
+      - name: Typecheck (mcp)
+        run: npx tsc -p tsconfig.mcp.json --noEmit
+
+      # vitest directly rather than `yarn test:run`, which would rebuild
+      # better-sqlite3 a second time.
+      - name: Test
+        run: npx vitest run

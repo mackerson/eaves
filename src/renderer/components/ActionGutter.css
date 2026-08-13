@@ -1,0 +1,302 @@
+/* Right-hand queue of actions an agent is waiting on. Sits beside the main
+   content so decisions never require scrolling the transcript. */
+.action-gutter {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  overflow-y: auto;
+  border-left: 1px solid var(--border-primary);
+  background-color: var(--bg-secondary);
+}
+
+.action-gutter-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-secondary);
+}
+
+.action-gutter-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.action-gutter-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background-color: var(--accent-primary);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.action-gutter-bulk {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.action-gutter-bulk-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.action-gutter-bulk-btn:hover:not(:disabled) { background-color: var(--bg-tertiary); }
+.action-gutter-bulk-btn.approve:hover:not(:disabled) { color: var(--success, #22c55e); }
+.action-gutter-bulk-btn.deny:hover:not(:disabled) { color: var(--danger, #ef4444); }
+.action-gutter-bulk-btn:disabled { opacity: 0.5; cursor: default; }
+
+.action-gutter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.action-row {
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm, 6px);
+  padding: var(--spacing-xs);
+  background-color: var(--bg-primary);
+}
+
+/* A staged choice is visible at a glance, so a long queue can be scanned
+   for what is still undecided. */
+.action-row.approve { border-color: var(--success, #22c55e); }
+.action-row.deny { border-color: var(--danger, #ef4444); }
+
+.action-row-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-row-disclosure {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+}
+
+.action-row-tool {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-row-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.action-row-btn {
+  display: flex;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.action-row-btn:hover:not(:disabled) { background-color: var(--bg-tertiary); }
+.action-row-btn.approve.chosen { color: var(--success, #22c55e); border-color: currentColor; }
+.action-row-btn.deny.chosen { color: var(--danger, #ef4444); border-color: currentColor; }
+.action-row-btn:disabled { opacity: 0.5; cursor: default; }
+
+.action-row-summary {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-row-input {
+  margin: 4px 0 0;
+  padding: var(--spacing-xs);
+  max-height: 200px;
+  overflow: auto;
+  border-radius: 4px;
+  background-color: var(--bg-tertiary);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.action-gutter-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: var(--spacing-sm);
+}
+
+.action-gutter-submit {
+  padding: 8px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background-color: var(--accent-primary);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.action-gutter-submit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.action-gutter-note,
+.action-gutter-error {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+}
+
+.action-gutter-error { color: var(--danger, #ef4444); }
+
+.action-gutter-decided {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-primary);
+}
+
+.action-gutter-decided-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+.action-gutter-decided-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-tertiary);
+}
+
+.action-gutter-decided-row.approved { color: var(--success, #22c55e); }
+.action-gutter-decided-row.denied { color: var(--danger, #ef4444); }
+
+/* Collapsed rail. Deliberately still visible when actions are pending —
+   a waiting agent that leaves no trace reads as a stalled conversation. */
+.action-gutter-rail {
+  width: 40px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--spacing-md) 0;
+  border: none;
+  border-left: 1px solid var(--border-primary);
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.action-gutter-rail:hover { color: var(--text-primary); }
+
+.action-gutter-rail-count {
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background-color: var(--accent-primary);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.action-gutter-collapse {
+  margin-left: 4px;
+  display: flex;
+  padding: 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.action-gutter-collapse:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
+
+.action-row-always {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+/* Standing waivers, listed so they can be taken back. A permission the user
+   cannot see is one they cannot revoke. */
+.action-gutter-grants {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-primary);
+}
+
+.action-gutter-grant-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+}
+
+.action-gutter-grant-row code { font-family: var(--font-mono, monospace); }
+
+.action-gutter-grant-revoke {
+  margin-left: auto;
+  display: flex;
+  padding: 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.action-gutter-grant-revoke:hover { background-color: var(--bg-tertiary); color: var(--danger, #ef4444); }

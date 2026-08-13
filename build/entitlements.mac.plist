@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the macOS build.
+
+  Hardened runtime is required for Apple notarization (configured in
+  package.json: `mac.hardenedRuntime: true`). Each entitlement below
+  punches a specific hole in that hardening — keep this list as small
+  as possible. If you remove a feature that needed one, drop the
+  entitlement here too.
+-->
+<plist version="1.0">
+  <dict>
+    <!-- V8 (the JS engine inside Electron) generates and executes machine
+         code at runtime. Without this entitlement, the hardened runtime
+         blocks JIT and the app crashes on launch. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- Electron's renderer process maps writable + executable memory pages
+         for V8's optimized code cache. Required alongside `allow-jit` for
+         Electron apps to launch under hardened runtime. -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- Lets Electron honor `ELECTRON_RUN_AS_NODE` and similar dyld env
+         vars that Electron uses internally to spawn its helper processes
+         (utility, GPU). Without this, helper-process startup fails on
+         notarized macOS builds. -->
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+
+    <!-- Outbound network access — used by every AI provider call
+         (Anthropic, OpenAI, OpenRouter, Google), the auto-updater feed,
+         messaging bridges (Telegram), and MCP servers reaching external
+         services. Required for the core product to function. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Inbound network listener sockets. Required for the bundled MCP
+         servers (which speak the MCP protocol over local sockets) and
+         the Ollama/LMStudio local-provider integration that connects to
+         user-run local model servers on loopback. -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+
+    <!-- Read+write to user-selected files via the system file picker —
+         used for attachment uploads (`dialog:pick-images`), background
+         image selection, and import-plugin file flows (chatgpt-import,
+         character-card-import). Scoped to files the user explicitly
+         picks; not blanket disk access. -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+  </dict>
+</plist>

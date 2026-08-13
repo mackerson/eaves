@@ -1,0 +1,94 @@
+.vaporwave-visualization {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  border: 1px solid var(--border-primary, #333);
+  border-radius: var(--border-radius-sm, 4px);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vaporwave-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.logo-overlay {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+/* Logo glow effect */
+.logo-overlay .logo-glow {
+  position: absolute;
+  inset: -15px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 51, 153, 0.4) 0%,
+    rgba(0, 204, 255, 0.3) 50%,
+    transparent 70%
+  );
+  animation: vaporwave-glow-pulse 2s ease-in-out infinite;
+  border-radius: 50%;
+  filter: blur(15px);
+}
+
+@keyframes vaporwave-glow-pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* Enclave logo */
+.logo-overlay .enclave-logo {
+  width: 96px;
+  height: 96px;
+  position: relative;
+  z-index: 1;
+  filter:
+    drop-shadow(0 0 10px rgba(255, 51, 153, 0.8))
+    drop-shadow(0 0 20px rgba(0, 204, 255, 0.6));
+  animation: vaporwave-float 3s ease-in-out infinite;
+}
+
+@keyframes vaporwave-float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-6px) rotate(1deg);
+  }
+  66% {
+    transform: translateY(3px) rotate(-1deg);
+  }
+}
+
+/* Fallback text logo */
+.logo-overlay .logo-fallback {
+  font-size: 72px;
+  font-weight: bold;
+  color: var(--text-primary, #fff);
+  font-family: var(--font-mono, monospace);
+  text-shadow:
+    0 0 10px rgba(255, 51, 153, 0.8),
+    0 0 20px rgba(0, 204, 255, 0.6),
+    0 0 30px rgba(255, 51, 153, 0.4);
+  animation: vaporwave-float 3s ease-in-out infinite;
+}

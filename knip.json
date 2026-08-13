@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/main/main.ts",
+    "src/main/preload.ts",
+    "src/main/mcp-servers/*.ts",
+    "scripts/*.ts",
+    "scripts/**/*.{js,mjs}"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "scripts/**/*.{ts,js,mjs}"
+  ],
+  "ignoreBinaries": [
+    "ps",
+    "pkill",
+    "sqlite3"
+  ],
+  "vite": {
+    "config": ["vite.config.ts"]
+  },
+  "vitest": {
+    "config": ["vitest.config.ts"]
+  }
+}

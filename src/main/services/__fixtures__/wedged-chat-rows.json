@@ -1,0 +1,969 @@
+[
+  {
+    "senderType": "human",
+    "senderId": "user-1",
+    "content": "redacted",
+    "contentBlocks": [
+      {
+        "type": "text",
+        "content": "redacted"
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "redacted",
+    "contentBlocks": [
+      {
+        "type": "text",
+        "content": "redacted"
+      },
+      {
+        "type": "text",
+        "content": "redacted"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "text",
+        "content": "redacted"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "text",
+        "content": "redacted"
+      }
+    ],
+    "responseMessages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_0151Tt6paPGQTuU8UX9w7QCv",
+            "toolName": "glob",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_0151Tt6paPGQTuU8UX9w7QCv",
+            "toolName": "glob",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01QXN5gRs7uZEgMcVCpJeph6",
+            "toolName": "list_tasks",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_013whHmSJJQUUTwuq96MJkWH",
+            "toolName": "list_notes",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01KkRLsZLgKVEQ8iswbRSsB2",
+            "toolName": "list_workflows",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01DEnE7vJGx9KVkrbdsJaoBr",
+            "toolName": "list_routines",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01S6XNUYpmMurL4Z91ahuSCs",
+            "toolName": "channel_list",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01Hhipt9d4Wia5TXbMxwMZtf",
+            "toolName": "list_tools",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01QXN5gRs7uZEgMcVCpJeph6",
+            "toolName": "list_tasks",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_013whHmSJJQUUTwuq96MJkWH",
+            "toolName": "list_notes",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01KkRLsZLgKVEQ8iswbRSsB2",
+            "toolName": "list_workflows",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01DEnE7vJGx9KVkrbdsJaoBr",
+            "toolName": "list_routines",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01S6XNUYpmMurL4Z91ahuSCs",
+            "toolName": "channel_list",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01Hhipt9d4Wia5TXbMxwMZtf",
+            "toolName": "list_tools",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01QESZCzLMozG4CxFqVJaayS",
+            "toolName": "get_workflow",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01QqXh2qJzeiq2gZSDc2BYTJ",
+            "toolName": "search_memories",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01QESZCzLMozG4CxFqVJaayS",
+            "toolName": "get_workflow",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01QqXh2qJzeiq2gZSDc2BYTJ",
+            "toolName": "search_memories",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "senderType": "human",
+    "senderId": "user-1",
+    "content": "redacted",
+    "contentBlocks": [
+      {
+        "type": "text",
+        "content": "redacted"
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "redacted",
+    "contentBlocks": [
+      {
+        "type": "text",
+        "content": "redacted"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "text",
+        "content": "redacted"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "text",
+        "content": "redacted"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "text",
+        "content": "redacted"
+      },
+      {
+        "type": "tool-approval"
+      },
+      {
+        "type": "tool-approval"
+      }
+    ],
+    "responseMessages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01QGe45e8C2hD8vv734WjNxS",
+            "toolName": "list_directory",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01F6XpGKu4K6sCZTCGTdZnDJ",
+            "toolName": "glob",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01QGe45e8C2hD8vv734WjNxS",
+            "toolName": "list_directory",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01F6XpGKu4K6sCZTCGTdZnDJ",
+            "toolName": "glob",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01Uk12M9bQJKJ15xL9XmvagS",
+            "toolName": "write_file",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01YSsN273zt1i24HpNgXrzx7",
+            "toolName": "write_file",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01Uk12M9bQJKJ15xL9XmvagS",
+            "toolName": "write_file",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01YSsN273zt1i24HpNgXrzx7",
+            "toolName": "write_file",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01PEjUZq7Z23eq3ZKF4zgWDZ",
+            "toolName": "read_file",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_017JGduB3rZ3gHdabgQxifAc",
+            "toolName": "glob",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01DCytNXxW3p2Q5NSo2DqfqY",
+            "toolName": "grep",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_011mX2Vx5mYxtBXTopFUWxJ5",
+            "toolName": "get_file_info",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01Y6b43tcFHHjCRgZhsxCYPK",
+            "toolName": "search_files",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01PEjUZq7Z23eq3ZKF4zgWDZ",
+            "toolName": "read_file",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_017JGduB3rZ3gHdabgQxifAc",
+            "toolName": "glob",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01DCytNXxW3p2Q5NSo2DqfqY",
+            "toolName": "grep",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_011mX2Vx5mYxtBXTopFUWxJ5",
+            "toolName": "get_file_info",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01Y6b43tcFHHjCRgZhsxCYPK",
+            "toolName": "search_files",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01Ra7kfXuTCeAWR9djnXX2Qs",
+            "toolName": "edit_file",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-approval-request",
+            "approvalId": "aitxt-wBMrepw3e6p6AoBi2hsVuVjq",
+            "toolCallId": "toolu_01Ra7kfXuTCeAWR9djnXX2Qs"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01SaGDSQ5QrvyLN4KWd2GXjX",
+            "toolName": "bash",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-approval-request",
+            "approvalId": "aitxt-Vkg4qc5XJMiE5IIs7auJgBXI",
+            "toolCallId": "toolu_01SaGDSQ5QrvyLN4KWd2GXjX"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "",
+    "contentBlocks": [
+      {
+        "type": "tool-call"
+      },
+      {
+        "type": "tool-approval"
+      }
+    ],
+    "responseMessages": [
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01Ra7kfXuTCeAWR9djnXX2Qs",
+            "toolName": "edit_file",
+            "output": "redacted"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01VS5iNEt6Xvah5STpQkLY4B",
+            "toolName": "read_file",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01APZLEZmABTAjURhiM6TH8W",
+            "toolName": "bash",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-approval-request",
+            "approvalId": "aitxt-gkgSqfFjaWjI3kUIZXYqAhAa",
+            "toolCallId": "toolu_01APZLEZmABTAjURhiM6TH8W"
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01VS5iNEt6Xvah5STpQkLY4B",
+            "toolName": "read_file",
+            "output": "redacted",
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "redacted",
+    "contentBlocks": [
+      {
+        "type": "text",
+        "content": "redacted"
+      },
+      {
+        "type": "tool-approval"
+      },
+      {
+        "type": "tool-approval"
+      }
+    ],
+    "responseMessages": [
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "tool-result",
+            "toolCallId": "toolu_01SaGDSQ5QrvyLN4KWd2GXjX",
+            "toolName": "bash",
+            "output": "redacted"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "redacted"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_01Pf1TKtL7GCXZi3de6YG516",
+            "toolName": "edit_file",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-approval-request",
+            "approvalId": "aitxt-vrCkasLesWS46Kwy0zicO9e6",
+            "toolCallId": "toolu_01Pf1TKtL7GCXZi3de6YG516"
+          },
+          {
+            "type": "tool-call",
+            "toolCallId": "toolu_013tyoS38idG3erxboKV7QyS",
+            "toolName": "edit_file",
+            "input": {},
+            "providerOptions": {
+              "anthropic": {
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            }
+          },
+          {
+            "type": "tool-approval-request",
+            "approvalId": "aitxt-sbitfdxUfiSTlLZwdkfSKSFQ",
+            "toolCallId": "toolu_013tyoS38idG3erxboKV7QyS"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "",
+    "contentBlocks": [
+      {
+        "type": "system",
+        "content": "redacted"
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "",
+    "contentBlocks": [
+      {
+        "type": "system",
+        "content": "redacted"
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "",
+    "contentBlocks": [
+      {
+        "type": "system",
+        "content": "redacted"
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "",
+    "contentBlocks": [
+      {
+        "type": "system",
+        "content": "redacted"
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "",
+    "contentBlocks": [
+      {
+        "type": "system",
+        "content": "redacted"
+      }
+    ]
+  },
+  {
+    "senderType": "human",
+    "senderId": "user-1",
+    "content": "redacted",
+    "contentBlocks": [
+      {
+        "type": "text",
+        "content": "redacted"
+      }
+    ]
+  },
+  {
+    "senderType": "agent",
+    "senderId": "agent-1",
+    "content": "",
+    "contentBlocks": [
+      {
+        "type": "system",
+        "content": "redacted"
+      }
+    ]
+  }
+]

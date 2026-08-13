@@ -1,0 +1,28 @@
+.logo-section {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-md);
+  height: 100%;
+}
+
+.logo {
+  height: 28px;
+  width: auto;
+  user-select: none;
+  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.3));
+  transition: all var(--transition-fast);
+}
+
+.logo:hover {
+  transform: scale(1.05);
+  filter: drop-shadow(0 0 12px rgba(102, 126, 234, 0.5));
+}
+
+.app-name {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+  text-transform: uppercase;
+}

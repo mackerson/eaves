@@ -1,0 +1,38 @@
+/* Bundled accessibility fonts.
+   OpenDyslexic — SIL Open Font License, (c) Abbie Gonzalez.
+   Source: github.com/antijingoist/opendyslexic (see assets/fonts/LICENSE-OpenDyslexic.txt).
+   Selected via the font preference in Settings → Appearance; never applied
+   unless the user opts in, so the ~440KB of faces below only ever download
+   from the local bundle on first use (font-display: swap). */
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('../assets/fonts/OpenDyslexic-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('../assets/fonts/OpenDyslexic-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('../assets/fonts/OpenDyslexic-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('../assets/fonts/OpenDyslexic-Bold-Italic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}

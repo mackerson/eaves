@@ -1,0 +1,120 @@
+.compact-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--spacing-sm);
+}
+
+.compact-header-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.compact-header-spacer {
+  flex: 1;
+  min-width: var(--spacing-sm);
+}
+
+.compact-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.compact-header-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 14ch;
+}
+
+.compact-header-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.compact-header-model {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22ch;
+}
+
+.compact-header-sep {
+  color: var(--text-secondary);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.compact-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  flex-shrink: 0;
+}
+
+.compact-status-dot.is-streaming {
+  animation: compact-status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes compact-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-status-dot.is-streaming {
+    animation: none;
+  }
+}
+
+.compact-header-select {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.75rem;
+  padding: 1px 4px;
+  max-width: 16ch;
+}
+
+.compact-header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.compact-header-btn:hover {
+  background-color: var(--bg-hover, rgba(127, 127, 127, 0.18));
+  color: var(--text-primary);
+}
+
+.compact-header-btn.is-off {
+  opacity: 0.4;
+}
