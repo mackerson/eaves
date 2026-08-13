@@ -4,7 +4,7 @@
 
 # Enclave
 
-**A private AI and Automation workspace that remembers your projects, works offline, and respects your privacy.**
+**An AI and automation workspace that remembers your projects, works offline, and respects your privacy.**
 
 [![CI](https://github.com/mackerson/enclave-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/mackerson/enclave-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -21,21 +21,52 @@ It is also a cozy-first environment. Enjoy 32 flavors of theme out of the box an
 
 Enclave exists because AI should work for you, personally, and not be yet another rent-seeker. It should just be something your computer does and has been promised to do since the 80s: intelligent scheduling, quick semantic project spaces with easy recall, task management, and assistance on the things you're doing. If the first computers were to be bicycles for the mind, the least a modern one can do is remember where you were going.
 
-Every vision of the future has included helpful robots that live alongside humanity: the Environmental Control Robot from Lost in Space, C-3PO and R2-D2 from Star Wars, Lt. Cmdr. Data from Star Trek. The road to agents like them is a very long way away, but in 2026 we are now at the point where the joke "C-3PO is just an LLM in a humanoid robot, don't fall for the clanker propaganda" is a thing that exists. The road to them must begin somewhere.
+Every vision of the future has included helpful robots that live alongside humanity: the (Environmental Control) Robot from Lost in Space, C-3PO and R2-D2 from Star Wars, Lt. Cmdr. Data from Star Trek. The road to them is very long indeed, but in 2026 we are now at the point where the joke "C-3PO is just an LLM in a humanoid robot, don't fall for the clanker propaganda" is a thing that exists. Long as it may be, we are now walking that road and we must consider it well so that we may avoid retreading troubled ground, and so that we can reach the lofty heights that we also imagine possible.
+
+Enclave is given in the belief that you are probably better equipped to choose for yourself than to have someone choose for you, and that you are probably a more reasonable caretaker of the agent memories you create along the way.
 
 ---
 
 ## What It Is
 
-An Electron desktop application for BYOK AI conversations with persistent memory:
+Built on Electron with standard web technologies (React, TypeScript), for bring-your-own-key (BYOK) or bring-your-own-compute AI conversations with persistent memory:
 - **Agents remember** your projects and context across sessions
-- **Works offline** — no internet required for local models
-- **Your data stays local** — stored on your device in SQLite
-- **Optional P2P sync** — devices connect directly, no cloud storage. Talk with your friend's or colleague's agent or project.
-- **Radically extensible** — plugin system for community tools. MCP support out of the box, plug in everywhere.
-- **Multi-agent support** — Claude, GPT, Gemini, OpenRouter, and local models, all in one place
+- **Works offline** no internet required for local models
+- **Your data stays local** stored on your device in SQLite
+- **Optional P2P sync** devices connect directly, no cloud storage. Talk with your friend's or colleague's agent or project.
+- **Radically extensible** plugin system for community tools. MCP support out of the box, plug it in everywhere.
+- **Multi-agent support** Claude, GPT, Gemini, OpenRouter, and local models, all in one place
+- **Basic task primitives** projects, notes, tasks, schedules and an event bus that lets you watch data as it passes through the system.
+- **Graph workflows** a visual DAG editor with agent, code, HTTP, scraper, conditional, loop and delay nodes. Agents can author them too — and anything an agent writes waits for your review before it is allowed to run. Put one on a cron schedule and it becomes a routine.
 
-Think of it as giving you an AI sidekick that actually works *for you* — remembers your goals, understands your context, and can't be shut down by a corporate API change.
+Think of it as giving you an AI sidekick that actually works *for you* — remembers your goals, understands your context, and can't get taken away by a policy change or an outage.
+
+---
+
+## Why It Matters
+
+### Information Asymmetry
+Right now, the power dynamic is broken:
+- **Corporations have AI** that analyzes you, predicts you, profits from you
+- **Then they charge you for it** while obscuring the cost to the environment, to investors, and to you
+- **First at SOTA prices** so you use a supercomputer to summarize that email
+- **Then you get dumbed-down chatbots** as providers optimize them, and either tier can be shut down or changed at any time
+- **Information flows one way**: You → Corporate AI → Corporate profit
+
+Enclave flips this:
+- **Your AI works for you** remembers your goals, protects your interests
+- **You control the data** it lives on your devices, not corporate servers
+- **Leverage whatever you want** without living in a walled garden or paying infra cost for every task
+- **Information flows to you**: World → Your Agent → You (filtered and contextualized)
+
+Think about what becomes possible when you have an AI sidekick that:
+- Reads terms of service and flags concerning clauses
+- Analyzes news sources for bias and provides missing context
+- Recognizes social engineering and manipulation attempts
+- Helps you navigate corporate bureaucracy with full memory of past interactions
+- Maintains your privacy by filtering what data you share
+
+This is information asymmetry reversal. It's only possible with local-first, user-controlled infrastructure.
 
 ---
 
@@ -52,6 +83,10 @@ Pre-built installers are not published yet — watch [Releases](https://github.c
 | Linux | `.AppImage`, `.deb`, or `.rpm` |
 
 Until then, see [Development](#development) to build from source.
+
+> **Note:** the bundled plugin repositories are being opened alongside the core.
+> Until they are public, `yarn setup:plugins` cannot clone them and the app runs
+> without bundled plugins — everything else works.
 
 ### First Run
 
@@ -95,7 +130,7 @@ Two surfaces over one storage substrate:
 - **Compact mode** strips everything but the conversation
 
 ### ⚙️ Work That Runs Itself
-- **Workflows** — a visual DAG editor for multi-step agent and code nodes
+- **Workflows** — run one by hand or on a schedule; every run records per-node results, a failed one included, so you can see how far it got
 - **Routines** — cron-scheduled workflows, with real run outcomes recorded
 - **Work sessions** — an agent gets its own container to do a task in, and reports back
 - **Approvals** — destructive tools ask first; approvals batch into one decision, with per-conversation waivers
@@ -123,30 +158,6 @@ Community-driven extensibility:
 
 ---
 
-## Why This Matters
-
-### Information Asymmetry
-Right now, the power dynamic is broken:
-- **Corporations have AI** that analyzes you, predicts you, profits from you
-- **You get dumbed-down chatbots** that forget everything and can be shut down anytime
-- **Information flows one way**: You → Corporate AI → Corporate profit
-
-Enclave flips this:
-- **Your AI works for you** — remembers your goals, protects your interests
-- **You control the data** — it lives on your devices, not corporate servers
-- **Information flows to you**: World → Your Agent → You (filtered and contextualized)
-
-Think about what becomes possible when you have an AI sidekick that:
-- Reads terms of service and flags concerning clauses
-- Analyzes news sources for bias and provides missing context
-- Recognizes social engineering and manipulation attempts
-- Helps you navigate corporate bureaucracy with full memory of past interactions
-- Maintains your privacy by filtering what data you share
-
-This is information asymmetry reversal. It's only possible with local-first, user-controlled infrastructure.
-
----
-
 ## How Device Sync Works
 
 Enclave supports optional device synchronization using a **coordination model** (like Tailscale) rather than cloud storage. **LAN peer-to-peer sync (Phase 1) has shipped**; cross-network coordination is on the roadmap.
@@ -159,7 +170,8 @@ Enclave supports optional device synchronization using a **coordination model** 
 - Works on LAN, VPN, or direct IP connection
 - Like AirDrop, but for any of your devices that can reach each other
 
-### Coordination Service (Optional Premium)
+### Enclave Mesh — In Development, Optional, Premium
+- Mobile phone app
 - Helps devices find each other across networks and NAT
 - Provides encrypted relay when direct connection isn't possible
 - End-to-end encrypted — we **can't read your data**
@@ -541,7 +553,7 @@ See [LICENSE](LICENSE) for full text.
 ## Acknowledgments
 
 Special thanks to:
-- **Anthropic** — for Claude and the MCP protocol that makes agent extensibility possible
+- **Anthropic** — for Claude, Claude Code, and the MCP protocol that makes agent extensibility possible
 - **Justin Frankel** — for Winamp, WASTE, and showing that respectful software can win
 - **Local LLM community** — Ollama, LM Studio, and everyone pushing intelligence to the edge
 - **Signal, Tailscale, Syncthing communities** — for proving privacy-first architecture works
