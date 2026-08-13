@@ -7,6 +7,26 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 and versions follow [semantic versioning](https://semver.org/) with the caveat
 above: in 0.x, a minor bump can carry breaking changes.
 
+## [0.4.1] — 2026-08-13
+
+A hotfix. 0.4.0 could not open a database created by any earlier build.
+
+### Fixed
+
+- **Upgrading from an earlier version left the app with no window.** The v75
+  baseline refused any database below v74, and 0.3.12 — the build most installs
+  had — leaves one at v72. The refusal threw before the window was created, so
+  the app started, spawned its processes and displayed nothing. Databases from
+  v52 onward are now carried forward automatically, with their data intact.
+- **A fatal error during startup now says so.** Previously any failure before
+  the window opened presented as a silent hang; it now shows a dialog naming the
+  problem and where the log is.
+
+### Known limitations
+
+Unchanged from 0.4.0: the builds are unsigned, there is no macOS build, and a
+plugin's UI bundle is not sandboxed.
+
 ## [0.4.0] — 2026-08-13
 
 First public release, and the first with installers.
@@ -64,4 +84,5 @@ First public release, and the first with installers.
 - A plugin's UI bundle is not sandboxed; it runs in the renderer with the full
   IPC bridge. See [SECURITY.md](SECURITY.md).
 
+[0.4.1]: https://github.com/mackerson/enclave-ai/releases/tag/v0.4.1
 [0.4.0]: https://github.com/mackerson/enclave-ai/releases/tag/v0.4.0
