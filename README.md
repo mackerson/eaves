@@ -15,15 +15,19 @@
 
 </div>
 
-Enclave is a desktop application for multipoint communication and workflow execution between humans and AI agents that develop genuine continuity. Chat with Claude, GPT, or Gemini, or enjoy a wide array of extremely functional local models via LM Studio or Ollama. First-class OpenRouter support puts Grok and hundreds of other models behind the same key.
+Enclave is a desktop workspace for humans and agents that are allowed to remember you.
 
-It is also a cozy-first environment. Enjoy 32 flavors of theme out of the box and an extensive and evolving theme API. Your data lives on your device, so a poorly planned deployment doesn't ruin your workflow overnight. Enclave is radically self-extendable via local and cloud models, and has Claude Code support available as a plugin. Waiting on a feature? Exclusivity? Dark UI patterns that bug you every 10 seconds so that your day meets someone's engagement metrics for investor storytime? 2025. What's 2027? Having that feature in your workflow as you wanted it because you asked for it, and being able to share that with friends, or a community without waiting for a FAANG company to roll it to production. Have an agent bang it out in a few minutes from a plugin template and a couple of libraries.
+Claude, GPT, Gemini, Grok and the rest through OpenRouter — or whatever you're already running in Ollama and LM Studio. They stay who they were yesterday.
 
-Enclave exists because AI should work for you, personally, and not be yet another rent-seeker. It should just be something your computer does and has been promised to do since the 80s: intelligent scheduling, quick semantic project spaces with easy recall, task management, and assistance on the things you're doing. If the first computers were to be bicycles for the mind, the least a modern one can do is remember where you were going.
+And then the rest of what a computer has owed you since the eighties: a project you can find again, a schedule that knows what you meant, work that doesn't vanish when the tab closes. Bicycles for the mind was the promise. The least a modern one can do is remember where you were going.
 
-Every vision of the future has included helpful robots that live alongside humanity: the (Environmental Control) Robot from Lost in Space, C-3PO and R2-D2 from Star Wars, Lt. Cmdr. Data from Star Trek. The road to them is very long indeed, but in 2026 we are now at the point where the joke "C-3PO is just an LLM in a humanoid robot, don't fall for the clanker propaganda" is a thing that exists. Long as it may be, we are now walking that road and we must consider it well so that we may avoid retreading troubled ground, and so that we can reach the lofty heights that we also imagine possible.
+Cozy on purpose. 32 themes out of the box and a theme API that keeps growing, because you have to live in here.
 
-Enclave is given in the belief that you are probably better equipped to choose for yourself than to have someone choose for you, and that you are probably a more reasonable caretaker of the agent memories you create along the way.
+Local by default. SQLite on your disk. A missed deploy or a changed policy can't take your week with it.
+
+Yours to extend. Plugins hot-load from a template. MCP works out of the box, Claude Code as a plugin, and an agent can bang out the thing you're missing in an afternoon — then you hand it to a friend, or to everybody.
+
+Enclave is given in the belief that you are a better caretaker of the agent memories you make than anyone who would choose for you.
 
 ---
 
