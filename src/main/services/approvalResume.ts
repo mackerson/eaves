@@ -197,8 +197,9 @@ export async function resumeAfterApprovals(opts: ApprovalBatchOptions): Promise<
 
   // Step 1: update the contentBlocks on the original message so the UI shows
   // every decision immediately, without waiting for the new stream.
+  const decisionWindow = getMainWindow();
   for (const r of resolved) {
-    await markApprovalDecided(r.entry, r.decision);
+    await markApprovalDecided(r.entry, r.decision, decisionWindow);
   }
 
   // Step 2: build the prior-turn messages array.
@@ -649,7 +650,11 @@ function reconstructEntryFromPersistedBlock(
   };
 }
 
-async function markApprovalDecided(entry: PendingApprovalEntry, decision: ApprovalDecision): Promise<void> {
+async function markApprovalDecided(
+  entry: PendingApprovalEntry,
+  decision: ApprovalDecision,
+  mainWindow: BrowserWindow | null,
+): Promise<void> {
   const updateBlock = (blocks: ContentBlock[] | undefined): ContentBlock[] | undefined => {
     if (!blocks) return blocks;
     return blocks.map(b => {
@@ -675,6 +680,7 @@ async function markApprovalDecided(entry: PendingApprovalEntry, decision: Approv
     const updated = updateBlock(msg.contentBlocks);
     if (updated) {
       chatRepo.updateMessage(entry.messageId, { contentBlocks: updated });
+      pushDecidedBlocks(mainWindow, entry.messageId, updated);
     }
     return;
   }
@@ -689,7 +695,33 @@ async function markApprovalDecided(entry: PendingApprovalEntry, decision: Approv
     // finalization, and passing false re-emits draftFinalized, which would
     // spuriously re-dispatch @mentions on the original message.
     channelRepo.updateMessageContentBlocks(entry.messageId, updated, msg.content, undefined, msg.metrics, msg.responseMessages);
+    pushDecidedBlocks(mainWindow, entry.messageId, updated);
   }
+}
+
+/**
+ * Tell the renderer the decision landed.
+ *
+ * Writing the contentBlocks was only ever half of it: the repository write
+ * updates the database, and the transcript is rendering from state it already
+ * holds. Without a push the card stays "pending" on screen until something
+ * unrelated forces a re-render — in practice the end of whatever stream is
+ * running, which is exactly when the user is least likely to still be looking.
+ * The approval queue looked correct throughout because it refreshes itself on
+ * this same event, which is what made the two surfaces disagree.
+ *
+ * `isDraft` is deliberately absent, for the same reason the write omits it:
+ * deciding an approval is not a draft finalization, and claiming otherwise
+ * re-emits draftFinalized and re-dispatches the original message's @mentions.
+ */
+function pushDecidedBlocks(
+  mainWindow: BrowserWindow | null,
+  messageId: string,
+  contentBlocks: ContentBlock[],
+): void {
+  // Same guard as every other send in this file — a plain null check.
+  if (!mainWindow) return;
+  mainWindow.webContents.send('message-updated', { messageId, contentBlocks });
 }
 
 /**

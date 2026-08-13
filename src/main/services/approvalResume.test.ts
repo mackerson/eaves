@@ -774,3 +774,56 @@ describe('resuming one approval while its siblings wait', () => {
     expect([...(pendingSetFromLastResume() ?? [])]).toEqual([]);
   });
 });
+
+/**
+ * The transcript renders from state the renderer already holds, so writing the
+ * decision to the database is only half of it. Without a push the approval
+ * card sits on "pending" until something unrelated forces a re-render — in
+ * practice the end of whatever stream is running. The approval queue looked
+ * right the whole time because it refreshes on this same event, which is what
+ * made the two surfaces disagree.
+ */
+describe('deciding an approval tells the renderer', () => {
+  it('pushes message-updated with the decided blocks, before the resume streams', async () => {
+    sends.length = 0;
+    registry.listForContext.mockReturnValue([]);
+
+    await resumeAfterApproval({
+      approvalId: APPROVAL_ID,
+      decision: decision(true),
+      registryEntry: chatEntry(),
+      getMainWindow,
+      toolStates: new Map(),
+    });
+
+    const updates = sends.filter(s => s.channel === 'message-updated');
+    expect(updates.length).toBeGreaterThan(0);
+
+    const payload = updates[0].payload as { messageId: string; contentBlocks: unknown[]; isDraft?: unknown };
+    expect(payload.messageId).toBe(ORIG_MSG_ID);
+    expect(Array.isArray(payload.contentBlocks)).toBe(true);
+
+    // isDraft must stay absent: deciding an approval is not a draft
+    // finalization, and sending false re-emits draftFinalized, which
+    // re-dispatches the original message's @mentions.
+    expect('isDraft' in payload).toBe(false);
+  });
+
+  it('carries the decision itself, so the card can stop saying pending', async () => {
+    sends.length = 0;
+    registry.listForContext.mockReturnValue([]);
+
+    await resumeAfterApproval({
+      approvalId: APPROVAL_ID,
+      decision: decision(true),
+      registryEntry: chatEntry(),
+      getMainWindow,
+      toolStates: new Map(),
+    });
+
+    const payload = sends.find(s => s.channel === 'message-updated')?.payload as
+      { contentBlocks: Array<{ type?: string; approval?: { status?: string } }> };
+    const approval = payload.contentBlocks.find(b => b.type === 'tool-approval')?.approval;
+    expect(approval?.status).toBe('approved');
+  });
+});
