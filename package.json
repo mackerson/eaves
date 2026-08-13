@@ -137,6 +137,7 @@
         "private": false
       }
     ],
+    "artifactName": "Enclave-AI-${version}.${ext}",
     "files": [
       "dist/**/*"
     ],
@@ -207,6 +208,7 @@
       ]
     },
     "nsis": {
+      "artifactName": "Enclave-AI-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
