@@ -26,8 +26,19 @@ if (!isPackagedBuild()) {
   config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 }
 
-const DATA_DIR = path.join(app.getPath('userData'), 'enclave-data');
-const DB_PATH = path.join(DATA_DIR, 'enclave.db');
+/**
+ * Resolved on demand, not at module load.
+ *
+ * `app.getPath` needs a live Electron app, so computing these eagerly meant
+ * that merely *importing* this module — or anything that imports a repository
+ * — required Electron. That put an Electron dependency on plain Node code
+ * (tests, the seed loader) which never opens the app database at all.
+ *
+ * Nothing here is cached: the only caller opens the database once and holds
+ * the handle.
+ */
+const dataDir = () => path.join(app.getPath('userData'), 'enclave-data');
+const dbPath = () => path.join(dataDir(), 'enclave.db');
 const DEFAULT_HUMAN_COLOR = '#2563eb';
 
 let db: Database.Database | null = null;
@@ -74,8 +85,8 @@ export function getDatabase(): Database.Database {
   }
   if (!db) {
     // Ensure the data directory exists before creating the database
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    db = new Database(DB_PATH);
+    fs.mkdirSync(dataDir(), { recursive: true });
+    db = new Database(dbPath());
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     // Defense-in-depth against write contention (e.g. a transient overlap with a

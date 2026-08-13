@@ -6,8 +6,12 @@ import { RoutineRow } from './row-types';
 export class RoutineRepository {
   private db: Database.Database;
 
-  constructor() {
-    this.db = getDatabase();
+  /**
+   * @param db Injected for tests and the seed loader; production callers use
+   * the singletons in ./index.ts and get the app database.
+   */
+  constructor(db?: Database.Database) {
+    this.db = db ?? getDatabase();
   }
 
   /**

@@ -1,6 +1,47 @@
 import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import * as os from 'os';
+import * as path from 'path';
+
+/**
+ * A default stub for the `electron` module, for main-process code under test.
+ *
+ * Forty-eight test files already mock this by hand and thirty of them only
+ * ever needed `app.getPath`. Providing a default means a test that merely
+ * touches a repository does not have to know that somewhere underneath, a
+ * project directory gets created.
+ *
+ * Paths land in a temp directory, never the real profile — main-process code
+ * under test writes files, and it must never write them into ~/.config/enclave.
+ *
+ * A test file that calls `vi.mock('electron', ...)` itself still wins; this is
+ * only the floor.
+ */
+vi.mock('electron', () => {
+  const root = path.join(os.tmpdir(), 'enclave-vitest');
+  return {
+    app: {
+      getPath: (name: string) => path.join(root, name),
+      getAppPath: () => root,
+      getVersion: () => '0.0.0-test',
+      isPackaged: false,
+      on: vi.fn(),
+      whenReady: () => Promise.resolve(),
+      quit: vi.fn(),
+      exit: vi.fn(),
+    },
+    ipcMain: { handle: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
+    dialog: { showErrorBox: vi.fn(), showMessageBox: vi.fn() },
+    shell: { openExternal: vi.fn() },
+    safeStorage: {
+      isEncryptionAvailable: () => false,
+      encryptString: (s: string) => Buffer.from(s),
+      decryptString: (b: Buffer) => b.toString(),
+    },
+    BrowserWindow: class {},
+  };
+});
 
 // Cleanup after each test case
 afterEach(() => {
