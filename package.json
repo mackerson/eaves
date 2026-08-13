@@ -1,6 +1,6 @@
 {
   "name": "enclave",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "desktopName": "enclave-ai.desktop",
   "description": "AI chat that remembers your projects, works offline, and respects your privacy",
   "author": "Ackerson Labs <oss@ackersonlabs.com>",

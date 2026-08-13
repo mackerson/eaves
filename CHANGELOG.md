@@ -7,6 +7,33 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 and versions follow [semantic versioning](https://semver.org/) with the caveat
 above: in 0.x, a minor bump can carry breaking changes.
 
+## [0.4.2] — 2026-08-13
+
+Approvals, from the point of view of everyone waiting on them.
+
+### Fixed
+
+- **Deciding an approval did not update the conversation.** The decision was
+  written to the database but never pushed to the window, so the card stayed on
+  "pending" until something else forced a re-render — usually the end of the
+  current response. The approval queue refreshed correctly the whole time,
+  which is why the two surfaces disagreed.
+- **An agent was told a pending approval had failed.** A call waiting on a
+  person received "no result was recorded… whether the call ran is unknown…
+  check the current state before repeating", which is what an interrupted turn
+  gets. Agents reasonably concluded something had broken and went looking for
+  it. A waiting call now says it is waiting, that it has not run, and that the
+  result will arrive later.
+- **Deciding one approval mis-described the others.** When several calls in one
+  response each need approval and you decide them one at a time, the ones still
+  queued were reported as unknown failures rather than as queued.
+
+### Added
+
+- Agents can look up how approvals work through `get_tool_info` on any gated
+  tool, or the `approvals` topic in the built-in guide. Nothing in the product
+  had ever explained the concept to them.
+
 ## [0.4.1] — 2026-08-13
 
 A hotfix. 0.4.0 could not open a database created by any earlier build.
@@ -84,5 +111,6 @@ First public release, and the first with installers.
 - A plugin's UI bundle is not sandboxed; it runs in the renderer with the full
   IPC bridge. See [SECURITY.md](SECURITY.md).
 
+[0.4.2]: https://github.com/mackerson/enclave-ai/releases/tag/v0.4.2
 [0.4.1]: https://github.com/mackerson/enclave-ai/releases/tag/v0.4.1
 [0.4.0]: https://github.com/mackerson/enclave-ai/releases/tag/v0.4.0
