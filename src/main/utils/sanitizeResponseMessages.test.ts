@@ -274,3 +274,114 @@ describe('sanitizeResponseMessagesForReplay', () => {
     expect(out).toEqual(input);
   });
 });
+
+/**
+ * A call that stopped for a human is not a call that failed, and the
+ * difference is the whole reason these two messages exist.
+ *
+ * An agent given the generic "outcome unknown, check state before repeating"
+ * notice for a pending approval does the reasonable thing with bad
+ * information: it goes looking for a race. One filed a detailed, confident,
+ * wrong bug report that way — parallel writes were "dropping results" when
+ * they were sitting in an approval queue.
+ */
+describe('a call waiting on approval says so', () => {
+  const threeGatedCalls = () => [
+    { role: 'user', content: 'write three files' },
+    {
+      role: 'assistant',
+      content: [
+        { type: 'tool-call', toolCallId: 'a', toolName: 'write_file', input: {} },
+        { type: 'tool-call', toolCallId: 'b', toolName: 'write_file', input: {} },
+        { type: 'tool-call', toolCallId: 'c', toolName: 'write_file', input: {} },
+        { type: 'tool-approval-request', toolCallId: 'a', approvalId: 'ap-a' },
+        { type: 'tool-approval-request', toolCallId: 'b', approvalId: 'ap-b' },
+        { type: 'tool-approval-request', toolCallId: 'c', approvalId: 'ap-c' },
+      ],
+    },
+  ];
+
+  const resultsFrom = (out: unknown[]) => {
+    const found: Record<string, string> = {};
+    for (const m of out as Array<{ role: string; content: unknown }>) {
+      if (m.role !== 'tool' || !Array.isArray(m.content)) continue;
+      for (const p of m.content as Array<{ toolCallId: string; output?: { value?: string } }>) {
+        found[p.toolCallId] = String(p.output?.value ?? '');
+      }
+    }
+    return found;
+  };
+
+  // Resuming one approval is what the inline card does. Its siblings are still
+  // pending, and must be described as pending — not as lost.
+  it('tells the siblings of a resumed approval that they are waiting, not lost', () => {
+    // 'a' is being resumed; 'b' and 'c' are still in the queue.
+    const out = sanitizeResponseMessagesForReplay(threeGatedCalls(), new Set(['a']), new Set(['b', 'c']));
+    const results = resultsFrom(out);
+
+    expect(results.b).toMatch(/waiting for a person to approve/i);
+    expect(results.c).toMatch(/waiting for a person to approve/i);
+    expect(results.b).toMatch(/has NOT run/);
+    // The call being resumed is answered by its approval-response, not here.
+    expect(results.a).toBeUndefined();
+  });
+
+  it('never tells an approval-pending call that its outcome is unknown', () => {
+    const results = resultsFrom(sanitizeResponseMessagesForReplay(threeGatedCalls(), new Set(['a']), new Set(['b', 'c'])));
+    for (const id of ['b', 'c']) {
+      expect(results[id]).not.toMatch(/Whether the call ran is unknown/);
+      expect(results[id]).not.toMatch(/Check the current state before repeating/);
+    }
+  });
+
+  it('tells it not to repeat, re-check, or work around', () => {
+    const results = resultsFrom(sanitizeResponseMessagesForReplay(threeGatedCalls(), new Set(['a']), new Set(['b', 'c'])));
+    expect(results.b).toMatch(/Do not repeat it/);
+    expect(results.b).toMatch(/do not check whether it happened/i);
+    expect(results.b).toMatch(/do not work around it/i);
+  });
+
+  // The generic notice still has a job: a turn that died mid-flight really is
+  // of unknown outcome, and saying otherwise would invite a double-apply.
+  it('still reports unknown for a call that never asked for approval', () => {
+    const out = sanitizeResponseMessagesForReplay([
+      { role: 'user', content: 'go' },
+      {
+        role: 'assistant',
+        content: [{ type: 'tool-call', toolCallId: 'x', toolName: 'bash', input: {} }],
+      },
+    ], new Set());
+
+    const results = resultsFrom(out);
+    expect(results.x).toMatch(/Whether the call ran is unknown/);
+    expect(results.x).not.toMatch(/waiting for a person/i);
+  });
+
+  it('leaves a call that already has a real result alone', () => {
+    const out = sanitizeResponseMessagesForReplay([
+      { role: 'user', content: 'go' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'tool-call', toolCallId: 'a', toolName: 'write_file', input: {} },
+          { type: 'tool-approval-request', toolCallId: 'a', approvalId: 'ap-a' },
+        ],
+      },
+      {
+        role: 'tool',
+        content: [{ type: 'tool-result', toolCallId: 'a', toolName: 'write_file', output: { type: 'text', value: 'written' } }],
+      },
+    ], new Set());
+
+    expect(resultsFrom(out).a).toBe('written');
+  });
+  // The one the existing "moot approval-request" test protects: an approval a
+  // newer message overtook is NOT pending, and must keep the honest unknown
+  // wording. Nobody is coming to decide it.
+  it('reports unknown for an approval that was overtaken, not pending', () => {
+    const out = sanitizeResponseMessagesForReplay(threeGatedCalls(), new Set(['a']), new Set());
+    const results = resultsFrom(out);
+    expect(results.b).toMatch(/Whether the call ran is unknown/);
+    expect(results.b).not.toMatch(/waiting for a person/i);
+  });
+});

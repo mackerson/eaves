@@ -29,6 +29,24 @@ export interface GuideTopic {
 
 export const ENCLAVE_GUIDE_TOPICS: GuideTopic[] = [
   {
+    id: 'approvals',
+    summary: 'Why some tool calls stop and wait for a person, and what to do while they do.',
+    body: `Some tools do not run the moment you call them. Anything that can change the user's machine — \`write_file\`, \`edit_file\`, \`bash\`, \`execute_code\` — pauses and asks the person first.
+
+**What you will see.** The turn ends without a result for that call. In a later turn you get either the tool's real result, or a note saying the call is still waiting. Neither is an error, and neither means anything was lost.
+
+**What to do.** Nothing, mostly:
+
+- **Do not repeat the call.** If it was approved and ran, calling again does it twice. This is the expensive mistake.
+- **Do not go looking for evidence** that it ran — reading the file back, listing the directory, checking for side effects. The answer arrives on its own, and probing wastes a turn to learn nothing.
+- **Do carry on** with anything that does not depend on it.
+- **Do say what you are waiting on** if everything else is blocked. The person may not realise a decision is sitting in front of them.
+
+**Several at once.** If you make several gated calls in one turn, each is decided separately. The person may approve one and leave the others, so you can get one real result while its siblings are still pending. That is normal — it is a queue, not a failure.
+
+**Why this exists.** The gate is the user's control over their own machine, and it is deliberate. An agent that treats a pending approval as a fault, and works around it, is routing around the one place a person gets to say no.`,
+  },
+  {
     id: 'overview',
     summary: 'What Enclave is and how its main surfaces fit together.',
     body: `Enclave is a local-first desktop application for working with AI agents. Everything — conversations, agents, notes, tasks, memory — is stored in a SQLite database on the user's own machine. Nothing is sent anywhere except the model provider calls the user configured.

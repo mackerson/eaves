@@ -52,6 +52,15 @@ interface MessageLike {
 export function sanitizeResponseMessagesForReplay(
   messages: unknown[],
   preserveCallIds: Set<string> = new Set(),
+  /**
+   * Calls whose approval is genuinely still outstanding — someone can still
+   * say yes. Supplied by the caller because the presence of an
+   * approval-request part does not answer the question: an approval a newer
+   * message overtook looks identical in the history and is never coming back.
+   * Only the resume path knows the difference, so replay passes nothing and
+   * keeps the honest "outcome unknown" wording.
+   */
+  pendingApprovalCallIds: Set<string> = new Set(),
 ): unknown[] {
   if (!Array.isArray(messages) || messages.length === 0) return messages;
 
@@ -114,7 +123,7 @@ export function sanitizeResponseMessagesForReplay(
     balanced.push(m);
   }
 
-  return dropEmptyContent(realignToolResults(balanced, preserveCallIds));
+  return dropEmptyContent(realignToolResults(balanced, preserveCallIds, pendingApprovalCallIds));
 }
 
 /**
@@ -134,7 +143,11 @@ export function sanitizeResponseMessagesForReplay(
  * right behind it. Results are position-independent, so moving them is safe;
  * only the pairing is load-bearing.
  */
-function realignToolResults(messages: MessageLike[], preserveCallIds: Set<string>): MessageLike[] {
+function realignToolResults(
+  messages: MessageLike[],
+  preserveCallIds: Set<string>,
+  pendingApprovalCallIds: Set<string> = new Set(),
+): MessageLike[] {
   // Index every result part by call id, then hand it to the first assistant
   // message that claims it. `claimed` keeps a duplicate result (same id
   // persisted twice across rows) from being emitted under two assistants.
@@ -165,12 +178,18 @@ function realignToolResults(messages: MessageLike[], preserveCallIds: Set<string
           claimed.add(part.toolCallId);
           results.push(result);
         } else if (!result) {
-          // Never answered — the turn died before the tool ran, or the
-          // approval it was waiting on was overtaken. Dropping the call would
-          // satisfy the provider but leave the model believing it never tried;
-          // answering it keeps the attempt in the conversation and lets the
-          // model decide what to do about it.
-          results.push(incompleteCallResult(part));
+          // Never answered. Dropping the call would satisfy the provider but
+          // leave the model believing it never tried; answering it keeps the
+          // attempt in the conversation and lets the model decide what to do.
+          //
+          // Which answer depends on what we know. A call that carried an
+          // approval request stopped for a person — that is not a failure and
+          // must not be described as one.
+          results.push(
+            pendingApprovalCallIds.has(part.toolCallId)
+              ? awaitingApprovalResult(part)
+              : incompleteCallResult(part),
+          );
         }
       }
       if (results.length > 0) out.push({ role: 'tool', content: results });
@@ -222,6 +241,45 @@ function incompleteCallResult(call: AssistantContentPart): ToolContentPart {
         'Reported by Enclave, not by the tool. Whether the call ran is unknown: it may have ' +
         'completed with its result lost. Check the current state before repeating anything ' +
         'that writes, edits, or sends.',
+    },
+  };
+}
+
+/**
+ * Stand in for a call that stopped to ask a person.
+ *
+ * The generic notice below says the outcome is unknown and to check state
+ * before repeating. For an approval that is correct but actively misleading:
+ * nothing ran, nothing is lost, and a human is looking at it right now.
+ *
+ * An agent told "unknown, may have completed" does the reasonable thing and
+ * goes hunting — re-reading files, re-issuing calls, reasoning about races
+ * that do not exist. One did exactly that and filed a confident, wrong bug
+ * report about parallel writes dropping results. The model was not at fault;
+ * it was told a failure had occurred, and it had no other source of truth
+ * about approvals, because nothing else in the system mentions them.
+ *
+ * So this says what is true and what to do: it has not run, someone is
+ * deciding, the result arrives later, leave it alone.
+ *
+ * Only used for approvals the caller confirms are still live. An approval a
+ * newer message overtook gets the generic notice, because for that one the
+ * outcome really is unknown and nobody is coming to decide it.
+ */
+function awaitingApprovalResult(call: AssistantContentPart): ToolContentPart {
+  return {
+    type: 'tool-result',
+    toolCallId: call.toolCallId,
+    toolName: call.toolName,
+    output: {
+      type: 'error-text',
+      value:
+        'This call is waiting for a person to approve it. Reported by Enclave, not by the tool. ' +
+        'It has NOT run and nothing has been lost: tools that can change things pause for ' +
+        'approval, and the person may not have answered yet. Do not repeat it, do not check ' +
+        'whether it happened, and do not work around it. If it is approved you will get its ' +
+        'real result in a later turn. Carry on with anything that does not depend on it, or ' +
+        'say plainly what you are waiting on.',
     },
   };
 }

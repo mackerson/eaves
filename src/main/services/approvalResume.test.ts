@@ -78,8 +78,11 @@ vi.mock('./ChannelDispatcher', () => ({
 vi.mock('../utils/perspectiveShift', () => ({
   perspectiveShiftMessages: (messages: unknown[]) => messages,
 }));
+// Passthrough, but a spy: one test needs to see which calls were reported as
+// still-pending, which is an argument rather than an effect.
+const sanitizeSpy = vi.fn((messages: unknown[]) => messages);
 vi.mock('../utils/sanitizeResponseMessages', () => ({
-  sanitizeResponseMessagesForReplay: (messages: unknown[]) => messages,
+  sanitizeResponseMessagesForReplay: (...args: unknown[]) => sanitizeSpy(...(args as [unknown[]])),
 }));
 // Real emitStreamSentinel: the assertions below read the sentinels off the
 // fake window, and a vi.fn() here would silently swallow them.
@@ -120,7 +123,10 @@ vi.mock('./modelContext', () => ({
   resolveDetectEndpoint: () => undefined,
 }));
 
-const registry = { register: vi.fn(), resolve: vi.fn() };
+// listForContext backs the "which siblings are still pending" lookup; default
+// to none so existing cases describe a lone approval, and set it per-test to
+// exercise the multi-approval case.
+const registry = { register: vi.fn(), resolve: vi.fn(), listForContext: vi.fn(() => []) };
 vi.mock('./PendingApprovalRegistry', () => ({
   getPendingApprovalRegistry: () => registry,
 }));
@@ -710,5 +716,61 @@ describe('resumeAfterApprovals — batch', () => {
     };
     const last = opts.formattedResult.messages.at(-1)!;
     expect(last.content).toHaveLength(1);
+  });
+});
+
+/**
+ * The case behind the whole change: a turn makes several gated calls and the
+ * person decides one on its own — exactly what the inline approval card does.
+ *
+ * The siblings are not part of this resume, so they get a synthesized result.
+ * They must be told they are queued, not that they failed: an agent given
+ * "outcome unknown, check state before repeating" goes hunting for a race and
+ * reports a bug that is not there.
+ */
+describe('resuming one approval while its siblings wait', () => {
+  // assembleReplayHistory calls the sanitizer too, with two arguments. Only
+  // the resume passes a third, so select on that rather than on call order.
+  const pendingSetFromLastResume = (): Set<string> | undefined =>
+    sanitizeSpy.mock.calls.filter(c => c.length >= 3).at(-1)?.[2] as Set<string> | undefined;
+
+  it('reports the still-pending siblings, and only from the same message', async () => {
+    sanitizeSpy.mockClear();
+    registry.listForContext.mockReturnValue([
+      { toolCallId: TOOL_CALL_ID, messageId: ORIG_MSG_ID, approvalId: APPROVAL_ID },
+      { toolCallId: 'tc-sibling', messageId: ORIG_MSG_ID, approvalId: 'ap-sibling' },
+      // Pending on a different message — a different turn's business.
+      { toolCallId: 'tc-elsewhere', messageId: 'msg-other', approvalId: 'ap-elsewhere' },
+    ] as never);
+
+    await resumeAfterApproval({
+      approvalId: APPROVAL_ID,
+      decision: decision(true),
+      registryEntry: chatEntry(),
+      getMainWindow,
+      toolStates: new Map(),
+    });
+
+    const pending = pendingSetFromLastResume();
+    expect([...(pending ?? [])]).toEqual(['tc-sibling']);
+    // The call being resumed is preserved, never described as pending.
+    expect(pending?.has(TOOL_CALL_ID)).toBe(false);
+  });
+
+  it('reports nothing pending when it was the only approval', async () => {
+    sanitizeSpy.mockClear();
+    registry.listForContext.mockReturnValue([
+      { toolCallId: TOOL_CALL_ID, messageId: ORIG_MSG_ID, approvalId: APPROVAL_ID },
+    ] as never);
+
+    await resumeAfterApproval({
+      approvalId: APPROVAL_ID,
+      decision: decision(true),
+      registryEntry: chatEntry(),
+      getMainWindow,
+      toolStates: new Map(),
+    });
+
+    expect([...(pendingSetFromLastResume() ?? [])]).toEqual([]);
   });
 });

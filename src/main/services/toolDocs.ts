@@ -68,12 +68,36 @@ A summary is a condensed account, not a transcript. When exact wording matters, 
  * Extended documentation by tool name. Absent means the tool's description is
  * already complete on its own.
  */
+/**
+ * Shared by every tool that pauses for human approval.
+ *
+ * Deliberately not on the wire: the default toolset already sits within nine
+ * tokens of its ceiling, and this would be paid on every request by every
+ * agent forever to prevent a confusion that only arises once. The runtime
+ * result an agent gets when a call is actually pending carries the same
+ * instruction at the moment it matters; this is here for an agent that asks.
+ */
+const APPROVAL_DOC = `This tool pauses for human approval before it runs.
+
+What that looks like:
+- The turn ends with no result for the call. That is not a failure and nothing was lost.
+- If the person approves, you get the real result in a later turn.
+- If several gated calls are made at once, each is decided separately — one may come back while its siblings are still waiting.
+
+What to do while a call is pending:
+- Do not repeat it. If it was approved and ran, calling again does it twice.
+- Do not check whether it happened by reading files back or listing directories; the answer arrives on its own.
+- Do carry on with anything that does not depend on it, or say plainly what you are waiting on.`;
+
 export const TOOL_DOCS: Record<string, string> = {
   create_workflow: WORKFLOW_DOC,
   update_workflow: WORKFLOW_DOC,
   create_routine: CRON_DOC,
   update_routine: CRON_DOC,
-  execute_code: EXECUTE_CODE_DOC,
+  execute_code: `${EXECUTE_CODE_DOC}\n\n${APPROVAL_DOC}`,
+  write_file: APPROVAL_DOC,
+  edit_file: APPROVAL_DOC,
+  bash: APPROVAL_DOC,
   search_conversations: TRANSCRIPT_SEARCH_DOC,
   read_conversation_at: TRANSCRIPT_SEARCH_DOC,
   summarize_conversation_at: TRANSCRIPT_SUMMARY_DOC,

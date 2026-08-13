@@ -224,7 +224,26 @@ export async function resumeAfterApprovals(opts: ApprovalBatchOptions): Promise<
   // Every call in the batch stays alive through sanitizing — each one is
   // resolved by its approval-response below, not by a tool-result.
   const preservedCallIds = new Set(resolved.map(r => r.entry.toolCallId));
-  const sanitizedPrior = sanitizeResponseMessagesForReplay(priorMessages, preservedCallIds);
+
+  // Siblings from the same assistant message whose approvals are still
+  // outstanding. When one call of several is decided on its own — which is
+  // what the inline approval card does — the rest are not part of this resume
+  // and get a synthesized result. Without this they are described as failures
+  // of unknown outcome, and an agent reading that goes looking for a race:
+  // re-reading files, re-issuing calls, reasoning about a bug that is not
+  // there. They are simply still in the queue, and they are told so.
+  const stillPending = new Set(
+    getPendingApprovalRegistry()
+      .listForContext(entry.context, entry.contextId)
+      .filter(p => p.messageId === entry.messageId && !preservedCallIds.has(p.toolCallId))
+      .map(p => p.toolCallId),
+  );
+
+  const sanitizedPrior = sanitizeResponseMessagesForReplay(
+    priorMessages,
+    preservedCallIds,
+    stillPending,
+  );
 
   // One approval-request part per decided call, so the SDK can map each
   // response back to the call it belongs to.
