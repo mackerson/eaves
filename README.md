@@ -84,10 +84,6 @@ Pre-built installers are not published yet — watch [Releases](https://github.c
 
 Until then, see [Development](#development) to build from source.
 
-> **Note:** the bundled plugin repositories are being opened alongside the core.
-> Until they are public, `yarn setup:plugins` cannot clone them and the app runs
-> without bundled plugins — everything else works.
-
 ### First Run
 
 A setup wizard walks you through it on first launch:
