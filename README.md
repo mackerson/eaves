@@ -74,15 +74,18 @@ This is information asymmetry reversal. It's only possible with local-first, use
 
 ### Download & Install
 
-Pre-built installers are not published yet — watch [Releases](https://github.com/mackerson/enclave-ai/releases). When they land they will cover:
+Grab the latest build from [Releases](https://github.com/mackerson/enclave-ai/releases/latest).
 
-| Platform | Artifact |
-|---|---|
-| macOS | `.dmg` — drag to Applications |
-| Windows | `.exe` installer |
-| Linux | `.AppImage`, `.deb`, or `.rpm` |
+| Platform | Artifact | |
+|---|---|---|
+| Linux | `.AppImage` (`chmod +x` and run), `.deb`, or `.rpm` | ✅ |
+| Windows x64 | `.exe` installer | ✅ |
+| macOS | `.dmg` | not yet — has to be built on a Mac |
 
-Until then, see [Development](#development) to build from source.
+**These builds are unsigned.** Windows SmartScreen will show *"Windows protected
+your PC"* on first run — click **More info** → **Run anyway**. If you would
+rather not take that on faith, [build from source](#development); it is four
+commands.
 
 ### First Run
 
@@ -467,7 +470,8 @@ against, so the two cannot drift.
 - ⏳ End-to-end encryption hardening
 
 ### v1.0 — Production Ready
-- ⏳ Signed, published cross-platform installers
+- ✅ Published installers for Linux and Windows (0.4.0)
+- ⏳ A macOS build, and code signing on all three
 - ⏳ Community plugin ecosystem
 - ⏳ Full stability and testing
 
