@@ -12,7 +12,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#quick-start)
 [![Electron](https://img.shields.io/badge/Electron-32-47848F.svg?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Telemetry](https://img.shields.io/badge/telemetry-none-success.svg)](#-privacy-by-architecture)
+[![Telemetry](https://img.shields.io/badge/telemetry-none-success.svg)](#privacy-by-architecture)
 
 </div>
 
@@ -89,7 +89,7 @@ Grab the latest build from [Releases](https://github.com/mackerson/enclave-ai/re
 
 **These builds are unsigned.** Windows SmartScreen will show *"Windows protected
 your PC"* on first run — click **More info** → **Run anyway**. If you would
-rather not take that on faith, [build from source](#development); it is four
+rather not take that on faith, [build from source](docs/development.md); it is four
 commands.
 
 ### First Run
@@ -101,13 +101,13 @@ A setup wizard walks you through it on first launch:
 3. **Start chatting** — agents remember conversation history
 4. **Create projects** — organize work into projects with tasks, notes, and files
 
-Your data lives in a local SQLite database. See [Data Storage](#data-storage) for file locations.
+Your data lives in a local SQLite database. See [data storage](docs/development.md#data-storage) for file locations.
 
 ---
 
 ## Features
 
-### 🧠 Agent Memory
+### Agent Memory
 Agents remember your conversations and develop genuine continuity:
 - Persistent memory across sessions, scoped per agent
 - **Core memory blocks** — small, always-in-context summaries the agent edits itself
@@ -115,7 +115,7 @@ Agents remember your conversations and develop genuine continuity:
 - **Transcript search** — agents can search and re-read any conversation they took part in, and summarize a stretch of it on demand
 - **Automatic compaction** — long histories fold into a running summary instead of falling off the end of the context window
 
-### 🤖 Multi-Agent Support
+### Multi-Agent Support
 Work with different AI models in one place:
 - Anthropic Claude, OpenAI, Google Gemini
 - OpenRouter (hundreds of models behind one key)
@@ -125,7 +125,7 @@ Work with different AI models in one place:
 
 Available models are fetched live from each provider, so new releases appear without an app update.
 
-### 💬 Channels and Chats
+### Channels and Chats
 Two surfaces over one storage substrate:
 - **Chats** — focused 1:1 conversations, with tags, folders, and archiving
 - **Channels** — IRC-style rooms where several humans and agents talk together
@@ -133,13 +133,13 @@ Two surfaces over one storage substrate:
 - Branching, regeneration, and draft messages
 - **Compact mode** strips everything but the conversation
 
-### ⚙️ Work That Runs Itself
+### Work That Runs Itself
 - **Workflows** — run one by hand or on a schedule; every run records per-node results, a failed one included, so you can see how far it got
 - **Routines** — cron-scheduled workflows, with real run outcomes recorded
 - **Work sessions** — an agent gets its own container to do a task in, and reports back
 - **Approvals** — destructive tools ask first; approvals batch into one decision, with per-conversation waivers
 
-### 🔒 Privacy by Architecture
+### Privacy by Architecture
 Your data stays under your control:
 - All data stored locally in SQLite
 - No cloud dependency, no tracking, **no telemetry**
@@ -147,14 +147,14 @@ Your data stays under your control:
 - Works offline, always
 - Optional P2P sync (we can't read your data — the architecture proves it)
 
-### 🔌 Plugin System
-Community-driven extensibility:
+### Plugin System
+Community-driven extensibility — [plugin authoring](docs/plugin-development.md), [build and shipping](docs/plugin-build-system.md):
 - Plugin backends run in **sandboxed worker threads** behind a permission-gated bridge
 - Isolated storage per plugin, with pre-install permission consent
 - In-app marketplace for discovery and installation
 - Register tools, views, services, and event handlers
 
-### 🎨 The Rest
+### The Rest
 - Embedded terminal, project files, tasks, notes, and a calendar
 - Theming, including custom themes — see [creating-themes.md](docs/creating-themes.md)
 - Local database backup and restore
@@ -164,144 +164,31 @@ Community-driven extensibility:
 
 ## How Device Sync Works
 
-Enclave supports optional device synchronization using a **coordination model** (like Tailscale) rather than cloud storage. **LAN peer-to-peer sync (Phase 1) has shipped**; cross-network coordination is on the roadmap.
+LAN peer-to-peer sync has shipped. Devices pair with a pinned certificate and
+talk directly — no cloud storage. Cross-network coordination (Enclave Mesh) is
+on the roadmap.
 
-### Direct P2P Sync (Free, Always) — *Phase 1 shipped*
-- Devices connect directly over IP (local network today; internet via coordination later)
-- Direct peer-to-peer encrypted sync between your devices
-- Pairing pins a device certificate; a peer presenting a different identity is dropped
-- No servers, no cloud storage, no middleman
-- Works on LAN, VPN, or direct IP connection
-- Like AirDrop, but for any of your devices that can reach each other
-
-### Enclave Mesh — In Development, Optional, Premium
-- Mobile phone app
-- Helps devices find each other across networks and NAT
-- Provides encrypted relay when direct connection isn't possible
-- End-to-end encrypted — we **can't read your data**
-- Coordination metadata only (device info, connection logs)
-- Your conversations, agents, and content never touch our servers
-
-### What This Means
-
-**Privacy by architecture:**
-- We coordinate connections, not content
-- Even if our servers were compromised, your data is safe
-- End-to-end encryption means we physically can't read your conversations
-- Similar trust model to Signal, Tailscale, Syncthing
-
-**Technical details:** See the [architecture overview](docs/architecture/README.md)
+Full write-up: [docs/device-sync.md](docs/device-sync.md).
 
 ---
 
 ## Plugins
 
-Plugins live in their own repositories and are symlinked into the core for development. `bundled-plugins.json` is the manifest that decides what ships.
+Plugins live in their own repositories and are symlinked into the core for
+development. `bundled-plugins.json` is the manifest that decides what ships.
 
-### Plugin Tiers
-
-| Tier | Description | Ships with app? |
-|------|-------------|-----------------|
-| **Bundled** | Ships in packaged builds | Yes |
-| **Example** | Reference implementation | Yes |
-| **QA** | Needs testing before promotion | No |
-| **Community** | Optional, user-installed | No |
-
-### Bundled Manifest
-
-| Plugin | Repo | Tier |
-|--------|------|------|
-| character-card-import | `enclave-plugin-character-card-import` | Bundled |
-| chatgpt-import | `enclave-plugin-chatgpt-import` | Bundled |
-| plugin-marketplace | `enclave-plugin-plugin-marketplace` | Bundled |
-| event-inspector | `enclave-plugin-event-inspector` | Bundled |
-| webview | `enclave-plugin-webview` | Example |
-| openmemory | `enclave-plugin-openmemory` | Community |
-
-Two more (`claude-code-terminal`, `enclave-claude-context`) are developed alongside the core but are not in the manifest yet.
-
-### Plugin Loading
-
-Enclave loads plugins from three locations (highest priority first):
-1. `plugins/` in the app directory (dev mode only, symlinks to sibling repos)
-2. `~/.config/enclave/plugins/` (user-installed)
-3. `dist/plugins/` (bundled with packaged app)
-
-### Creating a Plugin
-
-All sandboxed plugins (`sandboxVersion: 1`) use the same pattern. Full guide:
-[plugin-development.md](docs/plugin-development.md).
-
-1. Create a repo with `plugin.json`:
-```json
-{
-  "id": "com.example.myplugin",
-  "name": "My Plugin",
-  "version": "1.0.0",
-  "description": "Does something cool",
-  "type": "tool",
-  "entry": "index.cjs",
-  "sandboxVersion": 1,
-  "permissions": ["storage:read", "storage:write", "tools:register"]
-}
-```
-
-2. Create `index.cjs` with activate/deactivate:
-```javascript
-module.exports = {
-  async activate(context) {
-    context.tools.register('my_tool', {
-      description: 'Does something',
-      parameters: { type: 'object', properties: {} },
-      execute: async (args) => ({ result: 'done' }),
-    });
-  },
-  async deactivate(context) {}
-};
-```
-
-3. Install to `~/.config/enclave/plugins/your-plugin/` or add to `bundled-plugins.json`.
-
-### Plugin API
-
-The sandboxed plugin context provides:
-- **Data Access**: Read agents, projects, channels, settings
-- **Actions**: Create tasks/notes, send messages, switch context
-- **UI Extensions**: Register views, sidebar items, commands
-- **Events**: Subscribe to app events, emit custom events
-- **Tools**: Register AI tools (available to agents)
-- **Services**: Register/discover inter-plugin services
-- **Storage**: Plugin-isolated key-value storage
-- **Logging**: Prefixed logging for debugging
-
-A plugin's **UI bundle** is not sandboxed — it runs in the renderer with the
-full IPC bridge. Install plugins the way you would install any code that runs
-as you. See [SECURITY.md](SECURITY.md).
+- [Writing a plugin](docs/plugin-development.md) — manifest, sandbox, `context` API
+- [Build and shipping](docs/plugin-build-system.md) — tiers, load paths, bundled manifest, Vite
+- [SECURITY.md](SECURITY.md) — a plugin's UI bundle is not sandboxed; install them like any code that runs as you
 
 ---
 
 ## Architecture
 
-### Tech Stack
-- **Desktop**: Electron 32
-- **Frontend**: React 18 + TypeScript + Tailwind CSS + shadcn/ui
-- **Database**: SQLite (via better-sqlite3), with FTS5 and optional sqlite-vec
-- **AI SDK**: Vercel AI SDK (provider-agnostic streaming)
-- **Build**: Vite for renderer, TypeScript for main process
+Electron main process, React renderer, SQLite, Vercel AI SDK. The EventBus is
+storage-only — nothing on it starts an agent turn.
 
-### Repository Pattern
-All database operations go through repository classes:
-- `AgentRepository` — agent CRUD
-- `ProjectRepository` — projects, tasks, notes
-- `ChannelRepository` — channels, chats, and messages
-- `SettingsRepository` — app settings and encrypted provider keys
-- `PluginStorageRepository` — plugin data
-
-### Event System
-An app-wide EventBus carries data, AI, and plugin events. It is deliberately
-**storage-only**: nothing on the bus starts an agent turn. Turns are started by
-explicit dispatch, which is what keeps multi-agent rooms from looping. See
-[ADR-001](docs/architecture/README.md).
+Diagrams, invariants, stack, and ADR-001: [docs/architecture/README.md](docs/architecture/README.md).
 
 ---
 
@@ -309,7 +196,9 @@ explicit dispatch, which is what keeps multi-agent rooms from looping. See
 
 | Document | What's in it |
 |---|---|
-| [docs/architecture/README.md](docs/architecture/README.md) | Diagrams, invariants, and the architecture decision records |
+| [docs/architecture/README.md](docs/architecture/README.md) | Diagrams, invariants, stack, and the architecture decision records |
+| [docs/device-sync.md](docs/device-sync.md) | LAN P2P sync and the planned Mesh |
+| [docs/development.md](docs/development.md) | Clone, scripts, data locations, migrations |
 | [docs/plugin-development.md](docs/plugin-development.md) | Writing a plugin |
 | [docs/plugin-build-system.md](docs/plugin-build-system.md) | How plugin bundles are built and shipped |
 | [docs/creating-themes.md](docs/creating-themes.md) | Custom themes |
@@ -320,27 +209,6 @@ explicit dispatch, which is what keeps multi-agent rooms from looping. See
 
 ## Development
 
-### Project Structure
-```
-enclave-ai/
-├── src/
-│   ├── main/               # Electron main process
-│   │   ├── services/       # Core services (DB, AI, plugins, sandbox, sync)
-│   │   ├── repositories/   # Data access layer
-│   │   └── ipc/            # IPC handlers by domain
-│   ├── renderer/           # React frontend
-│   │   ├── components/     # UI components
-│   │   ├── stores/         # Zustand state
-│   │   └── views/          # Top-level views
-│   └── shared/             # Shared types, IPC contracts, Zod validation
-├── scripts/qa/             # Headless E2E harness (real IPC, isolated profile)
-├── plugins/                # Symlinks to sibling plugin repos (gitignored)
-├── bundled-plugins.json    # Manifest of plugins that ship with the app
-└── dist/                   # Built files
-```
-
-### Getting Started
-
 ```bash
 git clone https://github.com/mackerson/enclave-ai.git
 cd enclave-ai
@@ -349,102 +217,8 @@ yarn setup:plugins           # Clone plugin repos + create symlinks
 yarn dev:clean               # Start development
 ```
 
-Node version is pinned in `.nvmrc` (currently **22**). Package manager: **yarn (classic, 1.x)**.
-
-### Scripts
-
-**Development**:
-```bash
-yarn dev                 # Development mode
-yarn dev:clean           # Clean dev processes + start fresh (recommended)
-yarn dev:status          # Check running dev processes
-yarn kill:dev            # Kill orphaned dev processes
-```
-
-**Plugins**:
-```bash
-yarn setup:plugins           # Clone plugin repos + symlink into plugins/
-yarn setup:plugins:pull      # Pull latest on all plugin repos
-yarn build:plugins           # Build all plugin UI bundles
-```
-
-**Build**:
-```bash
-yarn typecheck           # Typecheck the renderer
-yarn build               # Typecheck + build everything
-yarn build:main          # Build main process only
-yarn build:renderer      # Build renderer only
-yarn build:mcp           # Build the MCP servers
-yarn start               # Run built app
-yarn package             # Package app for distribution
-```
-
-**Testing**:
-```bash
-yarn test                # Run tests in watch mode
-yarn test:run            # Run tests once
-yarn test:coverage       # Run tests with coverage report
-yarn test:ui             # Open Vitest UI
-yarn knip                # Find unused files, exports, and dependencies
-```
-
-Note: Tests and dev automatically handle native module rebuilds (`better-sqlite3`). Switching between `yarn test` and `yarn dev` just works — no manual `rebuild-sqlite3` needed.
-
-**End-to-end**: `scripts/qa/harness.mjs` launches a headless Enclave on an
-isolated profile — real renderer, real IPC, real SQLite, never your own data.
-
-```bash
-yarn build:main && yarn build:renderer
-node scripts/qa/harness.mjs launch --fresh
-node scripts/qa/harness.mjs eval '(async () => (await window.electron.getChats()).chats.length)()'
-node scripts/qa/harness.mjs stop
-```
-
-**Environment**:
-```bash
-yarn rebuild-sqlite3     # Rebuild SQLite for Electron (usually automatic)
-yarn reset:dev           # Reset dev environment to defaults (with confirmation)
-yarn reset:dev:force     # Reset without confirmation (use with caution!)
-```
-
-### Development Workflow
-
-`dev:clean` kills orphaned Electron/Vite processes before starting, preventing duplicate windows.
-
-**Quitting the app:**
-- **macOS**: Press `Cmd+Q` (closing the window keeps the app running in dock)
-- **Windows/Linux**: Just close the window
-
-### Data Storage
-
-Enclave stores all data locally on your machine:
-
-**Database Location** (platform-specific):
-- **macOS**: `~/Library/Application Support/enclave/enclave-data/enclave.db`
-- **Linux**: `~/.config/enclave/enclave-data/enclave.db`
-- **Windows**: `%APPDATA%\enclave\enclave-data\enclave.db`
-
-**User Plugins**:
-- **macOS**: `~/Library/Application Support/enclave/plugins/`
-- **Linux**: `~/.config/enclave/plugins/`
-- **Windows**: `%APPDATA%\enclave\plugins\`
-
-**Logs**: in the `userData` directory alongside the database.
-
-### Initial State
-
-On first run, Enclave creates a default agent, a "Personal" project, and a
-`#general` channel. To reset to that state during development, use `yarn reset:dev`.
-
-### Database Migrations
-
-The schema is versioned via SQLite's `user_version` and migrated automatically on
-startup (`src/main/services/migrations.ts`). The migration history has been
-squashed into a single baseline at **v75**; `MIN_SUPPORTED_VERSION` is 74, and a
-database older than that is rejected at startup with a clear message rather than
-silently half-migrated. A frozen snapshot of the pre-squash schema
-(`__fixtures__/schema-v74.sql`) is what the test suite compares the baseline
-against, so the two cannot drift.
+Node 22 (`.nvmrc`), yarn classic 1.x. Scripts, data locations, and migrations:
+[docs/development.md](docs/development.md). PR flow: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

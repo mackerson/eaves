@@ -10,6 +10,26 @@ claim on this page was verified against source on 2026-07-14 and re-verified
 and corrected on 2026-07-17 (post-cleanup: deletion events, dropped plugin
 actions, `plugin:event` gating).
 
+## Stack
+
+- **Desktop**: Electron 32
+- **Frontend**: React 18 + TypeScript + Tailwind CSS + shadcn/ui
+- **Database**: SQLite (via better-sqlite3), with FTS5 and optional sqlite-vec
+- **AI SDK**: Vercel AI SDK (provider-agnostic streaming)
+- **Build**: Vite for renderer, TypeScript for main process
+
+All database operations go through repository classes:
+`AgentRepository`, `ProjectRepository`, `ChannelRepository` (channels, chats,
+and messages), `SettingsRepository` (including encrypted provider keys),
+`PluginStorageRepository`.
+
+The app-wide EventBus carries data, AI, and plugin events. It is deliberately
+**storage-only**: nothing on the bus starts an agent turn. Turns are started by
+explicit dispatch, which is what keeps multi-agent rooms from looping. See
+ADR-001 below.
+
+Device sync (user-facing): [device-sync.md](../device-sync.md).
+
 ## Process & trust
 
 What runs where, and who is trusted. Main is the capability root; the
@@ -262,7 +282,7 @@ deliberate surface, not debt:
 
 | Topic | Where to look |
 |-------|---------------|
-| LAN sync | Code: `src/main/services/sync/SyncService.ts`, oplog seeded by the schema baseline. Detailed design docs are maintained outside the public repo. |
+| LAN sync | User-facing: [device-sync.md](../device-sync.md). Code: `src/main/services/sync/SyncService.ts`, oplog seeded by the schema baseline. Detailed design docs are maintained outside the public repo. |
 | Shadow agents | Code: `src/main/services/ShadowService.ts` + `shadowConsolidate.ts`. |
 | Plugin sandbox internals | Code: `src/main/services/sandbox/`; overview in `CLAUDE.md` "Plugin System" and the [plugin authoring guide](../plugin-development.md). |
 | Content blocks | No current doc — `ContentBlocksBuilder.ts` and `chatHelpers.ts` are the source of truth. (`architecture-content-blocks.md` described a since-fixed gap; removed 2026-07-14) |

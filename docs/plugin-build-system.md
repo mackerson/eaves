@@ -3,7 +3,7 @@
 How Enclave plugins are structured, cloned, and built for local development.
 This is a **build/dev** doc — for the runtime security model, the `context` API,
 and permissions see [`plugin-development.md`](plugin-development.md). Today, shipping is
-governed by `bundled-plugins.json`, described at the bottom.
+governed by `bundled-plugins.json` (tiers and the current manifest are below).
 
 ## Where plugins live
 
@@ -18,6 +18,29 @@ enclave/plugins/<name> -> ../plugins/<name>   # gitignored symlink
 
 Which plugins ship in a packaged build is declared in `bundled-plugins.json`
 (each entry has a `tier`: bundled / community / qa / example).
+
+## Plugin tiers
+
+| Tier | Description | Ships with app? |
+|------|-------------|-----------------|
+| **Bundled** | Ships in packaged builds | Yes |
+| **Example** | Reference implementation | Yes |
+| **QA** | Needs testing before promotion | No |
+| **Community** | Optional, user-installed | No |
+
+## Bundled manifest
+
+| Plugin | Repo | Tier |
+|--------|------|------|
+| character-card-import | `enclave-plugin-character-card-import` | Bundled |
+| chatgpt-import | `enclave-plugin-chatgpt-import` | Bundled |
+| plugin-marketplace | `enclave-plugin-plugin-marketplace` | Bundled |
+| event-inspector | `enclave-plugin-event-inspector` | Bundled |
+| webview | `enclave-plugin-webview` | Example |
+| openmemory | `enclave-plugin-openmemory` | Community |
+
+Two more (`claude-code-terminal`, `enclave-claude-context`) are developed
+alongside the core but are not in the manifest yet.
 
 ## First-time setup
 

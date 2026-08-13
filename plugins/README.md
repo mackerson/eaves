@@ -13,4 +13,6 @@ Plugins are cloned to `../plugins/` (sibling directory) and symlinked here.
 
 ## Plugin Repos
 
-See `bundled-plugins.json` in the project root for the full list of plugins and their GitHub repos.
+See `bundled-plugins.json` in the project root for the full list, or
+[docs/plugin-build-system.md](../docs/plugin-build-system.md) for tiers and
+what ships. Writing a plugin: [docs/plugin-development.md](../docs/plugin-development.md).

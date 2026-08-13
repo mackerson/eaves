@@ -68,6 +68,8 @@ change has a runtime surface, exercise it — don't rely on "it compiles."
 
 ## Project layout
 
+- [`docs/development.md`](./docs/development.md) — clone, scripts, data
+  locations, and migrations.
 - [`CLAUDE.md`](./CLAUDE.md) — the authoritative guide to the stack, build
   commands, and core patterns (IPC, repositories, the plugin sandbox).
 - [`docs/architecture/README.md`](./docs/architecture/README.md) — architecture
