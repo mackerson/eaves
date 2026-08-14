@@ -51,7 +51,10 @@
     "test:coverage": "npm rebuild better-sqlite3 --silent && vitest run --coverage",
     "jscpd": "jscpd src",
     "knip": "knip",
-    "jscpd:ci": "jscpd src --exitCode 1"
+    "jscpd:ci": "jscpd src --exitCode 1",
+    "seed": "node scripts/qa/seed.mjs",
+    "seed:demo": "yarn rebuild-sqlite3 && yarn build:main && yarn build:renderer && node scripts/qa/harness.mjs launch --fresh && node scripts/qa/seed.mjs --scenario=demo",
+    "seed:stop": "node scripts/qa/harness.mjs stop"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.71",

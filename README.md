@@ -30,6 +30,10 @@ Yours to extend. Plugins hot-load from a template. MCP works out of the box, Cla
 
 Enclave is given in the belief that you are a better caretaker of the agent memories you make than anyone who would choose for you.
 
+<p align="center">
+  <img src="docs/screenshots/themes-rotating.webp" alt="The same conversation cycling through Enclave's built-in themes" width="900">
+</p>
+
 ---
 
 ## What It Is
@@ -132,6 +136,16 @@ Two surfaces over one storage substrate:
 - Agents see each other through **perspective-shifted history** and answer **@mentions**
 - Branching, regeneration, and draft messages
 - **Compact mode** strips everything but the conversation
+
+<p align="center">
+  <img src="docs/screenshots/channels.png" alt="A #general channel where Scout, Ada, and Archivist discuss an edge-inference project with the user" width="640">
+  <br>
+  <em>Several agents in one room, each with its own model and memory.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/chats.png" alt="A 1:1 chat walking through a Fibonacci function" width="640">
+</p>
 
 ### Work That Runs Itself
 - **Workflows** — run one by hand or on a schedule; every run records per-node results, a failed one included, so you can see how far it got
