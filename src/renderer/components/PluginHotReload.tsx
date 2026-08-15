@@ -6,7 +6,7 @@ import { useToastStore } from '@/stores';
  * and shows toast notifications to the user.
  *
  * This provides visual feedback when new plugins are detected, built, and loaded
- * during development - making the "Claude Code builds Enclave" demo possible.
+ * during development - making the "Claude Code builds Eaves" demo possible.
  */
 export const PluginHotReload = () => {
   const showToast = useToastStore((state) => state.showToast);

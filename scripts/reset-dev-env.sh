@@ -1,5 +1,5 @@
 #!/bin/bash
-# Reset Enclave development environment to defaults
+# Reset Eaves development environment to defaults
 # This script deletes the local database and user data
 
 set -e
@@ -13,23 +13,23 @@ NC='\033[0m' # No Color
 # Detect platform
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
-    USER_DATA_DIR="$HOME/Library/Application Support/enclave"
+    USER_DATA_DIR="$HOME/Library/Application Support/eaves"
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Linux. Honour XDG_CONFIG_HOME — Electron does, so hardcoding
-    # ~/.config/enclave meant this script could not clean an isolated profile
+    # ~/.config/eaves meant this script could not clean an isolated profile
     # (the QA harness runs the app under its own XDG_CONFIG_HOME) and would
     # instead reach for the developer's real data.
-    USER_DATA_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/enclave"
+    USER_DATA_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/eaves"
 else
     # Windows (Git Bash)
-    USER_DATA_DIR="$APPDATA/enclave"
+    USER_DATA_DIR="$APPDATA/eaves"
 fi
 
-DB_DIR="$USER_DATA_DIR/enclave-data"
+DB_DIR="$USER_DATA_DIR/eaves-data"
 PLUGINS_DIR="$USER_DATA_DIR/plugins"
 LOGS_DIR="$USER_DATA_DIR/logs"
 
-echo -e "${YELLOW}Enclave Development Environment Reset${NC}"
+echo -e "${YELLOW}Eaves Development Environment Reset${NC}"
 echo ""
 echo "This will delete:"
 echo "  - Database: $DB_DIR"
@@ -49,14 +49,14 @@ if [[ "$1" != "--force" ]]; then
     fi
 fi
 
-# Kill any running Enclave processes (not all Electron apps!).
+# Kill any running Eaves processes (not all Electron apps!).
 #
-# Match on this checkout's own path rather than the literal "personal/enclave",
+# Match on this checkout's own path rather than the literal "personal/eaves",
 # which only matched one developer's directory layout. Anywhere else it killed
 # nothing and the script went on to rm -rf the database out from under a still
 # running app.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-echo -e "${YELLOW}→ Stopping Enclave processes...${NC}"
+echo -e "${YELLOW}→ Stopping Eaves processes...${NC}"
 pkill -f "${REPO_ROOT}.*electron" || true
 pkill -f "${REPO_ROOT}.*yarn dev" || true
 pkill -f "${REPO_ROOT}.*vite" || true
@@ -65,7 +65,7 @@ sleep 1
 # Refuse to delete data belonging to an app we could not stop: the whole point
 # of the kill above is that nothing has the SQLite file open when we remove it.
 if pgrep -f "${REPO_ROOT}.*electron" > /dev/null; then
-    echo -e "${RED}Enclave is still running — refusing to delete its data.${NC}"
+    echo -e "${RED}Eaves is still running — refusing to delete its data.${NC}"
     echo "  Quit the app and re-run, or kill it manually."
     exit 1
 fi

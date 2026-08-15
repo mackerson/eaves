@@ -18,7 +18,7 @@ Implementation: `src/main/services/sync/SyncService.ts`.
 - Works on LAN, VPN, or direct IP connection
 - Like AirDrop, but for any of your devices that can reach each other
 
-## Enclave Mesh — in development, optional, premium
+## Eaves Mesh — in development, optional, premium
 
 - Mobile phone app
 - Helps devices find each other across networks and NAT

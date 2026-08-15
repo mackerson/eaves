@@ -27,7 +27,7 @@ describe('PluginConfigManager', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-plugin-config-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-plugin-config-'));
     getPathMock.mockReturnValue(tmpDir);
     loggerInfoMock.mockClear();
   });

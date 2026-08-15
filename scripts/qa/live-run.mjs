@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Run every live-*.mjs suite in sequence and summarize. Each suite launches its
- * own fresh instance and skips cleanly (exit 0) when no ENCLAVE_QA_*_KEY is set,
+ * own fresh instance and skips cleanly (exit 0) when no EAVES_QA_*_KEY is set,
  * so this is safe to run anywhere — it just skips when unkeyed.
  *
  *   node scripts/qa/live-run.mjs

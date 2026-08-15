@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Load a seed dataset into a running headless Enclave, through real IPC.
+// Load a seed dataset into a running headless Eaves, through real IPC.
 //
 // Usage:
 //   yarn build:main && yarn build:renderer

@@ -64,8 +64,8 @@ function buildTestDb(dbPath: string): Database.Database {
 }
 
 function setupEnv(retention?: number): Env {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-backup-test-'));
-  const dbPath = path.join(dataDir, 'enclave.db');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-backup-test-'));
+  const dbPath = path.join(dataDir, 'eaves.db');
   const db = buildTestDb(dbPath);
 
   const service = new BackupService({
@@ -99,7 +99,7 @@ describe('BackupService', () => {
     it('writes a snapshot file with the canonical name', async () => {
       const snap = await env.service.createSnapshot('manual');
 
-      expect(snap.filename).toMatch(/^enclave-\d{8}T\d{9}Z-manual\.db$/);
+      expect(snap.filename).toMatch(/^eaves-\d{8}T\d{9}Z-manual\.db$/);
       expect(snap.reason).toBe('manual');
       expect(fs.existsSync(snap.path)).toBe(true);
       expect(snap.sizeBytes).toBeGreaterThan(0);
@@ -145,7 +145,7 @@ describe('BackupService', () => {
     it('ignores files that do not match the canonical pattern', async () => {
       await env.service.createSnapshot('manual');
       fs.writeFileSync(path.join(env.dataDir, 'backups', 'stray.txt'), 'hello');
-      fs.writeFileSync(path.join(env.dataDir, 'backups', 'enclave-broken.db'), 'invalid');
+      fs.writeFileSync(path.join(env.dataDir, 'backups', 'eaves-broken.db'), 'invalid');
 
       const listed = env.service.listSnapshots();
       expect(listed).toHaveLength(1);
@@ -188,11 +188,11 @@ describe('BackupService', () => {
     it('rejects names that do not match the canonical pattern', () => {
       expect(() => env.service.deleteSnapshot('../../etc/passwd')).toThrow(/non-snapshot/);
       expect(() => env.service.deleteSnapshot('arbitrary.db')).toThrow(/non-snapshot/);
-      expect(() => env.service.deleteSnapshot('enclave-20260514T120000Z-evil.db')).toThrow(/non-snapshot/);
+      expect(() => env.service.deleteSnapshot('eaves-20260514T120000Z-evil.db')).toThrow(/non-snapshot/);
     });
 
     it('throws when the snapshot file is missing', () => {
-      expect(() => env.service.deleteSnapshot('enclave-20260514T120000000Z-manual.db'))
+      expect(() => env.service.deleteSnapshot('eaves-20260514T120000000Z-manual.db'))
         .toThrow(/not found/);
     });
   });
@@ -233,12 +233,12 @@ describe('BackupService', () => {
     });
 
     it('rejects non-canonical filenames', async () => {
-      await expect(env.service.restoreFromSnapshot('../enclave.db'))
+      await expect(env.service.restoreFromSnapshot('../eaves.db'))
         .rejects.toThrow(/non-snapshot/);
     });
 
     it('throws when the snapshot is missing', async () => {
-      await expect(env.service.restoreFromSnapshot('enclave-20260514T120000000Z-manual.db'))
+      await expect(env.service.restoreFromSnapshot('eaves-20260514T120000000Z-manual.db'))
         .rejects.toThrow(/not found/);
     });
   });

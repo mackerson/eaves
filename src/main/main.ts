@@ -110,7 +110,7 @@ function getIconPath(): string {
 }
 
 // Windows paints the native caption bar with the *system* accent color, which
-// has nothing to do with the active Enclave theme — a user running a yellow
+// has nothing to do with the active Eaves theme — a user running a yellow
 // Windows accent gets a bright yellow band above a black app. Taking over the
 // frame with a Window Controls Overlay lets TopMenuBar own that row and keeps
 // the caption buttons themed. Seeded with the dark --bg-secondary default and
@@ -192,7 +192,7 @@ function createWindow() {
       ]
       : [
         "default-src 'self'",
-        // enclave-module: serves React shims to plugin UI bundles;
+        // eaves-module: serves React shims to plugin UI bundles;
         // plugin: serves installed-plugin UI bundles from userData/plugins/
         `script-src 'self' ${MODULE_SHIM_SCHEME}: ${PLUGIN_BUNDLE_SCHEME}:`,
         "style-src 'self' 'unsafe-inline'", // Tailwind requires inline styles
@@ -214,7 +214,7 @@ function createWindow() {
   // In packaged builds the renderer loads over file://, so plugin UI bundles'
   // externalized `/node_modules/react*` imports would resolve to a nonexistent
   // file:///node_modules/react and 404. Redirect those three to the
-  // enclave-module: scheme, which serves React shims. Dev is handled
+  // eaves-module: scheme, which serves React shims. Dev is handled
   // by vite.config.ts middleware instead.
   if (!isDev) {
     // Match all file:// requests and decide precisely in the handler — match
@@ -342,7 +342,7 @@ app.on('child-process-gone', (_event, details) => {
   logger.error('[Main] Child process gone:', details);
 });
 
-// Single-instance lock. Enclave has no multi-window feature, so a second launch
+// Single-instance lock. Eaves has no multi-window feature, so a second launch
 // only ever means a rival OS process on the same SQLite DB — two writers with no
 // busy_timeout can silently drop each other's writes, and a post-update
 // double-launch can race the boot migration. The common trigger is benign: the
@@ -384,7 +384,7 @@ app.whenReady().then(async () => {
     const detail = error instanceof Error ? error.message : String(error);
     logger.error('[Main] Fatal error during startup — cannot continue', error);
     dialog.showErrorBox(
-      'Enclave could not start',
+      'Eaves could not start',
       `${detail}\n\nA log with the full details is in:\n${app.getPath('userData')}/logs`,
     );
     app.exit(1);

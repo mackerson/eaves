@@ -30,10 +30,10 @@ const TABS: TabMeta[] = [
   { id: 'sync', label: 'Sync', description: 'Keep your devices in sync over your local network — private, serverless, end-to-end encrypted.' },
   { id: 'advanced', label: 'Advanced', description: 'Safety, setup wizard, logs.' },
   { id: 'updates', label: 'Updates', description: 'Version and update checks.' },
-  { id: 'data', label: 'Data', description: 'Your Enclave data directory.' },
+  { id: 'data', label: 'Data', description: 'Your Eaves data directory.' },
 ];
 
-const LAST_TAB_KEY = 'enclave.settings.lastTab';
+const LAST_TAB_KEY = 'eaves.settings.lastTab';
 
 function loadLastTab(): TabId {
   try {

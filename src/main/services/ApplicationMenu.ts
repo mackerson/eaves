@@ -9,11 +9,11 @@ import {
 /**
  * Native application menu for macOS.
  *
- * Enclave draws its own menu bar in the renderer (TopMenuBar), which is the
+ * Eaves draws its own menu bar in the renderer (TopMenuBar), which is the
  * right call on Windows — where the window is frameless and that bar owns the
  * title row — and on Linux. macOS is different: the system menu bar is always
  * present and cannot be hidden, so an app that sets no menu inherits
- * Electron's stock default. That is exactly what Enclave did, leaving mac
+ * Electron's stock default. That is exactly what Eaves did, leaving mac
  * users with a stale default menu above a second, custom one.
  *
  * So: real menu on darwin, no menu anywhere else, both driven by the shared

@@ -11,7 +11,7 @@ interface ImportPluginMeta {
   title: string;      // Display name
   icon?: string;
   component: string;  // Component name
-  pluginId: string;   // Full plugin ID (e.g., 'com.enclave.chatgpt-import')
+  pluginId: string;   // Full plugin ID (e.g., 'com.eaves.chatgpt-import')
   folderName?: string;
   source?: string;
   uiMetadata?: {

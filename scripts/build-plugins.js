@@ -160,7 +160,7 @@ function buildByPath(pluginPath) {
 }
 
 function main() {
-  console.log('🔧 Enclave Plugin Builder (Incremental)\n');
+  console.log('🔧 Eaves Plugin Builder (Incremental)\n');
 
   if (forceRebuild) {
     console.log('⚡ Force rebuild mode - rebuilding all plugins\n');

@@ -19,7 +19,7 @@ const { mockLogger, mockService, mockScheduler, mockSync } = vi.hoisted(() => ({
   mockSync: { stop: vi.fn() },
 }));
 // Quiesced before the restore so their timers can't fire a DB read into the
-// window where enclave.db is being replaced.
+// window where eaves.db is being replaced.
 vi.mock('../services/RoutineScheduler', () => ({ getRoutineScheduler: () => mockScheduler }));
 vi.mock('../services/sync/SyncService', () => ({ getSyncService: () => mockSync }));
 vi.mock('../services/logger', () => ({
@@ -32,7 +32,7 @@ vi.mock('../services/BackupService', () => ({
 
 import { registerBackupHandlers } from './backups';
 
-const VALID_FILENAME = 'enclave-20260514T143218456Z-manual.db';
+const VALID_FILENAME = 'eaves-20260514T143218456Z-manual.db';
 
 function fakeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
@@ -95,7 +95,7 @@ describe('Backup IPC handlers', () => {
     it('rejects unknown reasons embedded in the filename', async () => {
       const result = await handlers.get('backup:delete')!(
         {},
-        'enclave-20260514T143218456Z-evil.db',
+        'eaves-20260514T143218456Z-evil.db',
       );
       expect(result.success).toBe(false);
       expect(mockService.deleteSnapshot).not.toHaveBeenCalled();
@@ -108,7 +108,7 @@ describe('Backup IPC handlers', () => {
     });
 
     it('accepts the optional `-N` counter suffix', async () => {
-      const withSuffix = 'enclave-20260514T143218456Z-manual-2.db';
+      const withSuffix = 'eaves-20260514T143218456Z-manual-2.db';
       const result = await handlers.get('backup:delete')!({}, withSuffix);
       expect(result.success).toBe(true);
       expect(mockService.deleteSnapshot).toHaveBeenCalledWith(withSuffix);
@@ -117,7 +117,7 @@ describe('Backup IPC handlers', () => {
 
   describe('backup:restore', () => {
     it('rejects malformed filenames', async () => {
-      const result = await handlers.get('backup:restore')!({}, '../enclave.db');
+      const result = await handlers.get('backup:restore')!({}, '../eaves.db');
       expect(result.success).toBe(false);
       expect(mockService.restoreFromSnapshot).not.toHaveBeenCalled();
       expect(app.relaunch).not.toHaveBeenCalled();

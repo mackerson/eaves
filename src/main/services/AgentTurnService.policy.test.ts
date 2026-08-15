@@ -41,7 +41,7 @@ const {
 }));
 
 vi.mock('electron', () => ({
-  app: { getPath: () => '/tmp/enclave-test', on: vi.fn(), whenReady: () => Promise.resolve() },
+  app: { getPath: () => '/tmp/eaves-test', on: vi.fn(), whenReady: () => Promise.resolve() },
   BrowserWindow: class {},
 }));
 vi.mock('./logger', () => ({

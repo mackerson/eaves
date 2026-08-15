@@ -6,7 +6,7 @@
  *
  *   node scripts/qa/local-marketplace.mjs [port=8791]
  *   # then, in another terminal:
- *   ENCLAVE_REGISTRY_URL=http://localhost:8791/registry.json yarn dev
+ *   EAVES_REGISTRY_URL=http://localhost:8791/registry.json yarn dev
  *   # open  Plugins → Marketplace
  *
  * Note: the plugins here also ship bundled, so installing one drops a copy into
@@ -22,9 +22,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.argv[2] || 8791);
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..'); // enclave/
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..'); // eaves/
 const pluginsDir = path.resolve(root, '..', 'plugins'); // sibling ../plugins
-const serveDir = path.join(tmpdir(), 'enclave-local-marketplace');
+const serveDir = path.join(tmpdir(), 'eaves-local-marketplace');
 
 // The V1 first-party registry set (also the plugins with release tooling).
 const PLUGINS = ['character-card-import', 'chatgpt-import', 'openmemory', 'event-inspector'];
@@ -53,7 +53,7 @@ for (const name of PLUGINS) {
 
   entries.push({
     id: m.id, name: m.name, description: m.description || '', author: m.author || 'mackerson',
-    homepage: `https://github.com/mackerson/enclave-plugin-${name}`,
+    homepage: `https://github.com/mackerson/eaves-plugin-${name}`,
     tier: 'official', latest: m.version, minAppVersion: '0.3.0',
     permissions: m.permissions || [],
     release: { tag: `v${m.version}`, asset, url: `http://localhost:${PORT}/${asset}`, sha256 },
@@ -72,6 +72,6 @@ createServer((req, res) => {
 }).listen(PORT, '127.0.0.1', () => {
   console.log(`\nLocal marketplace serving ${entries.length} plugins on http://localhost:${PORT}`);
   console.log(`\n  Launch the app pointed at it (another terminal):\n`);
-  console.log(`    ENCLAVE_REGISTRY_URL=http://localhost:${PORT}/registry.json yarn dev\n`);
+  console.log(`    EAVES_REGISTRY_URL=http://localhost:${PORT}/registry.json yarn dev\n`);
   console.log(`  Then open  Plugins → Marketplace.  Ctrl-C here to stop.`);
 });

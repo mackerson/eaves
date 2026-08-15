@@ -19,7 +19,7 @@ describe('serveStaticFile containment', () => {
   let siblingDir: string;
 
   beforeEach(async () => {
-    root = await fs.mkdtemp(path.join(os.tmpdir(), 'enclave-static-'));
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'eaves-static-'));
     baseDir = path.join(root, 'img');
     siblingDir = path.join(root, 'img-secret'); // shares the "img" prefix
     await fs.mkdir(baseDir, { recursive: true });

@@ -16,7 +16,7 @@ vi.mock('../services/logger', () => ({
 // Mock Electron app module
 vi.mock('electron', () => ({
   app: {
-    getPath: vi.fn(() => '/tmp/enclave-test'),
+    getPath: vi.fn(() => '/tmp/eaves-test'),
   },
 }));
 

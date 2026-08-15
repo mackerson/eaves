@@ -25,7 +25,7 @@ const MODE_OPTIONS: { value: UpdateMode; label: string; description: string }[] 
   {
     value: 'external',
     label: 'Managed externally',
-    description: 'Disable the in-app updater. For users who install Enclave via a system package manager (AUR, Homebrew, apt).',
+    description: 'Disable the in-app updater. For users who install Eaves via a system package manager (AUR, Homebrew, apt).',
   },
 ];
 
@@ -134,7 +134,7 @@ export function UpdatesSection() {
               background: 'var(--bg-tertiary, rgba(0,0,0,0.04))',
             }}
           >
-            <p>Updates are managed by your system package manager. Use it to upgrade Enclave.</p>
+            <p>Updates are managed by your system package manager. Use it to upgrade Eaves.</p>
           </div>
         ) : (
           <>

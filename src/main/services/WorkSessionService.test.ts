@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 
 vi.mock('electron', () => ({
-  app: { getPath: () => '/tmp/enclave-test', isPackaged: true },
+  app: { getPath: () => '/tmp/eaves-test', isPackaged: true },
 }));
 vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

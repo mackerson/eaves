@@ -19,7 +19,7 @@ import * as path from 'path';
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/enclave-marketplace-test-userdata',
+    getPath: () => '/tmp/eaves-marketplace-test-userdata',
     getVersion: () => '1.0.0',
   },
 }));
@@ -67,7 +67,7 @@ describe('assertDestOwnership', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-marketplace-ownership-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-marketplace-ownership-'));
   });
 
   afterEach(() => {
@@ -125,7 +125,7 @@ describe('removeLegacyCollapsedInstall', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-marketplace-legacy-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-marketplace-legacy-'));
   });
 
   afterEach(() => {

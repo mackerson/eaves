@@ -336,8 +336,8 @@ export function registerChatHandlers(getMainWindow: () => BrowserWindow | null) 
         };
       }
 
-      const dataDir = path.join(app.getPath('userData'), 'enclave-data');
-      const attachmentsDir = path.join(dataDir, 'enclave-attachments');
+      const dataDir = path.join(app.getPath('userData'), 'eaves-data');
+      const attachmentsDir = path.join(dataDir, 'eaves-attachments');
 
       // Ensure attachments directory exists
       if (!fs.existsSync(attachmentsDir)) {
@@ -799,8 +799,8 @@ export function registerChatHandlers(getMainWindow: () => BrowserWindow | null) 
     const attachmentRepo = getMessageAttachmentRepository();
 
     // Get data directory
-    const dataDir = path.join(app.getPath('userData'), 'enclave-data');
-    const attachmentsDir = path.join(dataDir, 'enclave-attachments');
+    const dataDir = path.join(app.getPath('userData'), 'eaves-data');
+    const attachmentsDir = path.join(dataDir, 'eaves-attachments');
 
     // Ensure attachments directory exists
     if (!fs.existsSync(attachmentsDir)) {

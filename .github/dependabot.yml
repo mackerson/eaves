@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Security patches only for npm. Enclave pins Electron deliberately (32.x),
+  # Security patches only for npm. Eaves pins Electron deliberately (32.x),
   # and better-sqlite3 and node-pty are native modules whose ABI is tied to
   # that pin — a routine version bump on either produces an app that builds
   # and then dies at startup on ERR_DLOPEN_FAILED. Version updates are opened

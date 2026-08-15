@@ -40,7 +40,7 @@ describe('sanitizeResponseMessagesForReplay', () => {
     expect(out[1].content[0]).toMatchObject({ type: 'tool-result', toolCallId: 'call_dangling', toolName: 'bash' });
     const notice = out[1].content[0].output.value;
     // Attributed to us, not to bash — the model must not read this as tool output.
-    expect(notice).toContain('Reported by Enclave');
+    expect(notice).toContain('Reported by Eaves');
     // Reports an unknown outcome, never that nothing happened: a call can run
     // and lose its result, and "nothing ran" reads as licence to redo it.
     expect(notice).toContain('unknown');

@@ -133,7 +133,7 @@ export function LogViewerModal({ open, onOpenChange }: LogViewerModalProps) {
         <DialogHeader>
           <DialogTitle>Application Logs</DialogTitle>
           <DialogDescription>
-            Diagnostic logs written by Enclave. Only the end of each file is loaded.
+            Diagnostic logs written by Eaves. Only the end of each file is loaded.
           </DialogDescription>
         </DialogHeader>
 

@@ -120,19 +120,19 @@ describe('SettingsRepository', () => {
   });
 
   describe('dev env key override', () => {
-    const ENV_KEYS = ['ENCLAVE_OPENROUTER_API_KEY', 'ENCLAVE_QA_OPENROUTER_KEY'];
+    const ENV_KEYS = ['EAVES_OPENROUTER_API_KEY', 'EAVES_QA_OPENROUTER_KEY'];
     afterEach(() => { for (const k of ENV_KEYS) delete process.env[k]; });
 
-    it('lets ENCLAVE_<PROVIDER>_API_KEY win over the stored value', () => {
+    it('lets EAVES_<PROVIDER>_API_KEY win over the stored value', () => {
       testDb.prepare('UPDATE settings SET api_keys_json = ? WHERE id = 1')
         .run(JSON.stringify({ openrouter: 'encrypted_stored_key' }));
-      process.env.ENCLAVE_OPENROUTER_API_KEY = 'env-key';
+      process.env.EAVES_OPENROUTER_API_KEY = 'env-key';
 
       expect(repository.get().apiKeys.openrouter).toBe('env-key');
     });
 
-    it('honors the QA fallback var ENCLAVE_QA_<PROVIDER>_KEY', () => {
-      process.env.ENCLAVE_QA_OPENROUTER_KEY = 'qa-key';
+    it('honors the QA fallback var EAVES_QA_<PROVIDER>_KEY', () => {
+      process.env.EAVES_QA_OPENROUTER_KEY = 'qa-key';
       expect(repository.get().apiKeys.openrouter).toBe('qa-key');
     });
 

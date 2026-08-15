@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { EnclaveGlyph } from '@/components/ui/EnclaveGlyph';
+import { EavesGlyph } from '@/components/ui/EavesGlyph';
 
 interface OOBEWelcomeStepProps {
   onNext: (userName: string) => void;
@@ -25,13 +25,13 @@ export function OOBEWelcomeStep({ onNext, onSkip, defaultUserName }: OOBEWelcome
     <div className="p-8 space-y-8">
       <div className="text-center space-y-3">
         <div className="mb-4">
-          <EnclaveGlyph className="w-16 h-16 mx-auto" style={{ color: 'var(--text-primary, #fff)' }} />
+          <EavesGlyph className="w-16 h-16 mx-auto" style={{ color: 'var(--text-primary, #fff)' }} />
         </div>
         <h1
           className="text-3xl font-bold tracking-tight"
           style={{ color: 'var(--text-primary, #fff)' }}
         >
-          Welcome to Enclave
+          Welcome to Eaves
         </h1>
         <p
           className="text-base leading-relaxed max-w-md mx-auto"

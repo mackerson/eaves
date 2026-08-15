@@ -225,7 +225,7 @@ function PairingPanel({
       )}
       {unpaired.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          No unpaired Enclave devices found on this network yet. Make sure sync is enabled on
+          No unpaired Eaves devices found on this network yet. Make sure sync is enabled on
           the other device too.
         </p>
       )}

@@ -18,7 +18,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOGO_SVG="$PROJECT_ROOT/assets/icon.svg"
 ICONS_DIR="$PROJECT_ROOT/assets/icons"
 
-echo "🎨 Enclave Icon Generator"
+echo "🎨 Eaves Icon Generator"
 echo "========================"
 echo ""
 

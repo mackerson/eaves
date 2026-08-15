@@ -115,7 +115,7 @@ export function OOBEProviderStep({ onNext, onBack, defaultApiKeys }: OOBEProvide
               What&apos;s a provider?
             </p>
             <p>
-              A provider is the company (or local server) that runs the AI model your agent talks to. Enclave itself never sees your conversations — messages go straight from your machine to whichever provider you pick.
+              A provider is the company (or local server) that runs the AI model your agent talks to. Eaves itself never sees your conversations — messages go straight from your machine to whichever provider you pick.
             </p>
           </div>
 

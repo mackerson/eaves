@@ -4,7 +4,7 @@ MY_PID=$$
 MY_PPID=$(ps -o ppid= -p $MY_PID | tr -d ' ')
 
 killed=0
-for pid in $(pgrep -f 'electron.*enclave|vite.*enclave' 2>/dev/null); do
+for pid in $(pgrep -f 'electron.*eaves|vite.*eaves' 2>/dev/null); do
   # Skip our own process tree
   if [ "$pid" = "$MY_PID" ] || [ "$pid" = "$MY_PPID" ]; then
     continue

@@ -21,8 +21,8 @@ import { logger } from './logger';
  */
 
 const REGISTRY_URL =
-  process.env.ENCLAVE_REGISTRY_URL ||
-  'https://raw.githubusercontent.com/mackerson/enclave-plugin-registry/main/registry.json';
+  process.env.EAVES_REGISTRY_URL ||
+  'https://raw.githubusercontent.com/mackerson/eaves-plugin-registry/main/registry.json';
 
 export interface RegistryRelease {
   tag: string;
@@ -111,14 +111,14 @@ function permsEqual(a: string[], b: string[]): boolean {
  * in the renderer and can call install directly, consent must be shown by a
  * trusted surface the plugin can't spoof — a modal window owned by main, whose
  * page and preload the renderer cannot reach (see windows/pluginConsentWindow).
- * Returns true if the user approves. `ENCLAVE_PLUGIN_AUTO_CONSENT` (1=approve,
+ * Returns true if the user approves. `EAVES_PLUGIN_AUTO_CONSENT` (1=approve,
  * 0=decline) bypasses the window for headless tests only.
  *
  * `priorPermissions` drives the update case: grants the user has not previously
  * consented to are badged, so an update that widens access reads as one.
  */
 async function promptConsent(entry: RegistryPlugin, priorPermissions?: string[]): Promise<boolean> {
-  const flag = process.env.ENCLAVE_PLUGIN_AUTO_CONSENT;
+  const flag = process.env.EAVES_PLUGIN_AUTO_CONSENT;
   if (flag === '1') return true;
   if (flag === '0') return false;
 
@@ -205,7 +205,7 @@ export async function installPlugin(id: string): Promise<{ id: string; folderNam
   if (!entry) throw new Error(`"${id}" is not in the plugin registry`);
   if (!entry.release) throw new Error(`"${entry.name}" has no published build yet`);
   if (entry.minAppVersion && compareVersions(app.getVersion(), entry.minAppVersion) < 0) {
-    throw new Error(`"${entry.name}" needs Enclave ${entry.minAppVersion}+ (you have ${app.getVersion()})`);
+    throw new Error(`"${entry.name}" needs Eaves ${entry.minAppVersion}+ (you have ${app.getVersion()})`);
   }
   const { url, sha256 } = entry.release;
   if (!url.startsWith('https://') && !url.startsWith('http://localhost')) {
@@ -221,7 +221,7 @@ export async function installPlugin(id: string): Promise<{ id: string; folderNam
     if (!approved) throw new Error('Installation cancelled');
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-plugin-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-plugin-'));
   try {
     // 1. download
     const res = await fetch(url, { redirect: 'follow' });

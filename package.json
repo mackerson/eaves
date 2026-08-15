@@ -1,16 +1,16 @@
 {
-  "name": "enclave",
+  "name": "eaves",
   "version": "0.4.2",
-  "desktopName": "enclave-ai.desktop",
+  "desktopName": "eaves.desktop",
   "description": "AI chat that remembers your projects, works offline, and respects your privacy",
   "author": "Ackerson Labs <oss@ackersonlabs.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mackerson/enclave-ai.git"
+    "url": "git+https://github.com/mackerson/eaves.git"
   },
-  "homepage": "https://github.com/mackerson/enclave-ai#readme",
-  "bugs": "https://github.com/mackerson/enclave-ai/issues",
+  "homepage": "https://github.com/mackerson/eaves#readme",
+  "bugs": "https://github.com/mackerson/eaves/issues",
   "main": "dist/main/main/main.js",
   "scripts": {
     "postinstall": "electron-rebuild -f -w better-sqlite3 && bash scripts/sign-native-macos.sh && node scripts/build-plugins.js",
@@ -38,7 +38,7 @@
     "prepackage": "yarn prepare:native && yarn build",
     "package": "electron-builder",
     "package:mac": "yarn prepare:native && yarn build && set -a && . ./.env.local && set +a && electron-builder --mac",
-    "reinstall": "pkill -x Electron || true && rm -rf ~/Library/Application\\ Support/enclave/enclave-data && yarn rebuild-sqlite3 && yarn dev",
+    "reinstall": "pkill -x Electron || true && rm -rf ~/Library/Application\\ Support/eaves/eaves-data && yarn rebuild-sqlite3 && yarn dev",
     "rebuild-sqlite3": "electron-rebuild -f -w better-sqlite3",
     "setup:plugins": "bash scripts/setup-plugins.sh",
     "setup:plugins:pull": "bash scripts/setup-plugins.sh --pull",
@@ -131,18 +131,18 @@
     "vitest": "^4.0.4"
   },
   "build": {
-    "appId": "com.enclave.app",
-    "productName": "Enclave AI",
+    "appId": "com.eaves.app",
+    "productName": "Eaves",
     "publish": [
       {
         "provider": "github",
         "owner": "mackerson",
-        "repo": "enclave-ai",
+        "repo": "eaves",
         "private": false
       }
     ],
     "appImage": {
-      "artifactName": "Enclave-AI-${version}.${ext}"
+      "artifactName": "Eaves-${version}.${ext}"
     },
     "files": [
       "dist/**/*"
@@ -214,7 +214,7 @@
       ]
     },
     "nsis": {
-      "artifactName": "Enclave-AI-Setup-${version}.${ext}",
+      "artifactName": "Eaves-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

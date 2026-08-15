@@ -44,7 +44,7 @@ re-running against the same instance is safe; `run-all.mjs` always starts
 ## LLM determinism policy
 
 Flows probe `localhost:11434` and use the smallest local ollama model
-(override: `ENCLAVE_QA_MODEL=name`). Without ollama every flow still asserts
+(override: `EAVES_QA_MODEL=name`). Without ollama every flow still asserts
 the plumbing it can reach deterministically — an unreachable provider must
 *persist* its failure (`[Error: …]` assistant message / in-channel dispatch
 notice, still carrying dispatch metadata), which is itself part of the pinned

@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="assets/icons/icon-256.png" alt="Enclave" width="128" height="128">
+<img src="assets/icons/icon-256.png" alt="Eaves" width="128" height="128">
 
-# Enclave
+# Eaves
 
 **An AI and automation workspace that remembers your projects, works offline, and respects your privacy.**
 
-[![CI](https://github.com/mackerson/enclave-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/mackerson/enclave-ai/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/mackerson/enclave-ai?label=release&color=blue)](https://github.com/mackerson/enclave-ai/releases/latest)
+[![CI](https://github.com/mackerson/eaves/actions/workflows/ci.yml/badge.svg)](https://github.com/mackerson/eaves/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mackerson/eaves?label=release&color=blue)](https://github.com/mackerson/eaves/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#quick-start)
 [![Electron](https://img.shields.io/badge/Electron-32-47848F.svg?logo=electron&logoColor=white)](https://www.electronjs.org/)
@@ -16,7 +16,7 @@
 
 </div>
 
-Enclave is a desktop workspace for humans and agents that are allowed to remember you.
+Eaves is a desktop workspace for humans and agents that are allowed to remember you.
 
 Claude, GPT, Gemini, Grok and the rest through OpenRouter — or whatever you're already running in Ollama and LM Studio. They stay who they were yesterday.
 
@@ -28,10 +28,10 @@ Local by default. SQLite on your disk. A missed deploy or a changed policy can't
 
 Yours to extend. Plugins hot-load from a template. MCP works out of the box, Claude Code as a plugin, and an agent can bang out the thing you're missing in an afternoon — then you hand it to a friend, or to everybody.
 
-Enclave is given in the belief that you are a better caretaker of the agent memories you make than anyone who would choose for you.
+Eaves is given in the belief that you are a better caretaker of the agent memories you make than anyone who would choose for you.
 
 <p align="center">
-  <img src="docs/screenshots/themes-rotating.webp" alt="The same conversation cycling through Enclave's built-in themes" width="900">
+  <img src="docs/screenshots/themes-rotating.webp" alt="The same conversation cycling through Eaves's built-in themes" width="900">
 </p>
 
 ---
@@ -62,7 +62,7 @@ Right now, the power dynamic is broken:
 - **Then you get dumbed-down chatbots** as providers optimize them, and either tier can be shut down or changed at any time
 - **Information flows one way**: You → Corporate AI → Corporate profit
 
-Enclave flips this:
+Eaves flips this:
 - **Your AI works for you** remembers your goals, protects your interests
 - **You control the data** it lives on your devices, not corporate servers
 - **Leverage whatever you want** without living in a walled garden or paying infra cost for every task
@@ -83,7 +83,7 @@ This is information asymmetry reversal. It's only possible with local-first, use
 
 ### Download & Install
 
-Grab the latest build from [Releases](https://github.com/mackerson/enclave-ai/releases/latest).
+Grab the latest build from [Releases](https://github.com/mackerson/eaves/releases/latest).
 
 | Platform | Artifact | |
 |---|---|---|
@@ -179,7 +179,7 @@ Community-driven extensibility — [plugin authoring](docs/plugin-development.md
 ## How Device Sync Works
 
 LAN peer-to-peer sync has shipped. Devices pair with a pinned certificate and
-talk directly — no cloud storage. Cross-network coordination (Enclave Mesh) is
+talk directly — no cloud storage. Cross-network coordination (Eaves Mesh) is
 on the roadmap.
 
 Full write-up: [docs/device-sync.md](docs/device-sync.md).
@@ -224,8 +224,8 @@ Diagrams, invariants, stack, and ADR-001: [docs/architecture/README.md](docs/arc
 ## Development
 
 ```bash
-git clone https://github.com/mackerson/enclave-ai.git
-cd enclave-ai
+git clone https://github.com/mackerson/eaves.git
+cd eaves
 yarn install                 # Install deps + rebuild sqlite for Electron
 yarn setup:plugins           # Clone plugin repos + create symlinks
 yarn dev:clean               # Start development
@@ -273,7 +273,7 @@ Node 22 (`.nvmrc`), yarn classic 1.x. Scripts, data locations, and migrations:
 
 ## AI use
 
-Enclave is built with heavy AI assistance. That is stated here rather than left
+Eaves is built with heavy AI assistance. That is stated here rather than left
 for you to work out from the commit log.
 
 I have a repetitive strain injury. Typing has a daily budget, and I spend it on
@@ -310,7 +310,7 @@ Security issues go through [SECURITY.md](./SECURITY.md), never a public issue.
 
 **Software should respect users. AI should work for people, not corporations.**
 
-Enclave is built on the belief that:
+Eaves is built on the belief that:
 - **Users deserve sovereignty** — your data, your devices, your control
 - **Agents need continuity** — memory and identity matter for genuine utility
 - **Communities build better tools** — open systems enable protective innovation

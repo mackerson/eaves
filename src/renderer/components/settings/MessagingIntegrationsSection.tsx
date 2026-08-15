@@ -56,7 +56,7 @@ const PLATFORMS: PlatformMeta[] = [
   {
     platform: 'telegram',
     label: 'Telegram',
-    description: 'Access Enclave conversations remotely via a Telegram bot.',
+    description: 'Access Eaves conversations remotely via a Telegram bot.',
     tokenLabel: 'Bot Token',
     tokenPlaceholder: 'Paste token from @BotFather',
     tokenHelp: 'Create a bot at @BotFather on Telegram to get a token.',
@@ -95,7 +95,7 @@ export function MessagingIntegrationsSection() {
     <div className="pt-6 border-t border-border">
       <h3 className="text-xl font-semibold mb-1">Messaging Integrations</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Access Enclave conversations from outside the app.
+        Access Eaves conversations from outside the app.
       </p>
       <div className="space-y-6">
         {registered.map(meta => (
@@ -346,7 +346,7 @@ function BridgeCard({ meta, status, onStatusChange }: BridgeCardProps) {
             onChange={(e) => setAutoStart(e.target.checked)}
             className="h-4 w-4"
           />
-          <span>Auto-start when Enclave launches</span>
+          <span>Auto-start when Eaves launches</span>
         </label>
 
         <div className="flex items-center gap-2">

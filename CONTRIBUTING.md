@@ -1,6 +1,6 @@
-# Contributing to Enclave
+# Contributing to Eaves
 
-Thanks for your interest in improving Enclave. This guide covers how to get set
+Thanks for your interest in improving Eaves. This guide covers how to get set
 up, the conventions we follow, and how to get a change merged.
 
 By participating you agree to our [Code of Conduct](./CODE_OF_CONDUCT.md).
@@ -19,14 +19,14 @@ By participating you agree to our [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Development setup
 
-Enclave is an Electron + React + TypeScript app. You'll need:
+Eaves is an Electron + React + TypeScript app. You'll need:
 
 - **Node 22** (pinned in [`.nvmrc`](./.nvmrc) — `nvm use` picks it up)
 - **Yarn (classic, 1.x)**
 
 ```bash
-git clone https://github.com/mackerson/enclave-ai.git
-cd enclave-ai
+git clone https://github.com/mackerson/eaves.git
+cd eaves
 yarn install          # installs deps + rebuilds better-sqlite3 for Electron
 yarn setup:plugins    # clones the bundled plugin repos + symlinks them
 yarn dev:clean        # clean any orphaned dev processes, then start dev mode
@@ -77,13 +77,13 @@ change has a runtime surface, exercise it — don't rely on "it compiles."
 
 ## Plugins
 
-Plugins live in their own repositories (`enclave-plugin-*`) and run sandboxed in
+Plugins live in their own repositories (`eaves-plugin-*`) and run sandboxed in
 Worker Threads. If you're building a plugin rather than changing the core app,
 start with **[docs/plugin-development.md](./docs/plugin-development.md)** — the
 manifest, the `context` API, permissions, and a worked example. You don't need a
-full Enclave dev build to develop one.
+full Eaves dev build to develop one.
 
 ## Questions
 
-Open a [discussion or issue](https://github.com/mackerson/enclave-ai/issues) —
+Open a [discussion or issue](https://github.com/mackerson/eaves/issues) —
 we're happy to help you land your first contribution.

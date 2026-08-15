@@ -1,40 +1,40 @@
 {
   "$schema": "./bundled-plugins.schema.json",
-  "description": "Plugins that ship with packaged Enclave builds. Each entry specifies the GitHub repo and version tag to include.",
+  "description": "Plugins that ship with packaged Eaves builds. Each entry specifies the GitHub repo and version tag to include.",
   "plugins": [
     {
       "name": "character-card-import",
-      "repo": "mackerson/enclave-plugin-character-card-import",
+      "repo": "mackerson/eaves-plugin-character-card-import",
       "ref": "main",
       "tier": "bundled"
     },
     {
       "name": "chatgpt-import",
-      "repo": "mackerson/enclave-plugin-chatgpt-import",
+      "repo": "mackerson/eaves-plugin-chatgpt-import",
       "ref": "main",
       "tier": "bundled"
     },
     {
       "name": "plugin-marketplace",
-      "repo": "mackerson/enclave-plugin-plugin-marketplace",
+      "repo": "mackerson/eaves-plugin-plugin-marketplace",
       "ref": "main",
       "tier": "bundled"
     },
     {
       "name": "event-inspector",
-      "repo": "mackerson/enclave-plugin-event-inspector",
+      "repo": "mackerson/eaves-plugin-event-inspector",
       "ref": "main",
       "tier": "bundled"
     },
     {
       "name": "webview",
-      "repo": "mackerson/enclave-plugin-webview",
+      "repo": "mackerson/eaves-plugin-webview",
       "ref": "main",
       "tier": "example"
     },
     {
       "name": "openmemory",
-      "repo": "mackerson/enclave-plugin-openmemory",
+      "repo": "mackerson/eaves-plugin-openmemory",
       "ref": "main",
       "tier": "community"
     }

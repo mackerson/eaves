@@ -1,6 +1,6 @@
 # Test Infrastructure
 
-This directory contains test utilities, fixtures, and setup files for the Enclave project.
+This directory contains test utilities, fixtures, and setup files for the Eaves project.
 
 ## Files
 

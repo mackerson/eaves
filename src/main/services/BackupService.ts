@@ -24,17 +24,17 @@ const DEFAULT_RETENTION = 10;
 // Millisecond precision in the timestamp + optional `-N` counter suffix so
 // rapid-fire snapshots (pre-restore + fresh manual in the same tick) don't
 // collide on filename and silently overwrite each other.
-const FILENAME_PATTERN = /^enclave-(\d{8}T\d{6}\d{3}Z)-(startup|periodic|manual|pre-restore)(?:-(\d+))?\.db$/;
+const FILENAME_PATTERN = /^eaves-(\d{8}T\d{6}\d{3}Z)-(startup|periodic|manual|pre-restore)(?:-(\d+))?\.db$/;
 
 /**
  * Manages periodic + on-demand SQLite snapshots of the live database and
  * restoring from them. Snapshots use better-sqlite3's `db.backup(path)` which
  * runs a hot online backup against the open connection (safe with WAL mode).
  *
- * File layout: `<userData>/enclave-data/backups/enclave-<ISO>-<reason>.db`
+ * File layout: `<userData>/eaves-data/backups/eaves-<ISO>-<reason>.db`
  * ISO timestamp embedded in the name so sort order == chronological order.
  *
- * Restore is destructive — it closes the DB, replaces `enclave.db` (+ wipes
+ * Restore is destructive — it closes the DB, replaces `eaves.db` (+ wipes
  * WAL/SHM sidecars), and the caller relaunches the app. A `pre-restore`
  * snapshot of current state is taken first so the user has a one-step undo.
  */
@@ -59,9 +59,9 @@ export class BackupService {
     // would silently reopen the file we are about to replace.
     beginRestore?: () => void;
   }) {
-    this.dataDir = opts?.dataDir ?? path.join(app.getPath('userData'), 'enclave-data');
+    this.dataDir = opts?.dataDir ?? path.join(app.getPath('userData'), 'eaves-data');
     this.backupsDir = path.join(this.dataDir, 'backups');
-    this.dbPath = path.join(this.dataDir, 'enclave.db');
+    this.dbPath = path.join(this.dataDir, 'eaves.db');
     this.retention = opts?.retention ?? DEFAULT_RETENTION;
     this.getDb = opts?.getDb ?? getDatabase;
     this.beginRestore = opts?.beginRestore ?? beginDatabaseRestore;
@@ -172,7 +172,7 @@ export class BackupService {
    *     about to overwrite — leaving a stale handle open across the
    *     replacement. The caller quiesces those services first; the lock is
    *     the backstop for anything it misses.
-   *  4. Copy the chosen snapshot over `enclave.db` and remove the WAL/SHM
+   *  4. Copy the chosen snapshot over `eaves.db` and remove the WAL/SHM
    *     sidecars (stale sidecars against a freshly-restored DB cause silent
    *     data corruption — drop them and let WAL be rebuilt on next open).
    *  5. Caller relaunches the app — we don't call `app.relaunch()` here so
@@ -202,7 +202,7 @@ export class BackupService {
         if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
       }
     } catch (error) {
-      // Leave the lock up. The copy may have partially written enclave.db, and
+      // Leave the lock up. The copy may have partially written eaves.db, and
       // reopening a half-replaced file is the exact outcome the lock exists to
       // prevent. The user restarts; the pre-restore snapshot above is intact.
       logger.error('[Backup] Restore failed mid-copy — database stays locked until restart', error);
@@ -212,12 +212,12 @@ export class BackupService {
     logger.info(`[Backup] Restore complete — caller must relaunch`);
   }
 
-  /** Find a non-colliding `enclave-<iso>-<reason>[-N].db` filename. Two
+  /** Find a non-colliding `eaves-<iso>-<reason>[-N].db` filename. Two
    *  snapshots in the same millisecond get a numeric suffix. Cap the search
    *  so a wedged filesystem can't infinite-loop us. */
   private allocateSnapshotPath(reason: SnapshotReason): { filename: string; fullPath: string } {
     const iso = isoForFilename(new Date());
-    const base = `enclave-${iso}-${reason}`;
+    const base = `eaves-${iso}-${reason}`;
     for (let suffix = 0; suffix < 1000; suffix++) {
       const filename = suffix === 0 ? `${base}.db` : `${base}-${suffix}.db`;
       const fullPath = path.join(this.backupsDir, filename);

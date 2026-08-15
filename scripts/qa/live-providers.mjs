@@ -7,8 +7,8 @@
  *
  *   node scripts/qa/live-providers.mjs
  *
- * Skips (exit 0) when no ENCLAVE_QA_*_KEY is set. Per-provider model defaults
- * are overridable via ENCLAVE_QA_<PROVIDER>_MODEL.
+ * Skips (exit 0) when no EAVES_QA_*_KEY is set. Per-provider model defaults
+ * are overridable via EAVES_QA_<PROVIDER>_MODEL.
  */
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
@@ -17,16 +17,16 @@ import process from 'node:process';
 import { connect } from './harness.mjs';
 
 const PROVIDERS = [
-  { id: 'openrouter', env: 'ENCLAVE_QA_OPENROUTER_KEY', model: process.env.ENCLAVE_QA_OPENROUTER_MODEL || process.env.ENCLAVE_QA_MODEL || 'z-ai/glm-5.2' },
-  { id: 'anthropic', env: 'ENCLAVE_QA_ANTHROPIC_KEY', model: process.env.ENCLAVE_QA_ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001' },
-  { id: 'openai', env: 'ENCLAVE_QA_OPENAI_KEY', model: process.env.ENCLAVE_QA_OPENAI_MODEL || 'gpt-4o-mini' },
+  { id: 'openrouter', env: 'EAVES_QA_OPENROUTER_KEY', model: process.env.EAVES_QA_OPENROUTER_MODEL || process.env.EAVES_QA_MODEL || 'z-ai/glm-5.2' },
+  { id: 'anthropic', env: 'EAVES_QA_ANTHROPIC_KEY', model: process.env.EAVES_QA_ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001' },
+  { id: 'openai', env: 'EAVES_QA_OPENAI_KEY', model: process.env.EAVES_QA_OPENAI_MODEL || 'gpt-4o-mini' },
 ].filter(p => process.env[p.env]);
 
-if (PROVIDERS.length === 0) { console.log('SKIP: no ENCLAVE_QA_*_KEY in .env.local.'); process.exit(0); }
+if (PROVIDERS.length === 0) { console.log('SKIP: no EAVES_QA_*_KEY in .env.local.'); process.exit(0); }
 
 const harness = path.join(path.dirname(new URL(import.meta.url).pathname), 'harness.mjs');
-const scratchDir = process.env.ENCLAVE_QA_DIR || path.join(os.tmpdir(), 'enclave-qa');
-const dbPath = path.join(scratchDir, 'xdg', 'enclave', 'enclave-data', 'enclave.db');
+const scratchDir = process.env.EAVES_QA_DIR || path.join(os.tmpdir(), 'eaves-qa');
+const dbPath = path.join(scratchDir, 'xdg', 'eaves', 'eaves-data', 'eaves.db');
 const sh = (...a) => execFileSync('node', [harness, ...a], { stdio: 'inherit' });
 const q = (sql) => execFileSync('sqlite3', [dbPath, sql], { encoding: 'utf8' }).trim();
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));

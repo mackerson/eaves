@@ -1,5 +1,5 @@
 /**
- * Enclave Theme System - 32 Flavors
+ * Eaves Theme System - 32 Flavors
  *
  * Each theme defines colors that map to CSS custom properties.
  * The isDark flag determines which Tailwind class to apply (dark/light).

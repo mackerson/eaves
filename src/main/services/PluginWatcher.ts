@@ -16,7 +16,7 @@ type PluginSource = NonNullable<PluginManifest['source']>;
  * reloads plugins when new ones are added or existing ones are updated.
  *
  * This enables the "live demo" workflow where Claude Code can generate
- * a plugin and it appears in Enclave without restarting.
+ * a plugin and it appears in Eaves without restarting.
  */
 export class PluginWatcher {
   private watchers: chokidar.FSWatcher[] = [];

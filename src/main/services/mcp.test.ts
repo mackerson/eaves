@@ -4,7 +4,7 @@ vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('electron', () => ({
-  app: { getAppPath: () => '/tmp/enclave' },
+  app: { getAppPath: () => '/tmp/eaves' },
 }));
 
 import { __testing__, shouldGateMcpTool } from './mcp';

@@ -1,4 +1,4 @@
-# Writing Enclave Plugins
+# Writing Eaves Plugins
 
 A practical guide to building a plugin — the manifest, the sandboxed `context`
 API you get at runtime, permissions, and how to add tools, views, and events.
@@ -9,7 +9,7 @@ guide focuses on *writing* the plugin: the manifest, the runtime API, and permis
 
 ## What a plugin is
 
-A plugin is a small package that Enclave loads into a **sandboxed Worker Thread**.
+A plugin is a small package that Eaves loads into a **sandboxed Worker Thread**.
 It can register agent tools, background services, UI views, and event listeners —
 but it has **no ambient access** to the filesystem, network, or host modules. Every
 capability comes through a proxied `context` object and is gated by a permission the
@@ -67,7 +67,7 @@ module.exports = {
 };
 ```
 
-Drop it in a directory Enclave loads (see `plugin-build-system.md` → *Where plugins
+Drop it in a directory Eaves loads (see `plugin-build-system.md` → *Where plugins
 live*), and agents can call `count_words`. That's a complete plugin — no build step,
 because it has no UI.
 
@@ -224,7 +224,7 @@ A UI plugin ships a React bundle and wires it in the manifest:
   *Plugin UI build*.
 - Register the view from `index.cjs`: `context.ui.registerView({ id, title, icon,
   component: 'MyView' })` — `component` must match a `components` key.
-- Inside the component, host UI primitives are available on `window.EnclaveAPI.UI`
+- Inside the component, host UI primitives are available on `window.EavesAPI.UI`
   (buttons, cards, inputs, `AppIcon`, …) so plugins match the app's look and theme.
 - Installed bundles are served over the privileged `plugin://` scheme, so UI plugins
   work in packaged builds with no dev server.
@@ -232,7 +232,7 @@ A UI plugin ships a React bundle and wires it in the manifest:
 ## Build, test, publish
 
 - **Local dev:** `yarn setup:plugins` symlinks sibling plugin repos into `plugins/`,
-  which is the first load path Enclave checks, so a linked repo shadows the bundled
+  which is the first load path Eaves checks, so a linked repo shadows the bundled
   copy of the same id. The dev watcher acts on `plugin.json` only: adding a new
   plugin directory loads it into the running app, and editing the manifest reloads
   it — but editing backend code needs the **Reload** button on the plugin's card in
@@ -240,16 +240,16 @@ A UI plugin ships a React bundle and wires it in the manifest:
   Details in `plugin-build-system.md`.
 - **Authoring into a running app:** drop a plugin directory into
   `<userData>/plugins/` and it loads within seconds, no restart. A hand-written UI
-  bundle (no JSX, no imports, React off `window.EnclaveAPI`) needs no build step at
+  bundle (no JSX, no imports, React off `window.EavesAPI`) needs no build step at
   all. `docs/templates/AGENTS.md` is a self-contained brief for this — copy it into
   a project directory to give a coding agent everything it needs to write a plugin
   without reading this repo.
 - **Standalone build:** each plugin repo ships a `release.mjs` that builds → packs →
-  checksums a distributable tarball, so authors don't need a full Enclave dev tree.
+  checksums a distributable tarball, so authors don't need a full Eaves dev tree.
 - **Publish:** bump `version` in `plugin.json`, then push a `vX.Y.Z` tag. The repo's
   `.github/workflows/release.yml` builds the bundle, checksums it, and publishes a
   GitHub release; paste the emitted `release` block into
-  [`enclave-plugin-registry`](https://github.com/mackerson/enclave-plugin-registry)
+  [`eaves-plugin-registry`](https://github.com/mackerson/eaves-plugin-registry)
   and bump `latest`. `scripts/validate.mjs` is the merge gate.
 
   The bundle is the built runtime only — `plugin.json`, the backend entry, `lib/`

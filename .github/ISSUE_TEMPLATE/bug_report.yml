@@ -5,11 +5,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time. Enclave is alpha software — everything below
+        Thanks for taking the time. Eaves is alpha software — everything below
         1.0 should be treated as such — so bug reports are genuinely useful.
 
         **Found a security issue?** Don't file it here. See
-        [SECURITY.md](https://github.com/mackerson/enclave-ai/blob/main/SECURITY.md)
+        [SECURITY.md](https://github.com/mackerson/eaves/blob/main/SECURITY.md)
         for private reporting.
 
   - type: textarea
@@ -36,7 +36,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Enclave version
+      label: Eaves version
       description: Help → About, or the installer filename.
       placeholder: "0.4.0"
     validations:
@@ -76,9 +76,9 @@ body:
     attributes:
       label: Relevant log output
       description: |
-        Logs live beside the database — `~/.config/enclave/logs/` on Linux,
-        `%APPDATA%\enclave\logs\` on Windows, and
-        `~/Library/Application Support/enclave/logs/` on macOS.
+        Logs live beside the database — `~/.config/eaves/logs/` on Linux,
+        `%APPDATA%\eaves\logs\` on Windows, and
+        `~/Library/Application Support/eaves/logs/` on macOS.
 
         **Read before pasting:** logs can contain conversation text and file
         paths. They should not contain API keys — those are encrypted at rest

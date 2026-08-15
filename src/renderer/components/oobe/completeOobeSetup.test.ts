@@ -156,6 +156,6 @@ describe('completeOobeSetup: guided tour', () => {
   it('addresses the user by name and points at the guide tool', () => {
     const kickoff = buildTourKickoff('Robin');
     expect(kickoff).toContain('Robin');
-    expect(kickoff).toContain('enclave_guide');
+    expect(kickoff).toContain('eaves_guide');
   });
 });

@@ -22,7 +22,7 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../..');
-const scratch = process.env.ENCLAVE_QA_DIR || path.join(process.env.TMPDIR || '/tmp', 'enclave-qa-bench');
+const scratch = process.env.EAVES_QA_DIR || path.join(process.env.TMPDIR || '/tmp', 'eaves-qa-bench');
 const arg = (name, def) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : def; };
 const RUNS = Number(arg('--runs', 3));
 const HEADLESS = process.argv.includes('--headless');
@@ -113,7 +113,7 @@ async function coldStart(runIdx) {
   });
 
   // Watch the app's own log for the did-finish-load marker.
-  const appLog = path.join(xdg, 'enclave', 'logs');
+  const appLog = path.join(xdg, 'eaves', 'logs');
   const deadline = t0 + 30000;
   let coldMs = null;
   while (Date.now() < deadline && coldMs === null) {
@@ -131,7 +131,7 @@ async function coldStart(runIdx) {
 }
 
 (async () => {
-  console.log(`Enclave perf benchmark — ${RUNS} runs, ${HEADLESS ? 'HEADLESS (lower bound)' : 'HEADED (honest)'}\n`);
+  console.log(`Eaves perf benchmark — ${RUNS} runs, ${HEADLESS ? 'HEADLESS (lower bound)' : 'HEADED (honest)'}\n`);
   const serverPid = await ensureRenderer();
   const cold = [];
 

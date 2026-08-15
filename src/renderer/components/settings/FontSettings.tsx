@@ -50,7 +50,7 @@ export function FontSettings() {
         <Label>Reading font</Label>
         <p className="text-sm text-muted-foreground">
           Applies across the whole app, on top of any theme. OpenDyslexic is a
-          dyslexia-friendly font bundled with Enclave; Custom uses any font
+          dyslexia-friendly font bundled with Eaves; Custom uses any font
           installed on your system (e.g. Dyslexie, Atkinson Hyperlegible).
         </p>
         <div className="flex gap-2">

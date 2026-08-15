@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useUIPreferencesStore, DEFAULT_COMPACT_HEADER } from './useUIPreferencesStore';
 
-const SIDEBAR_COLLAPSED_KEY = 'enclave-sidebar-collapsed';
-const COMPACT_MODE_KEY = 'enclave-compact-mode';
-const COMPACT_HEADER_KEY = 'enclave-compact-header';
+const SIDEBAR_COLLAPSED_KEY = 'eaves-sidebar-collapsed';
+const COMPACT_MODE_KEY = 'eaves-compact-mode';
+const COMPACT_HEADER_KEY = 'eaves-compact-header';
 
 describe('useUIPreferencesStore — sidebarCollapsed', () => {
   beforeEach(() => {

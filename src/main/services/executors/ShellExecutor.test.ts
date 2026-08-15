@@ -32,7 +32,7 @@ describe('ShellExecutor filesystem safety', () => {
   let projectDir: string;
 
   beforeEach(async () => {
-    projectDir = await fs.mkdtemp(path.join(os.tmpdir(), 'enclave-proj-'));
+    projectDir = await fs.mkdtemp(path.join(os.tmpdir(), 'eaves-proj-'));
   });
 
   afterEach(async () => {
@@ -91,7 +91,7 @@ describe('ShellExecutor filesystem safety', () => {
 
   it('cleanup refuses to delete a path outside the OS temp root', async () => {
     // A stand-in for "the user's project directory" living outside tmp.
-    const outside = path.join(os.homedir(), `.enclave-cleanup-guard-${Date.now()}`);
+    const outside = path.join(os.homedir(), `.eaves-cleanup-guard-${Date.now()}`);
     await fs.mkdir(outside, { recursive: true });
     await fs.writeFile(path.join(outside, 'keep.txt'), 'important');
     try {

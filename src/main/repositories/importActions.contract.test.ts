@@ -109,7 +109,7 @@ describe('chatgpt-import action contract', () => {
       {
         messageId: 'm-n2',
         filename: 'image.png',
-        storedPath: '/enclave-data/attachments/image.png',
+        storedPath: '/eaves-data/attachments/image.png',
         mimeType: 'image/png',
         size: 2048,
         attachmentType: 'image',
@@ -120,6 +120,6 @@ describe('chatgpt-import action contract', () => {
     expect(attachmentIds).toHaveLength(1);
     const onMessage = attachments.getByMessageId('m-n2');
     expect(onMessage).toHaveLength(1);
-    expect(onMessage[0].storedPath).toBe('/enclave-data/attachments/image.png');
+    expect(onMessage[0].storedPath).toBe('/eaves-data/attachments/image.png');
   });
 });

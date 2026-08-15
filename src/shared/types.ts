@@ -126,7 +126,7 @@ export interface MessageAttachment {
   messageId: string;
   filename: string;
   originalPath?: string;  // Original path from import/upload
-  storedPath: string;  // Path in Enclave storage
+  storedPath: string;  // Path in Eaves storage
   mimeType: string;
   size: number;
   attachmentType: 'file' | 'image' | 'audio' | 'video';

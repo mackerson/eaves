@@ -30,7 +30,7 @@ export class ShellExecutor extends BaseExecutor {
     if (!bash) {
       throw new Error(
         process.platform === 'win32'
-          ? 'bash was not found. Install Git for Windows (which bundles bash) or WSL, then restart Enclave.'
+          ? 'bash was not found. Install Git for Windows (which bundles bash) or WSL, then restart Eaves.'
           : 'bash was not found on PATH.'
       );
     }

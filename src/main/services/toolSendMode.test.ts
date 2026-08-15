@@ -5,7 +5,7 @@ vi.mock('./logger', () => ({
 }));
 vi.mock('./EventBus', () => ({ eventBus: { emitEvent: vi.fn() } }));
 vi.mock('electron', () => ({
-  app: { getPath: (k: string) => `/tmp/enclave-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
+  app: { getPath: (k: string) => `/tmp/eaves-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
   ipcMain: { handle: vi.fn(), on: vi.fn() },
   BrowserWindow: class {},
 }));
@@ -69,10 +69,10 @@ describe('seedEnabledTools', () => {
     expect(seed.has('create_workflow')).toBe(true);
   });
 
-  // enclave_guide rides along with the control plane: an agent that can't look
-  // up how Enclave works answers from nothing, and the user can't tell.
+  // eaves_guide rides along with the control plane: an agent that can't look
+  // up how Eaves works answers from nothing, and the user can't tell.
   it('handles an agent with no defaultTools', () => {
-    expect([...seedEnabledTools(agent())].sort()).toEqual([...DISCOVERY, 'enclave_guide'].sort());
+    expect([...seedEnabledTools(agent())].sort()).toEqual([...DISCOVERY, 'eaves_guide'].sort());
   });
 });
 

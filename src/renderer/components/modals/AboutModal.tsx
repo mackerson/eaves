@@ -103,9 +103,9 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
             readers. The visible title lives in .winamp-titlebar; these are
             sr-only mirrors so the accessibility tree stays correct without
             disturbing the Winamp aesthetic. */}
-        <DialogTitle className="sr-only">About Enclave</DialogTitle>
+        <DialogTitle className="sr-only">About Eaves</DialogTitle>
         <DialogDescription className="sr-only">
-          Version, credits, and links for the Enclave application.
+          Version, credits, and links for the Eaves application.
         </DialogDescription>
         <div className="winamp-window">
           {/* Window title bar */}
@@ -123,10 +123,10 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
 
           {/* Main content area */}
           <div className="winamp-content">
-            <Tabs defaultValue="enclave" className="winamp-tabs">
+            <Tabs defaultValue="eaves" className="winamp-tabs">
               <TabsList className="winamp-tablist">
-                <TabsTrigger value="enclave" className="winamp-tab">
-                  Enclave
+                <TabsTrigger value="eaves" className="winamp-tab">
+                  Eaves
                 </TabsTrigger>
                 <TabsTrigger value="credits" className="winamp-tab">
                   Credits
@@ -142,8 +142,8 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
                 </TabsTrigger>
               </TabsList>
 
-              {/* Enclave Tab */}
-              <TabsContent value="enclave" className="winamp-tabcontent">
+              {/* Eaves Tab */}
+              <TabsContent value="eaves" className="winamp-tabcontent">
                 <div className="visualization-container">
                   <VaporwaveShader />
                   <div className="splash-text" key={splash}>{splash}</div>
@@ -161,14 +161,14 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
                   <p className="visit-text">
                     Visit{' '}
                     <a
-                      href="https://github.com/mackerson/enclave-ai"
+                      href="https://github.com/mackerson/eaves"
                       className="winamp-link"
                       onClick={(e) => {
                         e.preventDefault();
-                        window.electron.openExternal('https://github.com/mackerson/enclave-ai');
+                        window.electron.openExternal('https://github.com/mackerson/eaves');
                       }}
                     >
-                      github.com/mackerson/enclave-ai
+                      github.com/mackerson/eaves
                     </a>{' '}
                     for updates.
                   </p>
@@ -199,7 +199,7 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
                 <div className="opensource-content">
                   <h3 className="winamp-subheading">Free & Open Source Software</h3>
                   <p className="opensource-text">
-                    Enclave is free and open source software, released under the MIT License.
+                    Eaves is free and open source software, released under the MIT License.
                     You are free to use, modify, and distribute it under those terms.
                   </p>
 
@@ -245,7 +245,7 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
                   </p>
 
                   <div className="opensource-cta">
-                    <p className="cta-text">Help make Enclave better!</p>
+                    <p className="cta-text">Help make Eaves better!</p>
                     <p className="cta-subtext">
                       Star the project, report bugs, or contribute code.
                     </p>
@@ -302,12 +302,12 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
                   <ul className="links-list">
                     <li>
                       <a
-                        href="https://github.com/mackerson/enclave-ai"
+                        href="https://github.com/mackerson/eaves"
                         className="winamp-link"
                         onClick={(e) => {
                           e.preventDefault();
                           window.electron.openExternal(
-                            'https://github.com/mackerson/enclave-ai'
+                            'https://github.com/mackerson/eaves'
                           );
                         }}
                       >
@@ -316,12 +316,12 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
                     </li>
                     <li>
                       <a
-                        href="https://github.com/mackerson/enclave-ai/issues"
+                        href="https://github.com/mackerson/eaves/issues"
                         className="winamp-link"
                         onClick={(e) => {
                           e.preventDefault();
                           window.electron.openExternal(
-                            'https://github.com/mackerson/enclave-ai/issues'
+                            'https://github.com/mackerson/eaves/issues'
                           );
                         }}
                       >

@@ -331,16 +331,16 @@ export function useMenuCommands(modals: MenuCommandModals) {
 
           // Help
           case 'help.documentation':
-            await window.electron.openExternal('https://github.com/mackerson/enclave-ai');
+            await window.electron.openExternal('https://github.com/mackerson/eaves');
             break;
           case 'help.keyboardShortcuts':
             modals.openAbout();
             break;
           case 'help.releaseNotes':
-            await window.electron.openExternal('https://github.com/mackerson/enclave-ai/releases');
+            await window.electron.openExternal('https://github.com/mackerson/eaves/releases');
             break;
           case 'help.reportIssue':
-            await window.electron.openExternal('https://github.com/mackerson/enclave-ai/issues');
+            await window.electron.openExternal('https://github.com/mackerson/eaves/issues');
             break;
         }
       };

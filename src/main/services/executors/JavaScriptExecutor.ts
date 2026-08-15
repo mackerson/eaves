@@ -22,7 +22,7 @@ export class JavaScriptExecutor extends BaseExecutor {
     const contextJson = context ? JSON.stringify(context, null, 2) : '{}';
 
     return `
-// Enclave Code Execution Wrapper
+// Eaves Code Execution Wrapper
 (async () => {
   try {
     // Workflow context injected from previous nodes
@@ -39,9 +39,9 @@ export class JavaScriptExecutor extends BaseExecutor {
 
     // Output return value with markers for parsing
     if (result !== undefined) {
-      console.log('<<<ENCLAVE_RETURN>>>');
+      console.log('<<<EAVES_RETURN>>>');
       console.log(JSON.stringify(result));
-      console.log('<<<ENCLAVE_RETURN_END>>>');
+      console.log('<<<EAVES_RETURN_END>>>');
     }
 
     process.exit(0);

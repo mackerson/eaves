@@ -40,8 +40,8 @@ describe('list_tools (compact mode)', () => {
   it('trims multi-paragraph descriptions to a one-line teaser', async () => {
     const allTools = makeStubTools();
     const metadata = new Map<string, { category: string; origin: string }>();
-    metadata.set('short_tool', { category: 'builtin', origin: 'enclave-core' });
-    metadata.set('verbose_tool', { category: 'builtin', origin: 'enclave-core' });
+    metadata.set('short_tool', { category: 'builtin', origin: 'eaves-core' });
+    metadata.set('verbose_tool', { category: 'builtin', origin: 'eaves-core' });
 
     const { list_tools } = createDiscoveryTools(allTools, makeSession(), metadata);
     const result = await (list_tools.execute as any)({}, {} as never);
@@ -57,7 +57,7 @@ describe('list_tools (compact mode)', () => {
   it('keeps short descriptions intact', async () => {
     const allTools = makeStubTools();
     const metadata = new Map<string, { category: string; origin: string }>();
-    metadata.set('short_tool', { category: 'builtin', origin: 'enclave-core' });
+    metadata.set('short_tool', { category: 'builtin', origin: 'eaves-core' });
 
     const { list_tools } = createDiscoveryTools(allTools, makeSession(), metadata);
     const result = await (list_tools.execute as any)({}, {} as never);
@@ -69,7 +69,7 @@ describe('list_tools (compact mode)', () => {
   it('returns the flat compact shape and omits inputSchema', async () => {
     const allTools = makeStubTools();
     const metadata = new Map<string, { category: string; origin: string }>();
-    metadata.set('short_tool', { category: 'builtin', origin: 'enclave-core' });
+    metadata.set('short_tool', { category: 'builtin', origin: 'eaves-core' });
 
     const { list_tools } = createDiscoveryTools(allTools, makeSession('short_tool'), metadata);
     const result = await (list_tools.execute as any)({}, {} as never);
@@ -84,8 +84,8 @@ describe('list_tools (compact mode)', () => {
   it('verbose: true restores nested categories + schemas', async () => {
     const allTools = makeStubTools();
     const metadata = new Map<string, { category: string; origin: string }>();
-    metadata.set('short_tool', { category: 'builtin', origin: 'enclave-core' });
-    metadata.set('verbose_tool', { category: 'builtin', origin: 'enclave-core' });
+    metadata.set('short_tool', { category: 'builtin', origin: 'eaves-core' });
+    metadata.set('verbose_tool', { category: 'builtin', origin: 'eaves-core' });
 
     const { list_tools } = createDiscoveryTools(allTools, makeSession(), metadata);
     const result = await (list_tools.execute as any)({ verbose: true }, {} as never);

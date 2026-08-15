@@ -8,11 +8,11 @@ import { create } from 'zustand';
 
 export type MessageLayout = 'inline' | 'stacked';
 
-const MESSAGE_LAYOUT_KEY = 'enclave-message-layout';
-const ACTION_GUTTER_KEY = 'enclave-action-gutter-collapsed';
-const SIDEBAR_COLLAPSED_KEY = 'enclave-sidebar-collapsed';
-const COMPACT_MODE_KEY = 'enclave-compact-mode';
-const COMPACT_HEADER_KEY = 'enclave-compact-header';
+const MESSAGE_LAYOUT_KEY = 'eaves-message-layout';
+const ACTION_GUTTER_KEY = 'eaves-action-gutter-collapsed';
+const SIDEBAR_COLLAPSED_KEY = 'eaves-sidebar-collapsed';
+const COMPACT_MODE_KEY = 'eaves-compact-mode';
+const COMPACT_HEADER_KEY = 'eaves-compact-header';
 
 function readMessageLayout(): MessageLayout {
   try {

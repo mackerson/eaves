@@ -40,7 +40,7 @@ function countAttachmentRows(messageId) {
   if (!/^[A-Za-z0-9_-]+$/.test(messageId)) throw new Error(`unsafe messageId: ${messageId}`);
   const state = readState();
   if (!state?.xdg) throw new Error('harness state missing xdg dir');
-  const db = path.join(state.xdg, 'enclave', 'enclave-data', 'enclave.db');
+  const db = path.join(state.xdg, 'eaves', 'eaves-data', 'eaves.db');
   const out = execFileSync('sqlite3', ['-cmd', '.timeout 3000', db,
     `SELECT COUNT(*) FROM message_attachments WHERE message_id = '${messageId}'`]).toString().trim();
   return Number(out);
@@ -219,7 +219,7 @@ try {
 
   // ── Attachment send: persistence + (LLM) the agent sees the contents ───────
   const secret = `halcyon${sfx}`;
-  const attachDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-qa-flow6-'));
+  const attachDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-qa-flow6-'));
   const attachPath = path.join(attachDir, 'briefing.txt');
   fs.writeFileSync(attachPath, `QA briefing document.\nThe secret word is ${secret}.\nReport it when asked.\n`);
 

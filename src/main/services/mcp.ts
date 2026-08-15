@@ -183,7 +183,7 @@ function acquireFilesystemServer(dir: ProjectDirectory): Promise<PooledServer> {
       args: server.config.args || [],
       env: server.config.env,
     });
-    const client = new Client({ name: 'enclave', version: '0.0.0' }, { capabilities: {} });
+    const client = new Client({ name: 'eaves', version: '0.0.0' }, { capabilities: {} });
 
     // Evict before the caller can be handed a dead client on a later turn.
     const evict = () => {
@@ -276,7 +276,7 @@ export async function connectMCPServers(
       }
 
       const client = new Client(
-        { name: 'enclave', version: '0.0.0' },
+        { name: 'eaves', version: '0.0.0' },
         { capabilities: {} },
       );
       await client.connect(transport);

@@ -954,7 +954,7 @@ export class ChannelRepository {
       let chatIdToUpdate: string | null = null;
 
       // PASS 1: Insert all messages with parent_message_id = NULL
-      // and build complete ID mapping (old ChatGPT IDs -> new Enclave UUIDs)
+      // and build complete ID mapping (old ChatGPT IDs -> new Eaves UUIDs)
       for (const message of messagesToInsert) {
         // Use provided ID if available (for imports), otherwise generate new one
         const id = (message as any).id || `chatmsg-${randomUUID()}`;

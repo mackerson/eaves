@@ -18,7 +18,7 @@ vi.mock('./logger', () => ({
 }));
 vi.mock('./EventBus', () => ({ eventBus: { emitEvent } }));
 vi.mock('electron', () => ({
-  app: { getPath: (k: string) => `/tmp/enclave-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
+  app: { getPath: (k: string) => `/tmp/eaves-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
   ipcMain: { handle: vi.fn(), on: vi.fn() },
   BrowserWindow: class {},
 }));

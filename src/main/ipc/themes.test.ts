@@ -150,11 +150,11 @@ describe('Theme IPC Handlers', () => {
   describe('get-themes-directory', () => {
     it('should return the themes directory path', async () => {
       const handler = handlers.get('get-themes-directory')!;
-      (themeManager.getThemesDirectory as Mock).mockReturnValue('/Users/test/.config/enclave/themes');
+      (themeManager.getThemesDirectory as Mock).mockReturnValue('/Users/test/.config/eaves/themes');
 
       const result = await handler({});
 
-      expect(result).toBe('/Users/test/.config/enclave/themes');
+      expect(result).toBe('/Users/test/.config/eaves/themes');
     });
   });
 

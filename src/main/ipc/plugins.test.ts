@@ -24,7 +24,7 @@ vi.mock('electron', () => ({
   // Included so transitively-loaded modules (database → app.getPath) resolve
   // regardless of test order — otherwise this suite fails in isolation.
   app: {
-    getPath: (name: string) => (name === 'temp' ? '/tmp' : '/tmp/enclave-plugins-test'),
+    getPath: (name: string) => (name === 'temp' ? '/tmp' : '/tmp/eaves-plugins-test'),
   },
 }));
 

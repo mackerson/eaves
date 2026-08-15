@@ -29,8 +29,8 @@ describe('Logs IPC Handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-logs-outside-'));
-    logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-logs-test-'));
+    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-logs-outside-'));
+    logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-logs-test-'));
     // macOS hands out /var/... symlinked to /private/var/...; the handler
     // compares real paths, so the test's expectation has to as well.
     logDir = fs.realpathSync(logDir);
@@ -53,13 +53,13 @@ describe('Logs IPC Handlers', () => {
     const read = (input: unknown) => handlers.get('read-log-file')!({}, input);
 
     it('reads a log file by bare name', async () => {
-      fs.writeFileSync(path.join(logDir, 'enclave-2026-01-01.log'), 'hello');
-      const result = await read('enclave-2026-01-01.log');
+      fs.writeFileSync(path.join(logDir, 'eaves-2026-01-01.log'), 'hello');
+      const result = await read('eaves-2026-01-01.log');
       expect(result).toMatchObject({ success: true, content: 'hello', truncated: false, size: 5 });
     });
 
     it('reads a log file by the absolute path get-log-files returns', async () => {
-      const full = path.join(logDir, 'enclave-2026-01-01.log');
+      const full = path.join(logDir, 'eaves-2026-01-01.log');
       fs.writeFileSync(full, 'hello');
       expect(await read(full)).toMatchObject({ success: true, content: 'hello' });
     });
@@ -87,28 +87,28 @@ describe('Logs IPC Handlers', () => {
     it('refuses a symlink in the log dir pointing outside it', async () => {
       const secret = path.join(outsideDir, 'secret.txt');
       fs.writeFileSync(secret, 'top secret');
-      fs.symlinkSync(secret, path.join(logDir, 'enclave-evil.log'));
-      const result = await read('enclave-evil.log');
+      fs.symlinkSync(secret, path.join(logDir, 'eaves-evil.log'));
+      const result = await read('eaves-evil.log');
       expect(result.success).toBe(false);
       expect(result.content).toBeUndefined();
     });
 
     it('refuses a directory', async () => {
-      fs.mkdirSync(path.join(logDir, 'enclave-dir.log'));
-      expect((await read('enclave-dir.log')).success).toBe(false);
+      fs.mkdirSync(path.join(logDir, 'eaves-dir.log'));
+      expect((await read('eaves-dir.log')).success).toBe(false);
     });
 
     it('rejects non-string and empty input', async () => {
       expect((await read(null)).success).toBe(false);
       expect((await read('')).success).toBe(false);
-      expect((await read({ path: 'enclave-2026-01-01.log' })).success).toBe(false);
+      expect((await read({ path: 'eaves-2026-01-01.log' })).success).toBe(false);
     });
 
     it('returns the tail and flags truncation for an oversized log', async () => {
-      const big = path.join(logDir, 'enclave-big.log');
+      const big = path.join(logDir, 'eaves-big.log');
       const size = 1024 * 1024 + 100;
       fs.writeFileSync(big, 'a'.repeat(size - 3) + 'END');
-      const result = await read('enclave-big.log');
+      const result = await read('eaves-big.log');
       expect(result.success).toBe(true);
       expect(result.truncated).toBe(true);
       expect(result.size).toBe(size);
@@ -117,7 +117,7 @@ describe('Logs IPC Handlers', () => {
     });
 
     it('reports a missing file without leaking whether it exists elsewhere', async () => {
-      const result = await read('enclave-nope.log');
+      const result = await read('eaves-nope.log');
       expect(result).toEqual({ success: false, error: 'Log file not found' });
     });
   });

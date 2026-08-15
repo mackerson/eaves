@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const { runAgentTurn } = vi.hoisted(() => ({ runAgentTurn: vi.fn() }));
 
 vi.mock('electron', () => ({
-  app: { getPath: () => '/tmp/enclave-test', isPackaged: false, getVersion: () => '0.0.0' },
+  app: { getPath: () => '/tmp/eaves-test', isPackaged: false, getVersion: () => '0.0.0' },
   BrowserWindow: class {},
   ipcMain: { handle: vi.fn() },
 }));

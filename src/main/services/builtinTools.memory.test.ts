@@ -8,7 +8,7 @@ vi.mock('./EventBus', () => ({ eventBus: { emitEvent: vi.fn() } }));
 // load. Stub Electron so the import graph resolves (the memory tools never touch
 // the DB — they route through the service registry).
 vi.mock('electron', () => ({
-  app: { getPath: (k: string) => `/tmp/enclave-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
+  app: { getPath: (k: string) => `/tmp/eaves-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
   ipcMain: { handle: vi.fn(), on: vi.fn() },
   BrowserWindow: class {},
 }));

@@ -47,12 +47,12 @@ describe('TelegramAdapter', () => {
 
   describe('start', () => {
     it('reports running after a successful handshake', async () => {
-      botState.getMe.mockResolvedValue({ username: 'enclave_bot' });
+      botState.getMe.mockResolvedValue({ username: 'eaves_bot' });
 
       await adapter.start(config);
 
       expect(adapter.isRunning()).toBe(true);
-      expect(adapter.getBotUsername()).toBe('enclave_bot');
+      expect(adapter.getBotUsername()).toBe('eaves_bot');
     });
 
     // Regression: a swallowed getMe failure left the bridge reporting itself as
@@ -79,7 +79,7 @@ describe('TelegramAdapter', () => {
       botState.handlers.get('polling_error')?.(telegramError(statusCode));
 
     beforeEach(async () => {
-      botState.getMe.mockResolvedValue({ username: 'enclave_bot' });
+      botState.getMe.mockResolvedValue({ username: 'eaves_bot' });
       await adapter.start(config);
     });
 
@@ -111,11 +111,11 @@ describe('TelegramAdapter', () => {
 
   describe('testConnection', () => {
     it('reports the bot identity without starting a polling loop', async () => {
-      botState.getMe.mockResolvedValue({ username: 'enclave_bot' });
+      botState.getMe.mockResolvedValue({ username: 'eaves_bot' });
 
       await expect(adapter.testConnection(config)).resolves.toEqual({
         ok: true,
-        botUsername: 'enclave_bot',
+        botUsername: 'eaves_bot',
       });
       expect(adapter.isRunning()).toBe(false);
     });

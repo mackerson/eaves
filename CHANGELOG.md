@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to Enclave. Everything below 1.0 is alpha — expect the schema,
+Notable changes to Eaves. Everything below 1.0 is alpha — expect the schema,
 the plugin API and the IPC surface to move.
 
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
@@ -111,6 +111,6 @@ First public release, and the first with installers.
 - A plugin's UI bundle is not sandboxed; it runs in the renderer with the full
   IPC bridge. See [SECURITY.md](SECURITY.md).
 
-[0.4.2]: https://github.com/mackerson/enclave-ai/releases/tag/v0.4.2
-[0.4.1]: https://github.com/mackerson/enclave-ai/releases/tag/v0.4.1
-[0.4.0]: https://github.com/mackerson/enclave-ai/releases/tag/v0.4.0
+[0.4.2]: https://github.com/mackerson/eaves/releases/tag/v0.4.2
+[0.4.1]: https://github.com/mackerson/eaves/releases/tag/v0.4.1
+[0.4.0]: https://github.com/mackerson/eaves/releases/tag/v0.4.0

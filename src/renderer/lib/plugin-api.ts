@@ -130,13 +130,13 @@ export function initializePluginAPI() {
   };
 
   // Expose via window
-  (window as any).EnclaveAPI = api;
+  (window as any).EavesAPI = api;
 
 }
 
 // TypeScript declaration for global window
 declare global {
   interface Window {
-    EnclaveAPI: PluginAPI;
+    EavesAPI: PluginAPI;
   }
 }

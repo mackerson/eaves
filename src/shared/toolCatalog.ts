@@ -42,7 +42,7 @@ export const TOOL_CATALOG: ToolEntry[] = [
   { name: 'ask_user_question', label: 'Ask User', description: 'Ask the user a clarifying question', category: 'project' },
 
   // Discovery
-  { name: 'enclave_guide', label: 'Enclave Guide', description: 'Look up how Enclave itself works', category: 'discovery' },
+  { name: 'eaves_guide', label: 'Eaves Guide', description: 'Look up how Eaves itself works', category: 'discovery' },
 
   // Channel Tools
   { name: 'channel_send_message', label: 'Send Message', description: 'Post a message to another channel', category: 'channel' },

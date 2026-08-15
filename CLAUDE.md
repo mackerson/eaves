@@ -49,7 +49,7 @@ Note: Native module rebuilds are automatic. `predev` rebuilds better-sqlite3 for
 
 ## Architecture Overview
 
-Enclave is a local-first Electron desktop application for multi-agent AI conversations with persistent memory.
+Eaves is a local-first Electron desktop application for multi-agent AI conversations with persistent memory.
 
 Architecture diagrams and invariants live in `docs/architecture/README.md` — that page is the diagram home; this file stays command- and pattern-oriented.
 
@@ -100,18 +100,18 @@ Architecture diagrams and invariants live in `docs/architecture/README.md` — t
 - Lifecycle: `activate` on load; `deactivate` on disable/reload/update/uninstall,
   called only if `activate` resolved, before the RPC channel is torn down, bounded
   at 3s and best-effort — plugin code cannot block an uninstall
-- Plugins live in separate repos (`mackerson/enclave-plugin-*`), symlinked for dev
+- Plugins live in separate repos (`mackerson/eaves-plugin-*`), symlinked for dev
 - `bundled-plugins.json` defines which plugins ship with packaged builds
 - Three load paths, first match wins (deduped by id):
   `plugins/` (dev symlinks, `source: 'dev'`, dev builds only) >
-  `~/.config/enclave/plugins/` (`'user'`) > `dist/plugins/` (`'bundled'`)
+  `~/.config/eaves/plugins/` (`'user'`) > `dist/plugins/` (`'bundled'`)
 - `source` is not cosmetic — it decides where the renderer fetches the UI bundle
   (`'user'` → `plugin://` in userData; `'dev'`/`'bundled'` → the served `plugins/`
   tree) and only `'user'` plugins can be uninstalled
 
 **Marketplace** (`src/main/services/MarketplaceService.ts`, live):
 - Installs by **registry id, never a URL** — confined to entries in the curated
-  [`enclave-plugin-registry`](https://github.com/mackerson/enclave-plugin-registry).
+  [`eaves-plugin-registry`](https://github.com/mackerson/eaves-plugin-registry).
   A curated entry + its sha256 is the V1 trust root; there is no signing
 - Install: download → verify sha256 → unpack (zip-slip guarded) → manifest must
   declare the same id and *exactly* the registry's permissions → move into
@@ -119,7 +119,7 @@ Architecture diagrams and invariants live in `docs/architecture/README.md` — t
 - Consent is a **modal window owned by main** (`src/main/windows/pluginConsentWindow.ts`),
   not renderer UI: plugin bundles are `import()`ed into the main window's realm and
   could otherwise script or spoof the dialog gating their own install.
-  `ENCLAVE_PLUGIN_AUTO_CONSENT` (1/0) bypasses it for headless tests only
+  `EAVES_PLUGIN_AUTO_CONSENT` (1/0) bypasses it for headless tests only
 - Re-prompts only when the permission set changes; new grants are badged on update
 
 ### Chat vs Channel Architecture
@@ -170,9 +170,9 @@ Scoped to the calling agent, available to all agents:
 SQLite via better-sqlite3 with auto-migrations on startup. `database.ts` opens the DB and runs migrations; the schema itself (`CREATE TABLE` statements + versioned migrations) lives in `src/main/services/migrations.ts`.
 
 Platform locations:
-- macOS: `~/Library/Application Support/enclave/enclave-data/enclave.db`
-- Linux: `~/.config/enclave/enclave-data/enclave.db`
-- Windows: `%APPDATA%\enclave\enclave-data\enclave.db`
+- macOS: `~/Library/Application Support/eaves/eaves-data/eaves.db`
+- Linux: `~/.config/eaves/eaves-data/eaves.db`
+- Windows: `%APPDATA%\eaves\eaves-data\eaves.db`
 
 ### AI Integration
 

@@ -12,7 +12,7 @@ vi.mock('./logger', () => ({
 }));
 vi.mock('./EventBus', () => ({ eventBus: { emitEvent: vi.fn() } }));
 vi.mock('electron', () => ({
-  app: { getPath: (k: string) => `/tmp/enclave-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
+  app: { getPath: (k: string) => `/tmp/eaves-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
   ipcMain: { handle: vi.fn(), on: vi.fn() },
   BrowserWindow: class {},
 }));
@@ -104,7 +104,7 @@ describe('validateFetchUrl', () => {
   it.each([
     'https://example.com/api',
     'http://example.com',
-    'https://docs.enclave.dev/path?q=1',
+    'https://docs.eaves.dev/path?q=1',
   ])('allows public http(s) URL %s', (url) => {
     expect(() => validateFetchUrl(url)).not.toThrow();
   });

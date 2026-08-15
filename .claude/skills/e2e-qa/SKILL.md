@@ -1,11 +1,11 @@
 ---
 name: e2e-qa
-description: Launch and drive an isolated headless Enclave instance for end-to-end QA — real renderer, real IPC, real SQLite, never the user's profile. Use when verifying a change in the running app, screenshotting UI, or exercising IPC flows.
+description: Launch and drive an isolated headless Eaves instance for end-to-end QA — real renderer, real IPC, real SQLite, never the user's profile. Use when verifying a change in the running app, screenshotting UI, or exercising IPC flows.
 ---
 
-# Headless E2E QA for Enclave
+# Headless E2E QA for Eaves
 
-`scripts/qa/harness.mjs` launches an isolated Enclave (fresh `XDG_CONFIG_HOME`
+`scripts/qa/harness.mjs` launches an isolated Eaves (fresh `XDG_CONFIG_HOME`
 → fresh DB, migrations run on boot) with CDP on :9222 and drives it via
 `Runtime.evaluate`. `window.electron.*` is fully exposed, so flows can be
 exercised through real IPC and asserted against the rendered DOM.
@@ -35,8 +35,8 @@ exercised through real IPC and asserted against the rendered DOM.
    `ERR_DLOPEN_FAILED` in the electron log means this).
 3. `node scripts/qa/harness.mjs launch --fresh` — spawns everything detached,
    waits for CDP, auto-skips OOBE. Migration success is greppable in
-   `<scratch>/xdg/enclave/logs/*.log` (scratch defaults to
-   `$TMPDIR/enclave-qa`, override with `ENCLAVE_QA_DIR`).
+   `<scratch>/xdg/eaves/logs/*.log` (scratch defaults to
+   `$TMPDIR/eaves-qa`, override with `EAVES_QA_DIR`).
 4. Drive it:
    - `node scripts/qa/harness.mjs eval '(async () => (await window.electron.getChats()).chats.length)()'`
    - `node scripts/qa/harness.mjs screenshot /tmp/shot.png`
@@ -61,7 +61,7 @@ exercised through real IPC and asserted against the rendered DOM.
 
 ## Safety rails
 
-- Never point the harness at the real profile (`~/.config/enclave`) — the
+- Never point the harness at the real profile (`~/.config/eaves`) — the
   fresh-XDG isolation is the whole point. `--fresh` wipes only the scratch
   profile.
 - The CDP port is an unauthenticated localhost debug socket. Local runs

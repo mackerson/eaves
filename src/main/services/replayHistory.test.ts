@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('electron', () => ({
-  app: { getPath: () => '/tmp/enclave-test', isPackaged: true },
+  app: { getPath: () => '/tmp/eaves-test', isPackaged: true },
 }));
 
 // Compaction reaches for the DB and an LLM; neither is what these tests are

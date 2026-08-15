@@ -20,7 +20,7 @@ interface Plugin {
 // Get trusted plugins from localStorage
 const getTrustedPlugins = (): Set<string> => {
   try {
-    const stored = localStorage.getItem('enclave:trustedPlugins');
+    const stored = localStorage.getItem('eaves:trustedPlugins');
     return new Set(stored ? JSON.parse(stored) : []);
   } catch {
     return new Set();
@@ -29,7 +29,7 @@ const getTrustedPlugins = (): Set<string> => {
 
 // Save trusted plugins to localStorage
 const saveTrustedPlugins = (plugins: Set<string>): void => {
-  localStorage.setItem('enclave:trustedPlugins', JSON.stringify([...plugins]));
+  localStorage.setItem('eaves:trustedPlugins', JSON.stringify([...plugins]));
 };
 
 interface PluginsViewProps {
@@ -50,7 +50,7 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
   const originHint = (plugin: Plugin) =>
     plugin.source === 'dev'
       ? 'Linked from your dev checkout. Remove its symlink from plugins/ and restart to unload it — Disable stops it in the meantime.'
-      : 'Ships with Enclave and cannot be uninstalled. Disable stops it from running.';
+      : 'Ships with Eaves and cannot be uninstalled. Disable stops it from running.';
   const isTrusted = (plugin: Plugin) => !isUserPlugin(plugin) || trustedPlugins.has(plugin.id);
 
   const handleTrustPlugin = (pluginId: string) => {

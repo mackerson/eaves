@@ -7,7 +7,7 @@
  *
  *   node scripts/qa/live-semantic.mjs
  *
- * Skips (exit 0) when no ENCLAVE_QA_*_KEY is set.
+ * Skips (exit 0) when no EAVES_QA_*_KEY is set.
  */
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
@@ -15,11 +15,11 @@ import path from 'node:path';
 import process from 'node:process';
 import { connect } from './harness.mjs';
 
-if (!process.env.ENCLAVE_QA_OPENROUTER_KEY) { console.log('SKIP: needs ENCLAVE_QA_OPENROUTER_KEY (embeddings via OpenRouter).'); process.exit(0); }
+if (!process.env.EAVES_QA_OPENROUTER_KEY) { console.log('SKIP: needs EAVES_QA_OPENROUTER_KEY (embeddings via OpenRouter).'); process.exit(0); }
 
 const harness = path.join(path.dirname(new URL(import.meta.url).pathname), 'harness.mjs');
-const scratchDir = process.env.ENCLAVE_QA_DIR || path.join(os.tmpdir(), 'enclave-qa');
-const dbPath = path.join(scratchDir, 'xdg', 'enclave', 'enclave-data', 'enclave.db');
+const scratchDir = process.env.EAVES_QA_DIR || path.join(os.tmpdir(), 'eaves-qa');
+const dbPath = path.join(scratchDir, 'xdg', 'eaves', 'eaves-data', 'eaves.db');
 const sh = (...a) => execFileSync('node', [harness, ...a], { stdio: 'inherit' });
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 void dbPath; // (vec0 tables aren't readable by the bare sqlite3 CLI — we assert via the app instead)

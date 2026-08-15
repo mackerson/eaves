@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as path from 'path';
 
-vi.mock('electron', () => ({ app: { getPath: () => '/tmp/enclave-vec-test', isPackaged: true } }));
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp/eaves-vec-test', isPackaged: true } }));
 vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
   getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -27,16 +27,16 @@ describe('resolveVecExtensionPath', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('redirects a packed path to the unpacked copy', () => {
-    const packed = path.join('/opt', 'Enclave', 'resources', 'app.asar', 'node_modules', 'sqlite-vec-linux-x64', 'vec0.so');
+    const packed = path.join('/opt', 'Eaves', 'resources', 'app.asar', 'node_modules', 'sqlite-vec-linux-x64', 'vec0.so');
     getLoadablePath.mockReturnValue(packed);
 
     expect(resolveVecExtensionPath()).toBe(
-      path.join('/opt', 'Enclave', 'resources', 'app.asar.unpacked', 'node_modules', 'sqlite-vec-linux-x64', 'vec0.so'),
+      path.join('/opt', 'Eaves', 'resources', 'app.asar.unpacked', 'node_modules', 'sqlite-vec-linux-x64', 'vec0.so'),
     );
   });
 
   it('leaves a dev path (no asar) alone', () => {
-    const dev = path.join('/home', 'dev', 'enclave', 'node_modules', 'sqlite-vec-linux-x64', 'vec0.so');
+    const dev = path.join('/home', 'dev', 'eaves', 'node_modules', 'sqlite-vec-linux-x64', 'vec0.so');
     getLoadablePath.mockReturnValue(dev);
 
     expect(resolveVecExtensionPath()).toBe(dev);

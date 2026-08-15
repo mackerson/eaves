@@ -11,8 +11,8 @@ import { PROVIDER_IDS, ProviderId } from '../../shared/providers';
  * Dev-only API-key overrides from the environment. When present, an env var
  * takes precedence over the encrypted stored value for that provider — so a
  * developer can point at a known-good key (e.g. for testing embeddings) without
- * editing the store. Recognizes `ENCLAVE_<PROVIDER>_API_KEY` plus the
- * `ENCLAVE_QA_<PROVIDER>_KEY` alias the QA harness sets. NEVER active in
+ * editing the store. Recognizes `EAVES_<PROVIDER>_API_KEY` plus the
+ * `EAVES_QA_<PROVIDER>_KEY` alias the QA harness sets. NEVER active in
  * packaged builds — this is strictly a development affordance.
  */
 let loggedKeyOverrides = false;
@@ -23,7 +23,7 @@ function devEnvKeyOverrides(): Partial<Record<ProviderId, string>> {
   const out: Partial<Record<ProviderId, string>> = {};
   for (const id of PROVIDER_IDS) {
     const P = id.toUpperCase();
-    const v = process.env[`ENCLAVE_${P}_API_KEY`] ?? process.env[`ENCLAVE_QA_${P}_KEY`];
+    const v = process.env[`EAVES_${P}_API_KEY`] ?? process.env[`EAVES_QA_${P}_KEY`];
     if (v && v.trim()) out[id] = v.trim();
   }
   if (!loggedKeyOverrides) {

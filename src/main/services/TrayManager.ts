@@ -30,7 +30,7 @@ class TrayManagerService {
       const icon = this.loadIcon();
       this.tray = new Tray(icon);
 
-      this.tray.setToolTip('Enclave');
+      this.tray.setToolTip('Eaves');
       this.tray.setContextMenu(this.buildContextMenu());
 
       const toggle = () => this.toggleWindow();
@@ -74,7 +74,7 @@ class TrayManagerService {
   private buildContextMenu(): Menu {
     return Menu.buildFromTemplate([
       {
-        label: 'Show Enclave',
+        label: 'Show Eaves',
         click: () => this.showWindow(),
       },
       { type: 'separator' },

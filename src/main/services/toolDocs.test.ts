@@ -9,7 +9,7 @@ vi.mock('./logger', () => ({
 }));
 vi.mock('./EventBus', () => ({ eventBus: { emitEvent: vi.fn() } }));
 vi.mock('electron', () => ({
-  app: { getPath: (k: string) => `/tmp/enclave-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
+  app: { getPath: (k: string) => `/tmp/eaves-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
   ipcMain: { handle: vi.fn(), on: vi.fn() },
   BrowserWindow: class {},
 }));
@@ -154,7 +154,7 @@ describe('get_tool_info', () => {
         execute: async () => 0,
       }),
     };
-    const metadata = new Map([['create_workflow', { category: 'builtin', origin: 'enclave-core' }]]);
+    const metadata = new Map([['create_workflow', { category: 'builtin', origin: 'eaves-core' }]]);
 
     const { get_tool_info } = createDiscoveryTools(stub, { enabledTools: new Set() }, metadata);
     const info = await (get_tool_info.execute as any)({ toolName: 'create_workflow' }, {} as never);

@@ -138,7 +138,7 @@ export function buildDemoWorkflow(): { nodes: Node[]; edges: Edge[] } {
         label: 'Get Weather API Schema',
         url: 'https://api.weather.gov/openapi.json',
         method: 'GET',
-        headers: { 'User-Agent': 'EnclaveDemoWorkflow/1.0' },
+        headers: { 'User-Agent': 'EavesDemoWorkflow/1.0' },
       },
       position: { x: 250, y: 150 },
     },

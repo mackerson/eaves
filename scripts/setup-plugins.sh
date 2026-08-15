@@ -43,10 +43,10 @@ PLUGINS=$(jq -r '.plugins[] | "\(.name) \(.repo) \(.ref)"' "$MANIFEST")
 # plugin(s)". CLAUDE.md documents this script as required after cloning.
 #
 # Default to HTTPS, which works unauthenticated for public repos and in CI.
-# Override with ENCLAVE_GIT_PROTO=ssh, or point ENCLAVE_GIT_HOST at your own
+# Override with EAVES_GIT_PROTO=ssh, or point EAVES_GIT_HOST at your own
 # SSH alias.
-CLONE_PROTO="${ENCLAVE_GIT_PROTO:-https}"
-GIT_HOST="${ENCLAVE_GIT_HOST:-github.com}"
+CLONE_PROTO="${EAVES_GIT_PROTO:-https}"
+GIT_HOST="${EAVES_GIT_HOST:-github.com}"
 
 clone_url() {
   if [ "$CLONE_PROTO" = "ssh" ]; then

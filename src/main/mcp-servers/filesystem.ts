@@ -153,7 +153,7 @@ const tools: Tool[] = [
  */
 const server = new Server(
   {
-    name: 'enclave-filesystem',
+    name: 'eaves-filesystem',
     version: '1.0.0',
   },
   {

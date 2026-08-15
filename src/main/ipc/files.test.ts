@@ -29,7 +29,7 @@ describe('Files IPC Handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-files-test-'));
+    userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-files-test-'));
     (app.getPath as Mock).mockReturnValue(userDataDir);
 
     handlers = new Map();

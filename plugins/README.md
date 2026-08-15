@@ -1,4 +1,4 @@
-# Enclave Plugins
+# Eaves Plugins
 
 This directory is populated by `yarn setup:plugins`, which clones plugin repos from GitHub and symlinks them here.
 

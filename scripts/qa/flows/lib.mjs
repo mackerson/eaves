@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { connect } from '../harness.mjs';
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-export const scratchDir = process.env.ENCLAVE_QA_DIR || path.join(os.tmpdir(), 'enclave-qa');
+export const scratchDir = process.env.EAVES_QA_DIR || path.join(os.tmpdir(), 'eaves-qa');
 
 // Fallback model name used when no local ollama is reachable — the flows then
 // characterize the unreachable-provider error contract instead of live turns.
@@ -66,7 +66,7 @@ export async function pollUntil(fetchFn, pred, { timeout = 20000, interval = 500
 
 /**
  * Detect a local ollama and pick the smallest available model (override with
- * ENCLAVE_QA_MODEL). Returns null when unreachable — flows then assert the
+ * EAVES_QA_MODEL). Returns null when unreachable — flows then assert the
  * deterministic error-persistence contract and mark LLM assertions skipped.
  */
 export async function detectOllama() {
@@ -74,7 +74,7 @@ export async function detectOllama() {
     const res = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(2000) });
     const { models } = await res.json();
     if (!models?.length) return null;
-    if (process.env.ENCLAVE_QA_MODEL) return process.env.ENCLAVE_QA_MODEL;
+    if (process.env.EAVES_QA_MODEL) return process.env.EAVES_QA_MODEL;
     return [...models].sort((a, b) => a.size - b.size)[0].name;
   } catch {
     return null;
@@ -180,7 +180,7 @@ export function seedChannelBehavior(agentId, behavior) {
   if (!/^[A-Za-z0-9_-]+$/.test(agentId)) throw new Error(`unsafe agentId: ${agentId}`);
   const state = readState();
   if (!state?.xdg) throw new Error('harness state missing xdg dir');
-  const db = path.join(state.xdg, 'enclave', 'enclave-data', 'enclave.db');
+  const db = path.join(state.xdg, 'eaves', 'eaves-data', 'eaves.db');
   const json = JSON.stringify(behavior).replace(/'/g, "''");
   execFileSync('sqlite3', ['-cmd', '.timeout 3000', db,
     `UPDATE agents SET channel_behavior = '${json}' WHERE id = '${agentId}'`]);

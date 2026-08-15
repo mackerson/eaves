@@ -8,7 +8,7 @@
  *   node scripts/qa/live-dreaming.mjs
  *
  * Slow (~2-3 min): the shadow flushes on a 90s timer, then runs a real model
- * turn. Skips (exit 0) when no ENCLAVE_QA_*_KEY is set.
+ * turn. Skips (exit 0) when no EAVES_QA_*_KEY is set.
  */
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
@@ -16,15 +16,15 @@ import path from 'node:path';
 import process from 'node:process';
 import { connect } from './harness.mjs';
 
-const QA_KEYS = ['ENCLAVE_QA_OPENROUTER_KEY', 'ENCLAVE_QA_ANTHROPIC_KEY', 'ENCLAVE_QA_OPENAI_KEY', 'ENCLAVE_QA_GOOGLE_KEY'];
-if (!QA_KEYS.some(k => process.env[k])) { console.log('SKIP: no ENCLAVE_QA_*_KEY in .env.local.'); process.exit(0); }
+const QA_KEYS = ['EAVES_QA_OPENROUTER_KEY', 'EAVES_QA_ANTHROPIC_KEY', 'EAVES_QA_OPENAI_KEY', 'EAVES_QA_GOOGLE_KEY'];
+if (!QA_KEYS.some(k => process.env[k])) { console.log('SKIP: no EAVES_QA_*_KEY in .env.local.'); process.exit(0); }
 
-const provider = process.env.ENCLAVE_QA_PROVIDER || 'openrouter';
-const model = process.env.ENCLAVE_QA_MODEL || 'z-ai/glm-5.2';
+const provider = process.env.EAVES_QA_PROVIDER || 'openrouter';
+const model = process.env.EAVES_QA_MODEL || 'z-ai/glm-5.2';
 const harness = path.join(path.dirname(new URL(import.meta.url).pathname), 'harness.mjs');
-const scratchDir = process.env.ENCLAVE_QA_DIR || path.join(os.tmpdir(), 'enclave-qa');
-const dbPath = path.join(scratchDir, 'xdg', 'enclave', 'enclave-data', 'enclave.db');
-const logDir = path.join(scratchDir, 'xdg', 'enclave', 'logs');
+const scratchDir = process.env.EAVES_QA_DIR || path.join(os.tmpdir(), 'eaves-qa');
+const dbPath = path.join(scratchDir, 'xdg', 'eaves', 'eaves-data', 'eaves.db');
+const logDir = path.join(scratchDir, 'xdg', 'eaves', 'logs');
 const sh = (...a) => execFileSync('node', [harness, ...a], { stdio: 'inherit' });
 const q = (sql) => execFileSync('sqlite3', [dbPath, sql], { encoding: 'utf8' }).trim();
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -34,7 +34,7 @@ const check = (name, ok) => { console.log(`  ${ok ? '✓ PASS' : '✗ FAIL'}  ${
 
 const FACTS = [
   'My name is Robin and I run Northwind Instruments. Confirm you will remember that.',
-  'My dog is named Biscuit. Also, I am building the Enclave memory system this week. Acknowledge both.',
+  'My dog is named Biscuit. Also, I am building the Eaves memory system this week. Acknowledge both.',
   'The current priority is shipping the dreaming feature. Summarize what you know about me so far.',
 ];
 

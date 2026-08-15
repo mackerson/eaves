@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Enclave AI</title>
+    <title>Eaves</title>
     <!--
       React resolution for plugin UI bundles is handled at runtime, not via an
       import map: dev uses the vite.config.ts middleware; packaged builds use the
-      enclave-module: scheme (see src/main/protocols/moduleShim.ts). A static
+      eaves-module: scheme (see src/main/protocols/moduleShim.ts). A static
       importmap here was inert (bundles emit absolute /node_modules/react paths,
       which import maps do not rewrite) and tripped the prod CSP.
     -->
@@ -33,7 +33,7 @@
           border-radius: 50%;
           animation: spin 1s linear infinite;
         "></div>
-        <p style="margin-top: 16px; color: hsl(240 5% 64.9%);">Loading Enclave...</p>
+        <p style="margin-top: 16px; color: hsl(240 5% 64.9%);">Loading Eaves...</p>
         <style>
           @keyframes spin {
             to { transform: rotate(360deg); }

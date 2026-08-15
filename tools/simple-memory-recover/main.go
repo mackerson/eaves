@@ -1,6 +1,6 @@
 // simple-memory-recover: one-time recovery tool.
 //
-// When Enclave dropped the bundled "simple-memory" plugin in favor of the
+// When Eaves dropped the bundled "simple-memory" plugin in favor of the
 // built-in memory store, existing plugin memories were left stranded in the
 // plugin_storage table — the app simply stopped reading them. This tool copies
 // those memories into the new internal store (memory_entries) so they show up
@@ -10,10 +10,10 @@
 //   - makes a full, consistent backup of the database before touching anything
 //   - non-destructive: INSERT OR IGNORE never overwrites or deletes a memory
 //     you already have (safe to run twice)
-//   - refuses to run if Enclave is still open (the database would be locked)
+//   - refuses to run if Eaves is still open (the database would be locked)
 //
-// Usage (Windows): close Enclave, then double-click the .exe.
-//   --db <path>   operate on a specific database file (default: your Enclave profile)
+// Usage (Windows): close Eaves, then double-click the .exe.
+//   --db <path>   operate on a specific database file (default: your Eaves profile)
 //   --dry-run     report what WOULD happen; make no changes
 //   --yes         skip the confirmation prompt
 //   --no-pause    don't wait for Enter at the end (for scripting)
@@ -32,7 +32,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const pluginID = "com.enclave.simple-memory"
+const pluginID = "com.eaves.simple-memory"
 
 // The transform. simple-memory stored each memory as JSON {value, metadata:{...}},
 // which is exactly the shape the internal store uses — so this is a direct copy.
@@ -54,18 +54,18 @@ WHERE ps.plugin_id = ?
 func defaultDBPath() string {
 	switch runtime.GOOS {
 	case "windows":
-		return filepath.Join(os.Getenv("APPDATA"), "enclave", "enclave-data", "enclave.db")
+		return filepath.Join(os.Getenv("APPDATA"), "eaves", "eaves-data", "eaves.db")
 	case "darwin":
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "enclave", "enclave-data", "enclave.db")
+		return filepath.Join(home, "Library", "Application Support", "eaves", "eaves-data", "eaves.db")
 	default:
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", "enclave", "enclave-data", "enclave.db")
+		return filepath.Join(home, ".config", "eaves", "eaves-data", "eaves.db")
 	}
 }
 
 func main() {
-	dbPath := flag.String("db", "", "path to enclave.db (default: your Enclave profile)")
+	dbPath := flag.String("db", "", "path to eaves.db (default: your Eaves profile)")
 	dryRun := flag.Bool("dry-run", false, "report what would happen; make no changes")
 	assumeYes := flag.Bool("yes", false, "skip the confirmation prompt")
 	noPause := flag.Bool("no-pause", false, "don't wait for Enter at the end")
@@ -82,7 +82,7 @@ func run(dbPath string, dryRun, assumeYes bool) error {
 	if dbPath == "" {
 		dbPath = defaultDBPath()
 	}
-	fmt.Println("Enclave — simple-memory recovery")
+	fmt.Println("Eaves — simple-memory recovery")
 	fmt.Println("================================")
 	fmt.Printf("Database: %s\n\n", dbPath)
 
@@ -98,9 +98,9 @@ func run(dbPath string, dryRun, assumeYes bool) error {
 	}
 	defer db.Close()
 
-	// A locked DB almost always means Enclave is still running.
+	// A locked DB almost always means Eaves is still running.
 	if _, err := db.Exec("PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
-		return fmt.Errorf("database is busy — is Enclave still open? Close it completely and try again.\n       (%v)", err)
+		return fmt.Errorf("database is busy — is Eaves still open? Close it completely and try again.\n       (%v)", err)
 	}
 
 	if err := preflightSchema(db); err != nil {
@@ -148,14 +148,14 @@ func run(dbPath string, dryRun, assumeYes bool) error {
 	ftsCount, _ := scalar(db, "SELECT COUNT(*) FROM memory_fts")
 	fmt.Printf("\nRecovered %d memories. ✓\n", inserted)
 	fmt.Printf("Internal store now holds %d memories (search index: %d).\n", after, ftsCount)
-	fmt.Println("\nOpen Enclave — your memories are back. If semantic search is enabled,")
+	fmt.Println("\nOpen Eaves — your memories are back. If semantic search is enabled,")
 	fmt.Println("the app will build embeddings for them on next launch.")
 	return nil
 }
 
 func preflightSchema(db *sql.DB) error {
 	if n, _ := scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='memory_entries'"); n == 0 {
-		return fmt.Errorf("this database predates the internal memory store.\n       Update Enclave to the current version first, then run this tool.")
+		return fmt.Errorf("this database predates the internal memory store.\n       Update Eaves to the current version first, then run this tool.")
 	}
 	if n, _ := scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='plugin_storage'"); n == 0 {
 		return fmt.Errorf("no plugin_storage table — nothing to recover from.")

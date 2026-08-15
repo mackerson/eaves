@@ -9,14 +9,14 @@ import { z } from 'zod/v3';
 const LogFilePathSchema = z.string().min(1).max(500);
 
 /**
- * The only names the logger ever writes: `enclave-<date>.log` and
- * `enclave-<rotation timestamp>.log`. Matching against the producer's own
+ * The only names the logger ever writes: `eaves-<date>.log` and
+ * `eaves-<rotation timestamp>.log`. Matching against the producer's own
  * naming — rather than just stripping directories — is what keeps this handler
  * a log reader instead of a general-purpose file reader for anything that
  * happens to sit in the log directory. The character class excludes both path
  * separators, so nothing that passes can name a file outside it.
  */
-const LOG_FILE_NAME_PATTERN = /^enclave-[A-Za-z0-9._-]+\.log$/;
+const LOG_FILE_NAME_PATTERN = /^eaves-[A-Za-z0-9._-]+\.log$/;
 
 /**
  * A log file is capped at 10MB by the logger and there can be five of them.

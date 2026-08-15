@@ -12,11 +12,11 @@ import { getServiceRegistry } from './ServiceRegistry';
 import { Routine, Workflow } from '../../shared/types';
 import { WORKFLOW_NODE_TYPES, validateNodeData, type WorkflowNodeType } from '../../shared/workflowNodeTypes';
 import { TOOL_DOCS } from './toolDocs';
-import { guideTopicIndex, lookupGuideTopic } from './enclaveGuide';
+import { guideTopicIndex, lookupGuideTopic } from './eavesGuide';
 import { deferTool } from './toolDeferral';
 
 /**
- * Built-in tools that give agents access to Enclave's task and note management
+ * Built-in tools that give agents access to Eaves's task and note management
  */
 
 /**
@@ -336,13 +336,13 @@ function getCurrentProject() {
 }
 
 export const builtinTools = {
-  // Enclave is not in any model's training data, and list_tools/get_tool_info
+  // Eaves is not in any model's training data, and list_tools/get_tool_info
   // only describe the agent's own capabilities — not the product around them.
   // Without this an agent asked "how do I set up a routine?" invents an answer
   // the user cannot check. Description stays one line on purpose: it rides
   // every turn, the content does not.
-  enclave_guide: tool({
-    description: 'How Enclave itself works: projects, chats, channels, memory, workflows, routines, plugins, settings. Call it rather than guessing about the app. Omit topic for the index.',
+  eaves_guide: tool({
+    description: 'How Eaves itself works: projects, chats, channels, memory, workflows, routines, plugins, settings. Call it rather than guessing about the app. Omit topic for the index.',
     inputSchema: z.object({
       topic: z.string().optional().describe('Topic id from the index.'),
     }),
@@ -1359,7 +1359,7 @@ export const builtinTools = {
       try {
         const response = await fetch(url, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; Enclave/1.0)',
+            'User-Agent': 'Mozilla/5.0 (compatible; Eaves/1.0)',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7',
           },
           signal: AbortSignal.timeout(30000),

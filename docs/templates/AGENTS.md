@@ -1,6 +1,6 @@
-# Writing an Enclave plugin
+# Writing an Eaves plugin
 
-You are running in a terminal inside **Enclave**, a local-first Electron app for
+You are running in a terminal inside **Eaves**, a local-first Electron app for
 multi-agent AI conversations. The user wants you to write a plugin for it.
 
 This file is self-contained: everything needed for a working plugin is below, so
@@ -9,25 +9,25 @@ bottom for anything deeper.
 
 ## Where to write it
 
-Write the plugin to the user's Enclave plugin directory — **not** to the
+Write the plugin to the user's Eaves plugin directory — **not** to the
 current working directory. The current directory is whatever project the user
-has open, and Enclave does not load plugins from there.
+has open, and Eaves does not load plugins from there.
 
 | Platform | Directory |
 |---|---|
-| Linux | `~/.config/enclave/plugins/<folder>/` |
-| macOS | `~/Library/Application Support/enclave/plugins/<folder>/` |
-| Windows | `%APPDATA%\enclave\plugins\<folder>\` |
+| Linux | `~/.config/eaves/plugins/<folder>/` |
+| macOS | `~/Library/Application Support/eaves/plugins/<folder>/` |
+| Windows | `%APPDATA%\eaves\plugins\<folder>\` |
 
 `<folder>` is your plugin's id with dots replaced by dashes
 (`com.example.wordcount` → `com-example-wordcount`).
 
-Enclave watches that directory. When your `plugin.json` lands, the plugin is
+Eaves watches that directory. When your `plugin.json` lands, the plugin is
 loaded within a couple of seconds — **no restart, no reload, no build step** if
 you follow the recipe below. A view you register appears in the sidebar under
 PLUGINS on its own.
 
-**Write `plugin.json` last.** It is the file that triggers loading. Enclave will
+**Write `plugin.json` last.** It is the file that triggers loading. Eaves will
 wait up to 10s for the entry file, but writing code first is more reliable.
 
 ## A complete working plugin
@@ -69,13 +69,13 @@ module.exports = {
 
 ### `ui/index.js` — the view, **hand-written ES module, no build**
 
-Do not use JSX and do not `import` anything. Enclave puts React and its UI kit
-on `window.EnclaveAPI`, and this file is loaded directly as an ES module — so
+Do not use JSX and do not `import` anything. Eaves puts React and its UI kit
+on `window.EavesAPI`, and this file is loaded directly as an ES module — so
 there is no bundler, no `package.json`, and no `yarn install` involved.
 
 ```js
-const React = window.EnclaveAPI.React;
-const { Card, Button } = window.EnclaveAPI.UI;
+const React = window.EavesAPI.React;
+const { Card, Button } = window.EavesAPI.UI;
 
 export function WordCountView() {
   const [text, setText] = React.useState('');
@@ -98,7 +98,7 @@ export function WordCountView() {
 Use the functional form for state updates that depend on the previous value
 (`setN(n => n + 1)`), not `setN(n + 1)`.
 
-Tailwind utility classes work. `window.EnclaveAPI.UI` provides `Button`,
+Tailwind utility classes work. `window.EavesAPI.UI` provides `Button`,
 `Input`, `Card`, `AppIcon` and other shadcn/ui primitives, so a plugin view
 matches the app's theme for free.
 
@@ -130,7 +130,7 @@ Rules that will silently break the plugin if you get them wrong:
 - **`id` is reverse-DNS and permanent** — it keys storage and permission grants.
 - Every key in `ui.components` must match an **exported name** in your UI file.
 - `type` is one of `ui`, `tool`, `hybrid`, `mcp`, `import`, `terminal`.
-- **`icon`** must be an emoji (recommended) or one of Enclave's built-in icon
+- **`icon`** must be an emoji (recommended) or one of Eaves's built-in icon
   names. It is *not* a Lucide name — an unrecognized name falls back to a
   generic plugin icon. Valid names: `chat`, `channels`, `files`, `notes`,
   `tasks`, `calendar`, `workflows`, `routines`, `activity`, `plugins`,
@@ -225,18 +225,18 @@ or it doesn't belong in a plugin.
 
 ## Going deeper
 
-Upstream repo: <https://github.com/mackerson/enclave-ai>
+Upstream repo: <https://github.com/mackerson/eaves>
 
 - Writing plugins (full `context` reference, permissions, services):
-  <https://github.com/mackerson/enclave-ai/blob/main/docs/plugin-development.md>
+  <https://github.com/mackerson/eaves/blob/main/docs/plugin-development.md>
 - Build system, load paths, distribution:
-  <https://github.com/mackerson/enclave-ai/blob/main/docs/plugin-build-system.md>
+  <https://github.com/mackerson/eaves/blob/main/docs/plugin-build-system.md>
 - Architecture and invariants:
-  <https://github.com/mackerson/enclave-ai/blob/main/docs/architecture/README.md>
+  <https://github.com/mackerson/eaves/blob/main/docs/architecture/README.md>
 - Working examples — each is a standalone repo:
-  <https://github.com/mackerson?tab=repositories&q=enclave-plugin->
+  <https://github.com/mackerson?tab=repositories&q=eaves-plugin->
 - Curated plugin registry (publishing):
-  <https://github.com/mackerson/enclave-plugin-registry>
+  <https://github.com/mackerson/eaves-plugin-registry>
 
 A starter-parts repo for rapid assembly is planned; until then the example
 plugin repos above are the best reference for a working shape.

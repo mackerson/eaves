@@ -1,6 +1,6 @@
-# Enclave Architecture
+# Eaves Architecture
 
-Enclave is a local-first Electron app for multi-agent AI conversations. This
+Eaves is a local-first Electron app for multi-agent AI conversations. This
 page is the diagram home: two layered diagrams plus the invariants that make
 them true. It is deliberately **not** a full service map — deep topics are
 linked at the bottom, and implementation constants live in code, not in boxes.
@@ -41,7 +41,7 @@ flowchart LR
     Preload["Preload contextBridge<br/>sole bridge — typed methods only,<br/>Zod-validated invoke"]
     Main["Main process — capability root<br/>fs · net · PTY · SQLite · provider keys<br/>services · IPC handlers · repositories"]
     Workers["Plugin Worker Threads (untrusted)<br/>fs / net / child_process / vm require-blocked<br/>eval + Function disabled · path-contained require"]
-    SQLite[("enclave.db<br/>SQLite, WAL")]
+    SQLite[("eaves.db<br/>SQLite, WAL")]
 
     subgraph External["Outside the machine"]
         LLM["LLM APIs<br/>Anthropic · OpenAI · Google · OpenRouter<br/>(Ollama / LM Studio default to localhost)"]

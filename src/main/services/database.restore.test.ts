@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('electron', () => ({ app: { getPath: () => '/tmp/enclave-db-restore-test', isPackaged: true } }));
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp/eaves-db-restore-test', isPackaged: true } }));
 vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
   getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -51,7 +51,7 @@ describe('database restore lock', () => {
   });
 
   // One-way by design: a restore ends in app.relaunch(), and a failed one may
-  // have left enclave.db half-written. Restarting is the only unlock.
+  // have left eaves.db half-written. Restarting is the only unlock.
   it('stays locked for the rest of the process lifetime', () => {
     db.beginDatabaseRestore();
 

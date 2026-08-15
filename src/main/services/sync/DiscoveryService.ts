@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { logger } from '../logger';
 
 /**
- * mDNS advertise + browse for `_enclave-sync._tcp` on the local network.
+ * mDNS advertise + browse for `_eaves-sync._tcp` on the local network.
  * Pure-JS via bonjour-service — no native bindings.
  *
  * Events:
@@ -38,12 +38,12 @@ export class DiscoveryService extends EventEmitter {
       // Service-instance names must be network-unique; the id suffix keeps two
       // devices with the same hostname from colliding.
       name: `${deviceName.slice(0, 40)}-${this.ownDeviceId.slice(0, 8)}`,
-      type: 'enclave-sync',
+      type: 'eaves-sync',
       port,
       txt: { deviceid: this.ownDeviceId, devicename: deviceName },
     });
 
-    this.browser = this.bonjour.find({ type: 'enclave-sync' }, (service) => {
+    this.browser = this.bonjour.find({ type: 'eaves-sync' }, (service) => {
       const txt = (service.txt ?? {}) as Record<string, string>;
       const deviceId = txt.deviceid;
       if (!deviceId || deviceId === this.ownDeviceId) return;

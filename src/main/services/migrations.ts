@@ -36,7 +36,7 @@ function withTransaction(db: Database.Database, fn: () => void): void {
 
 /**
  * Baseline schema (v75). Third squash: folds the v52 baseline plus incremental
- * migrations v53–v74 into one truth, taken at the point Enclave went public.
+ * migrations v53–v74 into one truth, taken at the point Eaves went public.
  *
  * Unlike the previous two squashes this one lands no structural change — it is
  * purely a flattening. Every table, column, index and trigger here is what the
@@ -979,7 +979,7 @@ export function runMigrations(db: Database.Database, currentVersion: number): vo
     throw new Error(
       `Database schema is too old for this build (user_version=${currentVersion}, ` +
       `minimum ${MIN_SUPPORTED_VERSION}). Databases from before the chats-into-channels ` +
-      `fold cannot be upgraded automatically. Move enclave.db aside and restart to ` +
+      `fold cannot be upgraded automatically. Move eaves.db aside and restart to ` +
       `begin with a fresh one, keeping the old file in case the data is wanted later.`
     );
   }

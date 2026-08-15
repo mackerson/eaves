@@ -24,7 +24,7 @@ export class PythonExecutor extends BaseExecutor {
     const python = this.resolveExecutable(candidates);
     if (!python) {
       throw new Error(
-        'Python was not found. Install Python 3 and ensure it is on your PATH, then restart Enclave.'
+        'Python was not found. Install Python 3 and ensure it is on your PATH, then restart Eaves.'
       );
     }
 

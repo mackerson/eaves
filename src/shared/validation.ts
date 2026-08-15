@@ -466,7 +466,7 @@ export const EntityIdSchema = z.string()
 // reach `../../etc/passwd` style paths.
 export const BackupFilenameSchema = z.string()
   .regex(
-    /^enclave-\d{8}T\d{9}Z-(startup|periodic|manual|pre-restore)(?:-\d+)?\.db$/,
+    /^eaves-\d{8}T\d{9}Z-(startup|periodic|manual|pre-restore)(?:-\d+)?\.db$/,
     'Invalid backup filename',
   );
 

@@ -103,7 +103,7 @@ class Logger {
     this.currentLogFile = this.getCurrentLogPath();
     this.rotateIfNeeded();
 
-    const envLevel = process.env.ENCLAVE_LOG_LEVEL?.toUpperCase();
+    const envLevel = process.env.EAVES_LOG_LEVEL?.toUpperCase();
     if (envLevel) {
       switch (envLevel) {
         case 'DEBUG':
@@ -132,7 +132,7 @@ class Logger {
 
   private getCurrentLogPath(): string {
     const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    return path.join(this.logDir, `enclave-${date}.log`);
+    return path.join(this.logDir, `eaves-${date}.log`);
   }
 
   private rotateIfNeeded() {
@@ -144,7 +144,7 @@ class Logger {
     if (stats.size >= this.config.maxFileSize) {
       // Rename current log with timestamp
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const rotatedPath = path.join(this.logDir, `enclave-${timestamp}.log`);
+      const rotatedPath = path.join(this.logDir, `eaves-${timestamp}.log`);
       fs.renameSync(this.currentLogFile, rotatedPath);
 
       // Clean up old files
@@ -157,7 +157,7 @@ class Logger {
 
   private cleanupOldLogs() {
     const files = fs.readdirSync(this.logDir)
-      .filter(f => f.startsWith('enclave-') && f.endsWith('.log'))
+      .filter(f => f.startsWith('eaves-') && f.endsWith('.log'))
       .map(f => ({
         name: f,
         path: path.join(this.logDir, f),
@@ -204,7 +204,7 @@ class Logger {
 
   getLogFiles(): string[] {
     return fs.readdirSync(this.logDir)
-      .filter(f => f.startsWith('enclave-') && f.endsWith('.log'))
+      .filter(f => f.startsWith('eaves-') && f.endsWith('.log'))
       .map(f => path.join(this.logDir, f));
   }
 

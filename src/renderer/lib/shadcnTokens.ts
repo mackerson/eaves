@@ -1,5 +1,5 @@
 /**
- * Derive shadcn/Tailwind color tokens from the active Enclave theme.
+ * Derive shadcn/Tailwind color tokens from the active Eaves theme.
  *
  * shadcn components (Button, Input, …) consume `hsl(var(--primary))`-style
  * tokens. Hand-maintaining those per theme in App.css only ever covers the

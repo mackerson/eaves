@@ -19,7 +19,7 @@
  * definition or show up in `Object.keys`.
  */
 
-const DEFERRED = Symbol.for('enclave.deferredTool');
+const DEFERRED = Symbol.for('eaves.deferredTool');
 
 /** Mark a tool as deferred. Returns the same object, for use inline at definition. */
 export function deferTool<T extends object>(toolDef: T): T {

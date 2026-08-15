@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { EnclaveGlyph } from '@/components/ui/EnclaveGlyph';
+import { EavesGlyph } from '@/components/ui/EavesGlyph';
 import './VaporwaveShader.css';
 
 export function VaporwaveShader() {
@@ -185,7 +185,7 @@ export function VaporwaveShader() {
       />
       <div className="logo-overlay">
         <div className="logo-glow" />
-        <EnclaveGlyph className="enclave-logo" />
+        <EavesGlyph className="eaves-logo" />
       </div>
     </div>
   );

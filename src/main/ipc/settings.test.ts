@@ -138,12 +138,12 @@ describe('Settings IPC Handlers', () => {
         canceled: false,
         filePaths: ['/path/to/image.png'],
       });
-      (backgroundCache.cacheLocalFile as Mock).mockReturnValue('enclave://bg/image.png');
+      (backgroundCache.cacheLocalFile as Mock).mockReturnValue('eaves://bg/image.png');
 
       const result = await handler({});
 
       expect(result.canceled).toBe(false);
-      expect(result.path).toBe('enclave://bg/image.png');
+      expect(result.path).toBe('eaves://bg/image.png');
     });
 
     it('should return canceled when user cancels', async () => {
@@ -179,12 +179,12 @@ describe('Settings IPC Handlers', () => {
   describe('cache-background-url', () => {
     it('should cache a valid URL', async () => {
       const handler = handlers.get('cache-background-url')!;
-      (backgroundCache.cacheUrl as Mock).mockResolvedValue('enclave://bg/cached.png');
+      (backgroundCache.cacheUrl as Mock).mockResolvedValue('eaves://bg/cached.png');
 
       const result = await handler({}, 'https://example.com/image.png');
 
       expect(result.success).toBe(true);
-      expect(result.path).toBe('enclave://bg/cached.png');
+      expect(result.path).toBe('eaves://bg/cached.png');
     });
 
     it('should reject invalid URL', async () => {
@@ -209,12 +209,12 @@ describe('Settings IPC Handlers', () => {
   describe('get-cached-background', () => {
     it('should return cached background', async () => {
       const handler = handlers.get('get-cached-background')!;
-      (backgroundCache.getCached as Mock).mockReturnValue('enclave://bg/cached.png');
+      (backgroundCache.getCached as Mock).mockReturnValue('eaves://bg/cached.png');
 
       const result = await handler({}, 'https://example.com/image.png');
 
       expect(result.cached).toBe(true);
-      expect(result.path).toBe('enclave://bg/cached.png');
+      expect(result.path).toBe('eaves://bg/cached.png');
     });
 
     it('should return not cached when missing', async () => {

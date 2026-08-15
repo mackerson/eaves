@@ -37,8 +37,8 @@ if (!isPackagedBuild()) {
  * Nothing here is cached: the only caller opens the database once and holds
  * the handle.
  */
-const dataDir = () => path.join(app.getPath('userData'), 'enclave-data');
-const dbPath = () => path.join(dataDir(), 'enclave.db');
+const dataDir = () => path.join(app.getPath('userData'), 'eaves-data');
+const dbPath = () => path.join(dataDir(), 'eaves.db');
 const DEFAULT_HUMAN_COLOR = '#2563eb';
 
 let db: Database.Database | null = null;
@@ -72,7 +72,7 @@ export function resolveVecExtensionPath(): string {
 }
 
 export function getDatabase(): Database.Database {
-  // A restore replaces enclave.db on disk. Because closing the DB just nulls
+  // A restore replaces eaves.db on disk. Because closing the DB just nulls
   // this singleton, any caller landing in that window would transparently
   // reopen the old file — re-running migrations and creating a fresh WAL —
   // and then have it overwritten underneath a live handle. Timer-driven
@@ -81,7 +81,7 @@ export function getDatabase(): Database.Database {
   // logged error from a routine tick is recoverable, a half-replaced database
   // is not.
   if (restoreInProgress) {
-    throw new Error('Database is being restored from a backup — restart Enclave to continue');
+    throw new Error('Database is being restored from a backup — restart Eaves to continue');
   }
   if (!db) {
     // Ensure the data directory exists before creating the database
@@ -233,7 +233,7 @@ export function closeDatabase(): void {
  * Close the DB and lock out reopens for the duration of a restore.
  *
  * Deliberately one-way. A restore is always followed by `app.relaunch()`, and
- * a failed one leaves `enclave.db` possibly half-written — in both cases the
+ * a failed one leaves `eaves.db` possibly half-written — in both cases the
  * correct next state is a fresh process, not a reopened handle. There is no
  * unlock; restarting is the unlock.
  */

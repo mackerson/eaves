@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Headless E2E QA harness: launches an isolated Enclave instance (fresh
+ * Headless E2E QA harness: launches an isolated Eaves instance (fresh
  * XDG config dir → fresh DB, never the real profile) with Chrome DevTools
  * Protocol enabled, and drives it via Runtime.evaluate against the real
  * renderer + real IPC.
@@ -29,13 +29,13 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const scratchDir = process.env.ENCLAVE_QA_DIR || path.join(os.tmpdir(), 'enclave-qa');
+const scratchDir = process.env.EAVES_QA_DIR || path.join(os.tmpdir(), 'eaves-qa');
 const stateFile = path.join(scratchDir, 'state.json');
 // Tracked separately from state.json: the static server can outlive a run, and
 // a leaked one silently serves a stale bundle to every launch that follows.
 const serverFile = path.join(scratchDir, 'renderer-server.json');
 
-// Load ENCLAVE_QA_* vars from the gitignored .env.local so keyed/live runs can
+// Load EAVES_QA_* vars from the gitignored .env.local so keyed/live runs can
 // seed provider keys without the value ever touching a command line. Minimal
 // parser — keeps the harness dependency-free. Existing env wins.
 function loadEnvLocal() {
@@ -52,10 +52,10 @@ loadEnvLocal();
 
 // Provider → env var holding its API key for keyed/live harness runs.
 const QA_KEY_ENV = {
-  openrouter: 'ENCLAVE_QA_OPENROUTER_KEY',
-  anthropic: 'ENCLAVE_QA_ANTHROPIC_KEY',
-  openai: 'ENCLAVE_QA_OPENAI_KEY',
-  google: 'ENCLAVE_QA_GOOGLE_KEY',
+  openrouter: 'EAVES_QA_OPENROUTER_KEY',
+  anthropic: 'EAVES_QA_ANTHROPIC_KEY',
+  openai: 'EAVES_QA_OPENAI_KEY',
+  google: 'EAVES_QA_GOOGLE_KEY',
 };
 
 /**
@@ -184,7 +184,7 @@ async function servesRenderer(port) {
   try {
     const res = await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(1500) });
     if (!res.ok) return false;
-    return (await res.text()).includes('<title>Enclave AI</title>');
+    return (await res.text()).includes('<title>Eaves</title>');
   } catch {
     return false;
   }
@@ -321,11 +321,11 @@ async function launch() {
       if (!(await portUp(p))) { freePort = p; break; }
     }
     if (freePort === null) {
-      console.error(`FATAL: ports ${RENDERER_PORTS[0]}-${RENDERER_PORTS.at(-1)} are all occupied by servers that are not the Enclave renderer.`);
+      console.error(`FATAL: ports ${RENDERER_PORTS[0]}-${RENDERER_PORTS.at(-1)} are all occupied by servers that are not the Eaves renderer.`);
       process.exit(1);
     }
     if (freePort !== RENDERER_PORTS[0]) {
-      console.warn(`NOTE: :${RENDERER_PORTS[0]} is held by a server that is not the Enclave renderer — using :${freePort}.`);
+      console.warn(`NOTE: :${RENDERER_PORTS[0]} is held by a server that is not the Eaves renderer — using :${freePort}.`);
     }
     const server = spawn(process.execPath, [fileURLToPath(import.meta.url), '_serve', rendererDist, String(freePort)], {
       detached: true,

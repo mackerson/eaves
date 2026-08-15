@@ -36,7 +36,7 @@ describe('isInsideDirectory', () => {
 });
 
 describe('readInstalledPluginId', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-owner-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-owner-'));
 
   const write = (name: string, contents: string) => {
     const d = path.join(dir, name);

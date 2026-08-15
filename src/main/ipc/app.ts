@@ -15,10 +15,10 @@ export function registerAppHandlers() {
   // `path` is the database directory; `appDataPath` is its parent, which also
   // holds project workspaces, avatars, themes, and installed plugins. Both are
   // reported because "back up your data" means the parent — the settings UI
-  // used to point at `enclave-data` alone while claiming it held everything.
+  // used to point at `eaves-data` alone while claiming it held everything.
   ipcMain.handle('app:get-data-dir', ipcResult('app:get-data-dir', async () => {
     return {
-      path: path.join(app.getPath('userData'), 'enclave-data'),
+      path: path.join(app.getPath('userData'), 'eaves-data'),
       appDataPath: app.getPath('userData'),
     };
   }));
@@ -46,7 +46,7 @@ export function registerAppHandlers() {
     return { success: true };
   }));
 
-  // The renderer's "Quit Enclave" menu entry needs a real quit — on macOS
+  // The renderer's "Quit Eaves" menu entry needs a real quit — on macOS
   // BrowserWindow.close() leaves the app running in the dock, so we need
   // app.quit() from the main process.
   ipcMain.handle('app:quit', ipcResult('app:quit', async () => {

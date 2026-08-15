@@ -1,10 +1,10 @@
-import { EnclaveGlyph } from '@/components/ui/EnclaveGlyph';
+import { EavesGlyph } from '@/components/ui/EavesGlyph';
 import './LogoSection.css';
 
 export function LogoSection() {
   return (
     <div className="logo-section">
-      <EnclaveGlyph className="logo" />
+      <EavesGlyph className="logo" />
     </div>
   );
 }

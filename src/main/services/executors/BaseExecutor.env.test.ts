@@ -13,26 +13,26 @@ import type { ExecutorOptions } from '../../types/code-execution';
 // read them in the child process, and assert the secrets are gone.
 describe('code executor env scrubbing', () => {
   beforeAll(() => {
-    process.env.ENCLAVE_TEST_OPENAI_API_KEY = 'sk-should-be-stripped';
-    process.env.ENCLAVE_TEST_GH_TOKEN = 'ghp-should-be-stripped';
-    process.env.ENCLAVE_TEST_DB_PASSWORD = 'pw-should-be-stripped';
-    process.env.ENCLAVE_TEST_BENIGN = 'keep-me';
+    process.env.EAVES_TEST_OPENAI_API_KEY = 'sk-should-be-stripped';
+    process.env.EAVES_TEST_GH_TOKEN = 'ghp-should-be-stripped';
+    process.env.EAVES_TEST_DB_PASSWORD = 'pw-should-be-stripped';
+    process.env.EAVES_TEST_BENIGN = 'keep-me';
   });
   afterAll(() => {
-    delete process.env.ENCLAVE_TEST_OPENAI_API_KEY;
-    delete process.env.ENCLAVE_TEST_GH_TOKEN;
-    delete process.env.ENCLAVE_TEST_DB_PASSWORD;
-    delete process.env.ENCLAVE_TEST_BENIGN;
+    delete process.env.EAVES_TEST_OPENAI_API_KEY;
+    delete process.env.EAVES_TEST_GH_TOKEN;
+    delete process.env.EAVES_TEST_DB_PASSWORD;
+    delete process.env.EAVES_TEST_BENIGN;
   });
 
   it('strips secret-bearing vars but preserves benign env in the child', async () => {
     const exec = new JavaScriptExecutor();
     const code = `
       console.log('RESULT:' + JSON.stringify({
-        apiKey: process.env.ENCLAVE_TEST_OPENAI_API_KEY ?? null,
-        token: process.env.ENCLAVE_TEST_GH_TOKEN ?? null,
-        password: process.env.ENCLAVE_TEST_DB_PASSWORD ?? null,
-        benign: process.env.ENCLAVE_TEST_BENIGN ?? null,
+        apiKey: process.env.EAVES_TEST_OPENAI_API_KEY ?? null,
+        token: process.env.EAVES_TEST_GH_TOKEN ?? null,
+        password: process.env.EAVES_TEST_DB_PASSWORD ?? null,
+        benign: process.env.EAVES_TEST_BENIGN ?? null,
       }));
     `;
     const result = await exec.executeCode(code, { timeout: 15000 } as ExecutorOptions);

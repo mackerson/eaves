@@ -82,7 +82,7 @@ function needsMcpBuild() {
 }
 
 function main() {
-  console.log('🚀 Enclave Dev Initialization\n');
+  console.log('🚀 Eaves Dev Initialization\n');
   const startTime = Date.now();
 
   // 1. Build plugins (incremental - handled by build-plugins.js)

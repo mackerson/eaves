@@ -107,7 +107,7 @@ export async function startWorkSession(opts: StartWorkSessionOptions): Promise<S
     chatId: session.id,
     senderId: currentUser?.id ?? 'system',
     senderType: 'human',
-    senderDisplayName: currentUser?.name ?? 'Enclave',
+    senderDisplayName: currentUser?.name ?? 'Eaves',
     senderColor: currentUser?.color,
     content: seedMessage(task.content, parentChannelId),
     contentBlocks: [{ type: 'text', content: seedMessage(task.content, parentChannelId), timestamp: now }],

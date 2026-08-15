@@ -6,7 +6,7 @@ import { protocol } from 'electron';
  * Plugin UI bundles externalize React and emit bare-absolute imports like
  *   import { jsx } from "/node_modules/react/jsx-runtime";
  * In dev, vite.config.ts intercepts `/node_modules/react*` and serves tiny ESM
- * shims that re-export from `window.EnclaveAPI.React`. There is no equivalent in
+ * shims that re-export from `window.EavesAPI.React`. There is no equivalent in
  * a packaged build (the renderer loads over file://), so those imports resolve
  * to file:///node_modules/react and 404 — every plugin UI fails to load (#6).
  *
@@ -23,12 +23,12 @@ const JS_HEADERS = { 'content-type': 'text/javascript; charset=utf-8' };
 
 const SHIMS: Record<string, string> = {
   'react/jsx-runtime': `
-    export const jsx = window.EnclaveAPI.React.jsxRuntime.jsx;
-    export const jsxs = window.EnclaveAPI.React.jsxRuntime.jsxs;
-    export const Fragment = window.EnclaveAPI.React.jsxRuntime.Fragment;
+    export const jsx = window.EavesAPI.React.jsxRuntime.jsx;
+    export const jsxs = window.EavesAPI.React.jsxRuntime.jsxs;
+    export const Fragment = window.EavesAPI.React.jsxRuntime.Fragment;
   `,
   react: `
-    const React = window.EnclaveAPI.React;
+    const React = window.EavesAPI.React;
     export default React;
     export const useState = React.useState;
     export const useEffect = React.useEffect;
@@ -42,20 +42,20 @@ const SHIMS: Record<string, string> = {
     export const Fragment = React.Fragment;
   `,
   'react-dom': `
-    const ReactDOM = window.EnclaveAPI.ReactDOM;
+    const ReactDOM = window.EavesAPI.ReactDOM;
     export default ReactDOM;
-    export const createRoot = window.EnclaveAPI.ReactDOMClient.createRoot;
-    export const hydrateRoot = window.EnclaveAPI.ReactDOMClient.hydrateRoot;
+    export const createRoot = window.EavesAPI.ReactDOMClient.createRoot;
+    export const hydrateRoot = window.EavesAPI.ReactDOMClient.hydrateRoot;
   `,
 };
 
 /** The scheme registered (as privileged) in main.ts and targeted by the redirect. */
-export const MODULE_SHIM_SCHEME = 'enclave-module';
+export const MODULE_SHIM_SCHEME = 'eaves-module';
 
 /**
- * Map an `enclave-module://` URL to a shim key. The bare module name lands on
- * the URL host (`enclave-module://react`), with sub-paths on the pathname
- * (`enclave-module://react/jsx-runtime`).
+ * Map an `eaves-module://` URL to a shim key. The bare module name lands on
+ * the URL host (`eaves-module://react`), with sub-paths on the pathname
+ * (`eaves-module://react/jsx-runtime`).
  */
 function shimKeyFromUrl(rawUrl: string): string | null {
   const url = new URL(rawUrl);
@@ -96,7 +96,7 @@ export function reactShimResponse(rawUrl: string): Response | null {
 }
 
 /**
- * Given an intercepted file:// request URL, return the `enclave-module://`
+ * Given an intercepted file:// request URL, return the `eaves-module://`
  * target if it points at one of the externalized React modules, else null.
  * Order matters: match the more specific paths before the `/react` suffix.
  */

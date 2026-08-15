@@ -82,8 +82,8 @@ export function ingestAttachments(attachments: string[]): IngestResult {
     };
   }
 
-  const dataDir = path.join(app.getPath('userData'), 'enclave-data');
-  const attachmentsDir = path.join(dataDir, 'enclave-attachments');
+  const dataDir = path.join(app.getPath('userData'), 'eaves-data');
+  const attachmentsDir = path.join(dataDir, 'eaves-attachments');
   if (!fs.existsSync(attachmentsDir)) {
     fs.mkdirSync(attachmentsDir, { recursive: true });
   }

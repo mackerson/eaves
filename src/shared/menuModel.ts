@@ -163,15 +163,15 @@ const separator: MenuNode = { kind: 'separator' };
 function appMenu(): MenuDefinition {
   return {
     id: 'app',
-    label: 'Enclave',
+    label: 'Eaves',
     items: [
-      { kind: 'item', id: 'app.about', label: 'About Enclave', role: 'about' },
+      { kind: 'item', id: 'app.about', label: 'About Eaves', role: 'about' },
       { kind: 'item', id: 'app.checkForUpdates', label: 'Check for Updates…' },
       separator,
       { kind: 'item', id: 'app.settings', label: 'Settings…', accelerator: 'CmdOrCtrl+,' },
       separator,
-      { kind: 'item', id: 'app.hide', label: 'Hide Enclave', role: 'hide', accelerator: 'Cmd+H' },
-      { kind: 'item', id: 'app.quit', label: 'Quit Enclave', role: 'quit', accelerator: 'Cmd+Q' },
+      { kind: 'item', id: 'app.hide', label: 'Hide Eaves', role: 'hide', accelerator: 'Cmd+H' },
+      { kind: 'item', id: 'app.quit', label: 'Quit Eaves', role: 'quit', accelerator: 'Cmd+Q' },
     ],
   };
 }
@@ -346,7 +346,7 @@ function toolsMenu(): MenuDefinition {
 
 function helpMenu(platform: MenuPlatform): MenuDefinition {
   const items: MenuNode[] = [
-    { kind: 'item', id: 'help.documentation', label: 'Enclave Help' },
+    { kind: 'item', id: 'help.documentation', label: 'Eaves Help' },
     {
       kind: 'item',
       id: 'help.keyboardShortcuts',
@@ -361,7 +361,7 @@ function helpMenu(platform: MenuPlatform): MenuDefinition {
   if (platform !== 'darwin') {
     items.push(separator);
     items.push({ kind: 'item', id: 'app.checkForUpdates', label: 'Check for Updates…' });
-    items.push({ kind: 'item', id: 'app.about', label: 'About Enclave' });
+    items.push({ kind: 'item', id: 'app.about', label: 'About Eaves' });
   }
 
   return { id: 'help', label: 'Help', items };
@@ -370,7 +370,7 @@ function helpMenu(platform: MenuPlatform): MenuDefinition {
 /**
  * The whole bar for a platform.
  *
- * There is no Window menu: Enclave is single-window by design (see the
+ * There is no Window menu: Eaves is single-window by design (see the
  * single-instance lock in main.ts), so New Window and Bring All to Front
  * have nothing to act on. Minimize/Zoom/Full Screen live in View instead.
  */

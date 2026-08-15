@@ -91,7 +91,7 @@ describe('AboutModal keyboard shortcuts', () => {
     const panel = openTips('darwin');
     expect(rowFor(panel, '⌘K').textContent).toContain('Search Everything');
     // macOS gets rows the other platforms do not — Quit lives in the app menu.
-    expect(rowFor(panel, '⌘Q').textContent).toContain('Quit Enclave');
+    expect(rowFor(panel, '⌘Q').textContent).toContain('Quit Eaves');
   });
 
   it('falls back to a non-mac rendering when the platform is unavailable', () => {

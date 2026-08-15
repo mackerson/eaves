@@ -15,7 +15,7 @@ disclosure.
 
 ## Scope
 
-Enclave is a local-first Electron app. The trust boundary that matters:
+Eaves is a local-first Electron app. The trust boundary that matters:
 
 - The **main process** is the capability root (filesystem, network, PTY,
   SQLite, provider keys). The **renderer is untrusted;** preload is the only

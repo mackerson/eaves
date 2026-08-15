@@ -1,6 +1,6 @@
-# Creating Themes for Enclave
+# Creating Themes for Eaves
 
-This guide explains how to create custom themes for Enclave. A theme controls
+This guide explains how to create custom themes for Eaves. A theme controls
 the app's **colors**, and optionally its **fonts** and **icon set**. Themes are
 hot-reloaded and appear under Settings → Appearance.
 
@@ -14,7 +14,7 @@ hot-reloaded and appear under Settings → Appearance.
 
 1. Create a folder in your themes directory (see [Theme Location](#theme-location)):
    ```
-   ~/.config/enclave/themes/my-theme/
+   ~/.config/eaves/themes/my-theme/
    ```
 
 2. Create a `theme.json` file in that folder with your theme definition.
@@ -27,9 +27,9 @@ Changes to `theme.json` are hot-reloaded — no restart needed.
 
 | Platform | Path |
 |----------|------|
-| macOS | `~/Library/Application Support/enclave/themes/` |
-| Linux | `~/.config/enclave/themes/` |
-| Windows | `%APPDATA%\enclave\themes\` |
+| macOS | `~/Library/Application Support/eaves/themes/` |
+| Linux | `~/.config/eaves/themes/` |
+| Windows | `%APPDATA%\eaves\themes\` |
 
 Each theme lives in its own folder with a `theme.json` file:
 ```

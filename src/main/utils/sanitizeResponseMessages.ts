@@ -238,7 +238,7 @@ function incompleteCallResult(call: AssistantContentPart): ToolContentPart {
       value:
         'No result was recorded for this tool call — the turn ended before one came back ' +
         '(interrupted request, or a pending approval overtaken by a newer message). ' +
-        'Reported by Enclave, not by the tool. Whether the call ran is unknown: it may have ' +
+        'Reported by Eaves, not by the tool. Whether the call ran is unknown: it may have ' +
         'completed with its result lost. Check the current state before repeating anything ' +
         'that writes, edits, or sends.',
     },
@@ -274,7 +274,7 @@ function awaitingApprovalResult(call: AssistantContentPart): ToolContentPart {
     output: {
       type: 'error-text',
       value:
-        'This call is waiting for a person to approve it. Reported by Enclave, not by the tool. ' +
+        'This call is waiting for a person to approve it. Reported by Eaves, not by the tool. ' +
         'It has NOT run and nothing has been lost: tools that can change things pause for ' +
         'approval, and the person may not have answered yet. Do not repeat it, do not check ' +
         'whether it happened, and do not work around it. If it is approved you will get its ' +

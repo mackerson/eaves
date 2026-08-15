@@ -7,8 +7,8 @@ are in [CLAUDE.md](../CLAUDE.md).
 ## Getting started
 
 ```bash
-git clone https://github.com/mackerson/enclave-ai.git
-cd enclave-ai
+git clone https://github.com/mackerson/eaves.git
+cd eaves
 yarn install                 # Install deps + rebuild sqlite for Electron
 yarn setup:plugins           # Clone plugin repos + create symlinks
 yarn dev:clean               # Start development
@@ -19,7 +19,7 @@ Node version is pinned in `.nvmrc` (currently **22**). Package manager: **yarn (
 ## Project structure
 
 ```
-enclave-ai/
+eaves/
 ├── src/
 │   ├── main/               # Electron main process
 │   │   ├── services/       # Core services (DB, AI, plugins, sandbox, sync)
@@ -77,7 +77,7 @@ Tests and dev automatically handle native module rebuilds (`better-sqlite3`).
 Switching between `yarn test` and `yarn dev` just works — no manual
 `rebuild-sqlite3` needed.
 
-**End-to-end**: `scripts/qa/harness.mjs` launches a headless Enclave on an
+**End-to-end**: `scripts/qa/harness.mjs` launches a headless Eaves on an
 isolated profile — real renderer, real IPC, real SQLite, never your own data.
 
 ```bash
@@ -105,23 +105,23 @@ duplicate windows.
 
 ## Data storage
 
-Enclave stores all data locally on your machine.
+Eaves stores all data locally on your machine.
 
 **Database** (platform-specific):
-- **macOS**: `~/Library/Application Support/enclave/enclave-data/enclave.db`
-- **Linux**: `~/.config/enclave/enclave-data/enclave.db`
-- **Windows**: `%APPDATA%\enclave\enclave-data\enclave.db`
+- **macOS**: `~/Library/Application Support/eaves/eaves-data/eaves.db`
+- **Linux**: `~/.config/eaves/eaves-data/eaves.db`
+- **Windows**: `%APPDATA%\eaves\eaves-data\eaves.db`
 
 **User plugins**:
-- **macOS**: `~/Library/Application Support/enclave/plugins/`
-- **Linux**: `~/.config/enclave/plugins/`
-- **Windows**: `%APPDATA%\enclave\plugins\`
+- **macOS**: `~/Library/Application Support/eaves/plugins/`
+- **Linux**: `~/.config/eaves/plugins/`
+- **Windows**: `%APPDATA%\eaves\plugins\`
 
 **Logs**: in the `userData` directory alongside the database.
 
 ## Initial state
 
-On first run, Enclave creates a default agent, a "Personal" project, and a
+On first run, Eaves creates a default agent, a "Personal" project, and a
 `#general` channel. To reset to that state during development, use
 `yarn reset:dev`.
 

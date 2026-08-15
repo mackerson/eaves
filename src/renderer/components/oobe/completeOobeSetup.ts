@@ -15,16 +15,16 @@ export interface CompleteOobeSetupParams {
  * it, and it lands in their chat history where a system-voice instruction
  * would read as noise they never wrote.
  *
- * The agent's knowledge of Enclave comes from the `enclave_guide` tool, which
+ * The agent's knowledge of Eaves comes from the `eaves_guide` tool, which
  * is always active, so this only has to point at it. Don't restate the app's
  * features here: a copy would drift out of step with the guide and the guide
  * is the version that stays correct.
  */
 export function buildTourKickoff(userName: string): string {
   return [
-    `Hi — I'm ${userName}, and this is my first time using Enclave.`,
+    `Hi — I'm ${userName}, and this is my first time using Eaves.`,
     '',
-    'Start by checking the enclave_guide tool so you know how this app actually works,',
+    'Start by checking the eaves_guide tool so you know how this app actually works,',
     "then introduce yourself and show me around. I'd rather you asked what I'm here to do",
     'and worked from that than ran through a feature list.',
     '',

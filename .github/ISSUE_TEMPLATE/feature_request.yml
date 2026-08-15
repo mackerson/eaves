@@ -1,19 +1,19 @@
 name: Feature request
-description: Suggest something Enclave should be able to do
+description: Suggest something Eaves should be able to do
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Before writing: the [roadmap in the README](https://github.com/mackerson/enclave-ai#roadmap)
+        Before writing: the [roadmap in the README](https://github.com/mackerson/eaves#roadmap)
         lists what is already planned, and a fair amount is further along than
         it looks.
 
-        Worth knowing — Enclave has a plugin system, and plugin backends run
+        Worth knowing — Eaves has a plugin system, and plugin backends run
         sandboxed with their own tools, views and services. If what you want
         could live in a plugin, that path is open to you today and does not
         need anyone's permission. See
-        [plugin-development.md](https://github.com/mackerson/enclave-ai/blob/main/docs/plugin-development.md).
+        [plugin-development.md](https://github.com/mackerson/eaves/blob/main/docs/plugin-development.md).
 
   - type: textarea
     id: problem
@@ -21,7 +21,7 @@ body:
       label: What are you trying to do?
       description: >
         The problem, not the solution. What are you actually trying to
-        accomplish, and where does Enclave get in the way?
+        accomplish, and where does Eaves get in the way?
     validations:
       required: true
 

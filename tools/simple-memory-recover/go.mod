@@ -1,4 +1,4 @@
-module enclave-memory-recover
+module eaves-memory-recover
 
 go 1.26
 

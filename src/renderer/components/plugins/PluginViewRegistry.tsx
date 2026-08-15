@@ -47,7 +47,7 @@ function DynamicPluginLoader({
 
     // Resolve the bundle URL by where the plugin actually lives — which is what
     // `source` records, so it is checked before `isDev`. A marketplace install
-    // lives in userData under its full-id folder name (com-enclave-webview),
+    // lives in userData under its full-id folder name (com-eaves-webview),
     // which the dev server's /plugins/ root has no entry for; resolving it there
     // 404s. The plugin:// scheme is registered unconditionally, so it serves
     // userData in dev and packaged alike. See protocols/pluginBundle.ts.

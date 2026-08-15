@@ -141,22 +141,22 @@ export async function buildToolset(
   );
 
   for (const toolName of Object.keys(builtinTools)) {
-    toolMetadata.set(toolName, { category: 'builtin', origin: 'enclave-core' });
+    toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
   for (const toolName of Object.keys(channelTools)) {
-    toolMetadata.set(toolName, { category: 'builtin', origin: 'enclave-core' });
+    toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
   for (const toolName of Object.keys(transcriptTools)) {
-    toolMetadata.set(toolName, { category: 'builtin', origin: 'enclave-core' });
+    toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
   for (const toolName of Object.keys(selfTools)) {
-    toolMetadata.set(toolName, { category: 'builtin', origin: 'enclave-core' });
+    toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
   for (const toolName of Object.keys(coreMemoryTools)) {
-    toolMetadata.set(toolName, { category: 'builtin', origin: 'enclave-core' });
+    toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
   for (const toolName of Object.keys(workSessionTools)) {
-    toolMetadata.set(toolName, { category: 'builtin', origin: 'enclave-core' });
+    toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
 
   for (const [toolName, toolDef] of Object.entries(pluginTools)) {
@@ -232,7 +232,7 @@ export async function buildToolset(
   const allToolsForSDK: Record<string, unknown> = { ...allAvailableTools };
   const discoveryTools = createDiscoveryTools(allToolsForSDK, sessionState, toolMetadata);
   for (const [toolName, toolDef] of Object.entries(discoveryTools)) {
-    toolMetadata.set(toolName, { category: 'discovery', origin: 'enclave-core' });
+    toolMetadata.set(toolName, { category: 'discovery', origin: 'eaves-core' });
     allToolsForSDK[toolName] = toolDef;
   }
 
@@ -258,8 +258,8 @@ const DISCOVERY_TOOL_NAMES = ['list_tools', 'get_tool_info', 'enable_tool', 'dis
 /**
  * Always in front of the model, in either send mode.
  *
- * The discovery tools are the control plane. `enclave_guide` is here for a
- * different reason: no model knows what Enclave is, so without it an agent
+ * The discovery tools are the control plane. `eaves_guide` is here for a
+ * different reason: no model knows what Eaves is, so without it an agent
  * asked how the app works answers from nothing and the user has no way to
  * tell. Reaching it via list_tools → enable_tool would work, but only if the
  * model already suspected it needed to look — which is exactly what a
@@ -269,7 +269,7 @@ const DISCOVERY_TOOL_NAMES = ['list_tools', 'get_tool_info', 'enable_tool', 'dis
  * Roleplay agents are unaffected: that path short-circuits above and honours
  * only the author's explicit allowlist.
  */
-const ALWAYS_ACTIVE_TOOL_NAMES = [...DISCOVERY_TOOL_NAMES, 'enclave_guide'] as const;
+const ALWAYS_ACTIVE_TOOL_NAMES = [...DISCOVERY_TOOL_NAMES, 'eaves_guide'] as const;
 
 /**
  * The tool names actually put in front of the model on a given step.

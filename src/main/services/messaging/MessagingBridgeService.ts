@@ -255,7 +255,7 @@ export class MessagingBridgeService {
 
   private async cmdHelp(bridge: MessagingBridge, chatId: string): Promise<void> {
     const help = [
-      'Enclave Remote REPL',
+      'Eaves Remote REPL',
       '',
       '/chats — List recent conversations',
       '/search <query> — Search conversations',
@@ -420,7 +420,7 @@ export class MessagingBridgeService {
     if (!agentId) {
       const agents = agentRepo.getAll();
       if (agents.length === 0) {
-        await bridge.sendMessage(chatId, 'No agents available. Create one in Enclave first.');
+        await bridge.sendMessage(chatId, 'No agents available. Create one in Eaves first.');
         return;
       }
       agentId = agents[0].id;
@@ -536,7 +536,7 @@ export class MessagingBridgeService {
       return;
     }
 
-    // Create human message in Enclave
+    // Create human message in Eaves
     const currentUser = userRepo.getCurrent();
     chatRepo.createDirectMessage({
       chatId: session.currentChatId,
@@ -614,7 +614,7 @@ export class MessagingBridgeService {
         cleanup();
       } else if (event.type === 'chat:error') {
         logger.error('[MessagingBridge] AI stream error:', data.error);
-        this.errorBuffer(bridge, bufferKey, 'An error occurred. Check Enclave for details.');
+        this.errorBuffer(bridge, bufferKey, 'An error occurred. Check Eaves for details.');
         cleanup();
       }
     };
@@ -649,13 +649,13 @@ export class MessagingBridgeService {
           bufferKey,
           result.aborted
             ? 'Cancelled — this chat was answered somewhere else.'
-            : 'An error occurred. Check Enclave for details.',
+            : 'An error occurred. Check Eaves for details.',
         );
       }
     } catch (error: any) {
       logger.error('[MessagingBridge] AI request failed:', error);
       cleanup();
-      this.errorBuffer(bridge, bufferKey, 'An error occurred. Check Enclave for details.');
+      this.errorBuffer(bridge, bufferKey, 'An error occurred. Check Eaves for details.');
     }
   }
 

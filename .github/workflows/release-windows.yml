@@ -63,7 +63,7 @@ jobs:
       - name: Read app version
         id: ver
         # Surfaces the package.json version so the artifact name is unique per
-        # build — no more "enclave-windows-x64 (2).zip" on repeat downloads.
+        # build — no more "eaves-windows-x64 (2).zip" on repeat downloads.
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Package (Windows x64)
@@ -97,7 +97,7 @@ jobs:
           else
             gh release create "$tag" \
               --target "${{ github.sha }}" \
-              --title "Enclave ${{ steps.ver.outputs.version }}" \
+              --title "Eaves ${{ steps.ver.outputs.version }}" \
               --notes "Windows x64 build from \`${{ github.sha }}\`. **Unsigned** — SmartScreen will warn on first run." \
               "${files[@]}"
             echo "Created release $tag"
@@ -109,7 +109,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: enclave-windows-${{ steps.ver.outputs.version }}-x64
+          name: eaves-windows-${{ steps.ver.outputs.version }}-x64
           path: |
             release/*.exe
             release/*.exe.blockmap

@@ -5,7 +5,7 @@ vi.mock('./logger', () => ({
 }));
 vi.mock('./EventBus', () => ({ eventBus: { emitEvent: vi.fn() } }));
 vi.mock('electron', () => ({
-  app: { getPath: (k: string) => `/tmp/enclave-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
+  app: { getPath: (k: string) => `/tmp/eaves-test-${k}`, on: vi.fn(), whenReady: () => Promise.resolve() },
   ipcMain: { handle: vi.fn(), on: vi.fn() },
   BrowserWindow: class {},
 }));
@@ -67,12 +67,12 @@ const TOTAL_TOKEN_CEILING = 8_200;
  * wire and uncounted — the ceiling was passing against a number that was no
  * longer true. Anything that reaches the model belongs in the composition below.
  *
- * Raised 5,600 → 5,650 (2026-08-10) for `enclave_guide`, 117 tokens against 96
+ * Raised 5,600 → 5,650 (2026-08-10) for `eaves_guide`, 117 tokens against 96
  * of headroom. It is already built the way this comment asks: the guide content
- * lives off the wire in enclaveGuide.ts and is fetched only when called, so the
+ * lives off the wire in eavesGuide.ts and is fetched only when called, so the
  * 117 is a one-line description and a single optional string — there is no
  * prose left to move. Deferral was the alternative and it does not work here:
- * the tool exists so an agent stops inventing answers about Enclave, and a
+ * the tool exists so an agent stops inventing answers about Eaves, and a
  * deferred tool is only reachable by a model that already suspected it should
  * look something up — which a confidently wrong answer means it did not. The
  * other candidates for deferral are all common paths (execute_code 334, bash

@@ -296,7 +296,7 @@ export abstract class BaseExecutor {
     // the caller's workingDirectory (e.g. the project folder for the bash tool)
     // when provided, else the throwaway dir. This keeps cleanup from ever
     // touching, and the script file from ever landing in, the user's folder.
-    const scriptDir = path.join(os.tmpdir(), `enclave-exec-${executionId}`);
+    const scriptDir = path.join(os.tmpdir(), `eaves-exec-${executionId}`);
     const cwd = options.workingDirectory?.trim() ? options.workingDirectory : scriptDir;
 
     try {
@@ -409,8 +409,8 @@ export abstract class BaseExecutor {
   protected parseReturnValue(stdout: string): any {
     try {
       // Look for JSON output between markers
-      const returnMarker = '<<<ENCLAVE_RETURN>>>';
-      const endMarker = '<<<ENCLAVE_RETURN_END>>>';
+      const returnMarker = '<<<EAVES_RETURN>>>';
+      const endMarker = '<<<EAVES_RETURN_END>>>';
 
       const startIdx = stdout.indexOf(returnMarker);
       if (startIdx === -1) {
@@ -436,7 +436,7 @@ export abstract class BaseExecutor {
 
   protected cleanOutput(stdout: string): string {
     return stdout
-      .replace(/<<<ENCLAVE_RETURN>>>[\s\S]*?<<<ENCLAVE_RETURN_END>>>/g, '')
+      .replace(/<<<EAVES_RETURN>>>[\s\S]*?<<<EAVES_RETURN_END>>>/g, '')
       .trim();
   }
 

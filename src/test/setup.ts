@@ -13,13 +13,13 @@ import * as path from 'path';
  * project directory gets created.
  *
  * Paths land in a temp directory, never the real profile — main-process code
- * under test writes files, and it must never write them into ~/.config/enclave.
+ * under test writes files, and it must never write them into ~/.config/eaves.
  *
  * A test file that calls `vi.mock('electron', ...)` itself still wins; this is
  * only the floor.
  */
 vi.mock('electron', () => {
-  const root = path.join(os.tmpdir(), 'enclave-vitest');
+  const root = path.join(os.tmpdir(), 'eaves-vitest');
   return {
     app: {
       getPath: (name: string) => path.join(root, name),

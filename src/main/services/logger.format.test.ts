@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 // The Logger class constructs against app.getPath at import time; only the
 // pure formatter is under test here.
-vi.mock('electron', () => ({ app: { getPath: () => '/tmp/enclave-test' } }));
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp/eaves-test' } }));
 
 import { formatLogArgs } from './logger';
 

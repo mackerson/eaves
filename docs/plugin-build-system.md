@@ -1,19 +1,19 @@
 # Plugin Build & Development
 
-How Enclave plugins are structured, cloned, and built for local development.
+How Eaves plugins are structured, cloned, and built for local development.
 This is a **build/dev** doc — for the runtime security model, the `context` API,
 and permissions see [`plugin-development.md`](plugin-development.md). Today, shipping is
 governed by `bundled-plugins.json` (tiers and the current manifest are below).
 
 ## Where plugins live
 
-Plugins are **separate git repos** (`mackerson/enclave-plugin-*`), **not**
+Plugins are **separate git repos** (`mackerson/eaves-plugin-*`), **not**
 tracked in this repo. `plugins/` is gitignored and holds **symlinks** to
 sibling checkouts created by `scripts/setup-plugins.sh`:
 
 ```
 ../plugins/<name>/                  # the real repo (sibling checkout)
-enclave/plugins/<name> -> ../plugins/<name>   # gitignored symlink
+eaves/plugins/<name> -> ../plugins/<name>   # gitignored symlink
 ```
 
 Which plugins ship in a packaged build is declared in `bundled-plugins.json`
@@ -32,21 +32,21 @@ Which plugins ship in a packaged build is declared in `bundled-plugins.json`
 
 | Plugin | Repo | Tier |
 |--------|------|------|
-| character-card-import | `enclave-plugin-character-card-import` | Bundled |
-| chatgpt-import | `enclave-plugin-chatgpt-import` | Bundled |
-| plugin-marketplace | `enclave-plugin-plugin-marketplace` | Bundled |
-| event-inspector | `enclave-plugin-event-inspector` | Bundled |
-| webview | `enclave-plugin-webview` | Example |
-| openmemory | `enclave-plugin-openmemory` | Community |
+| character-card-import | `eaves-plugin-character-card-import` | Bundled |
+| chatgpt-import | `eaves-plugin-chatgpt-import` | Bundled |
+| plugin-marketplace | `eaves-plugin-plugin-marketplace` | Bundled |
+| event-inspector | `eaves-plugin-event-inspector` | Bundled |
+| webview | `eaves-plugin-webview` | Example |
+| openmemory | `eaves-plugin-openmemory` | Community |
 
-Two more (`claude-code-terminal`, `enclave-claude-context`) are developed
+Two more (`claude-code-terminal`, `eaves-claude-context`) are developed
 alongside the core but are not in the manifest yet.
 
 ## First-time setup
 
 ```bash
-git clone https://github.com/mackerson/enclave-ai.git
-cd enclave-ai
+git clone https://github.com/mackerson/eaves.git
+cd eaves
 yarn install          # deps + rebuild better-sqlite3 + build plugin UIs (postinstall)
 yarn setup:plugins    # clone the plugin repos as siblings + symlink into plugins/
 yarn dev
@@ -75,12 +75,12 @@ Plugin UI source lives in each plugin's `ui/src/`; the built bundle
 
 A UI bundle is loaded as a plain ES module, so a plugin can skip Vite entirely by
 writing `ui/dist/index.js` (or any `ui.entry` path) by hand: no JSX, no imports,
-React off `window.EnclaveAPI`. Nothing to install and nothing to build, which is
+React off `window.EavesAPI`. Nothing to install and nothing to build, which is
 what makes authoring a UI plugin into a *running* app practical:
 
 ```js
-const React = window.EnclaveAPI.React;
-const { Card } = window.EnclaveAPI.UI;
+const React = window.EavesAPI.React;
+const { Card } = window.EavesAPI.UI;
 
 export function MyView() {
   return React.createElement(Card, { className: 'p-6' }, 'Hello');
@@ -113,7 +113,7 @@ plugins/my-plugin/
 
 ```json
 {
-  "id": "com.enclave.my-plugin",
+  "id": "com.eaves.my-plugin",
   "name": "My Plugin",
   "version": "1.0.0",
   "description": "…",
@@ -175,7 +175,7 @@ export default defineConfig({
 **Don't change the `/node_modules/react*` paths** — they are load-bearing. The
 bundle emits bare-absolute imports like
 `import { jsx } from "/node_modules/react/jsx-runtime"`, and the host resolves
-them to shims that re-export `window.EnclaveAPI.React`:
+them to shims that re-export `window.EavesAPI.React`:
 
 - **dev** → the root Vite config serves the shims
 - **production** → a privileged `moduleShim` scheme serves byte-identical shims
@@ -184,7 +184,7 @@ them to shims that re-export `window.EnclaveAPI.React`:
   was CSP-blocked.
 
 Host-provided UI: plugin components pull React and shadcn/ui primitives off
-`window.EnclaveAPI` (`.React`, `.UI.{Button, Input, Card, …}`) — see
+`window.EavesAPI` (`.React`, `.UI.{Button, Input, Card, …}`) — see
 `src/renderer/lib/plugin-api.ts` for the full surface.
 
 ## Distribution · bundled + marketplace
@@ -204,7 +204,7 @@ Host-provided UI: plugin components pull React and shadcn/ui primitives off
   others are the app's own files or a symlink into your checkout.
 - **Marketplace / install-from-registry**: **live (V1).**
   `MarketplaceService.ts` fetches the curated registry from
-  [`mackerson/enclave-plugin-registry`](https://github.com/mackerson/enclave-plugin-registry)
+  [`mackerson/eaves-plugin-registry`](https://github.com/mackerson/eaves-plugin-registry)
   (main process, over TLS; cached to `userData/marketplace/` for offline), and
   installs by registry **id** — never a URL — so installs are confined to
   curated entries. Install downloads the release asset, verifies its `sha256`,
@@ -212,7 +212,7 @@ Host-provided UI: plugin components pull React and shadcn/ui primitives off
   permissions the registry listed (no silent escalation), and loads it without
   a restart. Consent is a **native dialog from main**, not renderer UI: the
   marketplace runs unsandboxed in the renderer and could otherwise spoof it.
-  Override the registry for testing with `ENCLAVE_REGISTRY_URL`; see
+  Override the registry for testing with `EAVES_REGISTRY_URL`; see
   `scripts/qa/local-marketplace.mjs`.
 
   Publishing a plugin requires a **built bundle** as a GitHub release asset

@@ -92,7 +92,7 @@ export function UpdateBanner() {
           <>
             <ArrowDownToLine className="h-5 w-5 text-blue-500 flex-shrink-0" />
             <div className="flex-1 text-sm text-foreground">
-              <span className="font-medium">Enclave {version}</span> is available
+              <span className="font-medium">Eaves {version}</span> is available
             </div>
             <button
               onClick={handleDownload}

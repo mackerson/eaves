@@ -15,9 +15,9 @@ export default defineConfig({
           if (req.url === '/node_modules/react/jsx-runtime') {
             res.setHeader('Content-Type', 'application/javascript');
             res.end(`
-              export const jsx = window.EnclaveAPI.React.jsxRuntime.jsx;
-              export const jsxs = window.EnclaveAPI.React.jsxRuntime.jsxs;
-              export const Fragment = window.EnclaveAPI.React.jsxRuntime.Fragment;
+              export const jsx = window.EavesAPI.React.jsxRuntime.jsx;
+              export const jsxs = window.EavesAPI.React.jsxRuntime.jsxs;
+              export const Fragment = window.EavesAPI.React.jsxRuntime.Fragment;
             `);
             return;
           }
@@ -25,7 +25,7 @@ export default defineConfig({
           if (req.url === '/node_modules/react') {
             res.setHeader('Content-Type', 'application/javascript');
             res.end(`
-              const React = window.EnclaveAPI.React;
+              const React = window.EavesAPI.React;
               export default React;
               export const useState = React.useState;
               export const useEffect = React.useEffect;
@@ -44,10 +44,10 @@ export default defineConfig({
           if (req.url === '/node_modules/react-dom') {
             res.setHeader('Content-Type', 'application/javascript');
             res.end(`
-              const ReactDOM = window.EnclaveAPI.ReactDOM;
+              const ReactDOM = window.EavesAPI.ReactDOM;
               export default ReactDOM;
-              export const createRoot = window.EnclaveAPI.ReactDOMClient.createRoot;
-              export const hydrateRoot = window.EnclaveAPI.ReactDOMClient.hydrateRoot;
+              export const createRoot = window.EavesAPI.ReactDOMClient.createRoot;
+              export const hydrateRoot = window.EavesAPI.ReactDOMClient.hydrateRoot;
             `);
             return;
           }

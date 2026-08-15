@@ -1,6 +1,6 @@
 /**
- * Reference material about Enclave itself, served on demand by the
- * `enclave_guide` tool.
+ * Reference material about Eaves itself, served on demand by the
+ * `eaves_guide` tool.
  *
  * No model has this application in its weights, and nothing else tells an agent
  * what a project, channel, routine or workflow is here. `list_tools` /
@@ -27,7 +27,7 @@ export interface GuideTopic {
   body: string;
 }
 
-export const ENCLAVE_GUIDE_TOPICS: GuideTopic[] = [
+export const EAVES_GUIDE_TOPICS: GuideTopic[] = [
   {
     id: 'approvals',
     summary: 'Why some tool calls stop and wait for a person, and what to do while they do.',
@@ -48,8 +48,8 @@ export const ENCLAVE_GUIDE_TOPICS: GuideTopic[] = [
   },
   {
     id: 'overview',
-    summary: 'What Enclave is and how its main surfaces fit together.',
-    body: `Enclave is a local-first desktop application for working with AI agents. Everything — conversations, agents, notes, tasks, memory — is stored in a SQLite database on the user's own machine. Nothing is sent anywhere except the model provider calls the user configured.
+    summary: 'What Eaves is and how its main surfaces fit together.',
+    body: `Eaves is a local-first desktop application for working with AI agents. Everything — conversations, agents, notes, tasks, memory — is stored in a SQLite database on the user's own machine. Nothing is sent anywhere except the model provider calls the user configured.
 
 The main surfaces, all reachable from the left sidebar:
 
@@ -198,7 +198,7 @@ File and shell tools run on the user's own machine with the user's own permissio
   {
     id: 'plugins',
     summary: 'Sandboxed extensions, and what they can and cannot reach.',
-    body: `Plugins extend Enclave — new views, new tools, new service backends. They run in worker threads with permission-gated access to app data, and the app monitors their memory use.
+    body: `Plugins extend Eaves — new views, new tools, new service backends. They run in worker threads with permission-gated access to app data, and the app monitors their memory use.
 
 Plugins are managed under Plugins, and a bundled marketplace plugin lists installable ones. Several ship with the app, including importers for character cards and ChatGPT exports.
 
@@ -212,24 +212,24 @@ Installing a plugin is a trust decision: an installed plugin is code running on 
 - **Providers** — API keys per provider, and endpoint URLs for local providers like Ollama and LM Studio. Keys are encrypted at rest and cannot be read back once saved; they can be replaced or removed. More than one provider can be configured at a time, and different agents can use different ones.
 - **Defaults** — which agent is used for new conversations, and which handles background work.
 - **Appearance** — themes, background, fonts.
-- **Data** — where everything is stored on disk, and database backups. Enclave snapshots the database at startup and daily, keeping the ten most recent, and any snapshot can be restored. Note that snapshots cover the database only — attachments, project workspaces, avatars, themes and installed plugins are files on disk and are not rolled back by a restore. To back up everything, copy the whole app data folder shown in that panel.
+- **Data** — where everything is stored on disk, and database backups. Eaves snapshots the database at startup and daily, keeping the ten most recent, and any snapshot can be restored. Note that snapshots cover the database only — attachments, project workspaces, avatars, themes and installed plugins are files on disk and are not rolled back by a restore. To back up everything, copy the whole app data folder shown in that panel.
 - **Updates** — automatic, manual, or left to the system package manager.`,
   },
 ];
 
-const TOPIC_IDS = ENCLAVE_GUIDE_TOPICS.map(t => t.id);
+const TOPIC_IDS = EAVES_GUIDE_TOPICS.map(t => t.id);
 
 export function guideTopicIndex(): string {
   return [
-    'Enclave guide — available topics. Call enclave_guide again with one of these ids.',
+    'Eaves guide — available topics. Call eaves_guide again with one of these ids.',
     '',
-    ...ENCLAVE_GUIDE_TOPICS.map(t => `- ${t.id}: ${t.summary}`),
+    ...EAVES_GUIDE_TOPICS.map(t => `- ${t.id}: ${t.summary}`),
   ].join('\n');
 }
 
 export function lookupGuideTopic(topic: string): string {
   const key = topic.trim().toLowerCase();
-  const found = ENCLAVE_GUIDE_TOPICS.find(t => t.id === key);
+  const found = EAVES_GUIDE_TOPICS.find(t => t.id === key);
   if (found) return found.body;
   // Say what does exist rather than just failing — a wrong guess should teach
   // the correction in one round trip.

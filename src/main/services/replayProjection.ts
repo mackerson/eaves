@@ -46,7 +46,7 @@ export type InlineImagePart = { type: 'image'; image: string; mediaType: string 
  */
 export function createAttachmentLoaders(): AttachmentLoaders {
   const attachmentRepo = getMessageAttachmentRepository();
-  const attachmentsDir = path.join(app.getPath('userData'), 'enclave-data', 'enclave-attachments');
+  const attachmentsDir = path.join(app.getPath('userData'), 'eaves-data', 'eaves-attachments');
 
   // Resolve a file-service:// attachment URL to a path on disk. Shared by
   // the image and text-file loaders below.

@@ -59,7 +59,7 @@ vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const ASSET_URL = 'https://github.com/mackerson/enclave-plugin-demo/releases/download/v1.0.0/demo-1.0.0.tgz';
+const ASSET_URL = 'https://github.com/mackerson/eaves-plugin-demo/releases/download/v1.0.0/demo-1.0.0.tgz';
 const PERMISSIONS = ['ui:views:register', 'storage:write'];
 const BUNDLE = Buffer.from('pretend this is a gzipped tarball');
 const REAL_SHA = crypto.createHash('sha256').update(BUNDLE).digest('hex');
@@ -70,11 +70,11 @@ function registryWith(overrides: Record<string, unknown> = {}) {
     updated: '2026-08-14',
     plugins: [
       {
-        id: 'com.enclave.demo',
+        id: 'com.eaves.demo',
         name: 'Demo',
         description: 'demo',
         author: 'mackerson',
-        homepage: 'https://github.com/mackerson/enclave-plugin-demo',
+        homepage: 'https://github.com/mackerson/eaves-plugin-demo',
         tier: 'official',
         latest: '1.0.0',
         permissions: PERMISSIONS,
@@ -104,22 +104,22 @@ async function loadService(registry: unknown) {
   return import('./MarketplaceService');
 }
 
-const destDir = () => path.join(userDataDir, 'plugins', 'com-enclave-demo');
+const destDir = () => path.join(userDataDir, 'plugins', 'com-eaves-demo');
 
 beforeEach(() => {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enclave-install-test-'));
+  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-install-test-'));
   fs.mkdirSync(path.join(userDataDir, 'plugins'), { recursive: true });
   // Consent is host-enforced and covered by its own surface; approve so these
   // tests reach the guards that run after it.
-  process.env.ENCLAVE_PLUGIN_AUTO_CONSENT = '1';
-  unpackedManifest = { id: 'com.enclave.demo', sandboxVersion: 1, permissions: PERMISSIONS };
+  process.env.EAVES_PLUGIN_AUTO_CONSENT = '1';
+  unpackedManifest = { id: 'com.eaves.demo', sandboxVersion: 1, permissions: PERMISSIONS };
   vi.clearAllMocks();
   manager.isPluginLoaded.mockReturnValue(false);
   grants.get.mockReturnValue(undefined);
 });
 
 afterEach(() => {
-  delete process.env.ENCLAVE_PLUGIN_AUTO_CONSENT;
+  delete process.env.EAVES_PLUGIN_AUTO_CONSENT;
   fs.rmSync(userDataDir, { recursive: true, force: true });
   vi.unstubAllGlobals();
 });
@@ -128,11 +128,11 @@ describe('installPlugin integrity guards', () => {
   it('installs when the asset matches the published checksum', async () => {
     const { installPlugin } = await loadService(registryWith());
 
-    const result = await installPlugin('com.enclave.demo');
+    const result = await installPlugin('com.eaves.demo');
 
-    expect(result).toMatchObject({ id: 'com.enclave.demo', version: '1.0.0' });
-    expect(manager.loadUserPlugin).toHaveBeenCalledWith('com-enclave-demo');
-    expect(grants.set).toHaveBeenCalledWith('com.enclave.demo', PERMISSIONS, '1.0.0', expect.any(Number));
+    expect(result).toMatchObject({ id: 'com.eaves.demo', version: '1.0.0' });
+    expect(manager.loadUserPlugin).toHaveBeenCalledWith('com-eaves-demo');
+    expect(grants.set).toHaveBeenCalledWith('com.eaves.demo', PERMISSIONS, '1.0.0', expect.any(Number));
     expect(fs.existsSync(destDir())).toBe(true);
   });
 
@@ -142,7 +142,7 @@ describe('installPlugin integrity guards', () => {
       registryWith({ release: { tag: 'v1.0.0', asset: 'demo-1.0.0.tgz', url: ASSET_URL, sha256: wrong } })
     );
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/checksum mismatch/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/checksum mismatch/i);
 
     expect(manager.loadUserPlugin).not.toHaveBeenCalled();
     expect(grants.set).not.toHaveBeenCalled();
@@ -152,13 +152,13 @@ describe('installPlugin integrity guards', () => {
   it('rejects a bundle requesting permissions the registry did not list', async () => {
     // The user consented to PERMISSIONS; the bundle quietly wants the disk too.
     unpackedManifest = {
-      id: 'com.enclave.demo',
+      id: 'com.eaves.demo',
       sandboxVersion: 1,
       permissions: [...PERMISSIONS, 'system:filesystem'],
     };
     const { installPlugin } = await loadService(registryWith());
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/permissions that differ/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/permissions that differ/i);
 
     expect(manager.loadUserPlugin).not.toHaveBeenCalled();
     expect(grants.set).not.toHaveBeenCalled();
@@ -166,10 +166,10 @@ describe('installPlugin integrity guards', () => {
   });
 
   it('rejects a bundle declaring fewer permissions than were consented to', async () => {
-    unpackedManifest = { id: 'com.enclave.demo', sandboxVersion: 1, permissions: ['ui:views:register'] };
+    unpackedManifest = { id: 'com.eaves.demo', sandboxVersion: 1, permissions: ['ui:views:register'] };
     const { installPlugin } = await loadService(registryWith());
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/permissions that differ/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/permissions that differ/i);
     expect(manager.loadUserPlugin).not.toHaveBeenCalled();
   });
 
@@ -180,23 +180,23 @@ describe('installPlugin integrity guards', () => {
       })
     );
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/https/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/https/i);
     expect(manager.loadUserPlugin).not.toHaveBeenCalled();
   });
 
   it('rejects a bundle whose manifest declares a different id', async () => {
-    unpackedManifest = { id: 'com.enclave.somethingelse', sandboxVersion: 1, permissions: PERMISSIONS };
+    unpackedManifest = { id: 'com.eaves.somethingelse', sandboxVersion: 1, permissions: PERMISSIONS };
     const { installPlugin } = await loadService(registryWith());
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/does not match/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/does not match/i);
     expect(fs.existsSync(destDir())).toBe(false);
   });
 
   it('rejects a bundle that is not marked sandboxVersion 1', async () => {
-    unpackedManifest = { id: 'com.enclave.demo', permissions: PERMISSIONS };
+    unpackedManifest = { id: 'com.eaves.demo', permissions: PERMISSIONS };
     const { installPlugin } = await loadService(registryWith());
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/sandboxVersion/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/sandboxVersion/i);
     expect(manager.loadUserPlugin).not.toHaveBeenCalled();
   });
 
@@ -204,7 +204,7 @@ describe('installPlugin integrity guards', () => {
     unpackedManifest = null;
     const { installPlugin } = await loadService(registryWith());
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/missing plugin\.json/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/missing plugin\.json/i);
   });
 
   it('will not install an id that is absent from the registry', async () => {
@@ -217,15 +217,15 @@ describe('installPlugin integrity guards', () => {
   it('refuses an entry that needs a newer app than this one', async () => {
     const { installPlugin } = await loadService(registryWith({ minAppVersion: '2.0.0' }));
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/needs Enclave 2\.0\.0/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/needs Eaves 2\.0\.0/i);
     expect(manager.loadUserPlugin).not.toHaveBeenCalled();
   });
 
   it('declines to install when the user does not consent', async () => {
-    process.env.ENCLAVE_PLUGIN_AUTO_CONSENT = '0';
+    process.env.EAVES_PLUGIN_AUTO_CONSENT = '0';
     const { installPlugin } = await loadService(registryWith());
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/cancelled/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/cancelled/i);
     expect(manager.loadUserPlugin).not.toHaveBeenCalled();
     expect(fs.existsSync(destDir())).toBe(false);
   });
@@ -234,10 +234,10 @@ describe('installPlugin integrity guards', () => {
     // Already consented to a narrower set, so consent must be sought again —
     // with auto-consent declining, the install must not proceed.
     grants.get.mockReturnValue({ permissions: ['ui:views:register'], version: '0.9.0' } as never);
-    process.env.ENCLAVE_PLUGIN_AUTO_CONSENT = '0';
+    process.env.EAVES_PLUGIN_AUTO_CONSENT = '0';
     const { installPlugin } = await loadService(registryWith());
 
-    await expect(installPlugin('com.enclave.demo')).rejects.toThrow(/cancelled/i);
+    await expect(installPlugin('com.eaves.demo')).rejects.toThrow(/cancelled/i);
     expect(manager.loadUserPlugin).not.toHaveBeenCalled();
   });
 
@@ -245,10 +245,10 @@ describe('installPlugin integrity guards', () => {
     // Same grants as the registry lists: a reinstall must not ask again, so it
     // succeeds even though auto-consent is set to decline.
     grants.get.mockReturnValue({ permissions: [...PERMISSIONS], version: '1.0.0' } as never);
-    process.env.ENCLAVE_PLUGIN_AUTO_CONSENT = '0';
+    process.env.EAVES_PLUGIN_AUTO_CONSENT = '0';
     const { installPlugin } = await loadService(registryWith());
 
-    await expect(installPlugin('com.enclave.demo')).resolves.toMatchObject({ id: 'com.enclave.demo' });
+    await expect(installPlugin('com.eaves.demo')).resolves.toMatchObject({ id: 'com.eaves.demo' });
     expect(manager.loadUserPlugin).toHaveBeenCalled();
   });
 });

@@ -29,13 +29,13 @@ export function DataSection() {
       <div className="space-y-2">
         <Label>Data Directory</Label>
         {/*
-          This used to name enclave-data and claim it held everything. It
+          This used to name eaves-data and claim it held everything. It
           doesn't: project workspaces, avatars, themes, and installed plugins
           are siblings of it, so anyone who followed the instruction and then
           reinstalled lost all four while the database still referenced them.
         */}
         <p className="text-sm text-muted-foreground">
-          Back up this folder to preserve everything Enclave stores — the database
+          Back up this folder to preserve everything Eaves stores — the database
           (chats, agents, channels, notes), message attachments, project workspaces,
           avatars, themes, and installed plugins.
         </p>
@@ -43,7 +43,7 @@ export function DataSection() {
           {appDataDir || 'Loading…'}
         </div>
         <p className="text-xs text-muted-foreground">
-          The database itself is in <span className="font-mono">enclave-data/</span> inside it.
+          The database itself is in <span className="font-mono">eaves-data/</span> inside it.
         </p>
         <div className="flex gap-2">
           <Button
@@ -127,7 +127,7 @@ function BackupsPanel() {
       'Files on disk are NOT rolled back: attachments, project workspaces, avatars, ' +
       'themes and installed plugins stay exactly as they are now. Anything added since ' +
       'this snapshot will still be on disk with no database row pointing at it.\n\n' +
-      'A safety snapshot of your current state is taken first. Enclave restarts immediately after.'
+      'A safety snapshot of your current state is taken first. Eaves restarts immediately after.'
     );
     if (!ok) return;
     setBusy(filename);
@@ -158,7 +158,7 @@ function BackupsPanel() {
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        Enclave snapshots the database at startup and once a day. The 10 newest are kept; older ones are pruned automatically. Snapshots live in <span className="font-mono text-xs">enclave-data/backups/</span>.
+        Eaves snapshots the database at startup and once a day. The 10 newest are kept; older ones are pruned automatically. Snapshots live in <span className="font-mono text-xs">eaves-data/backups/</span>.
       </p>
       <p className="text-sm text-muted-foreground">
         These cover the database only — not attachments, project workspaces, avatars, themes or plugins. Copy the folder above to back those up.

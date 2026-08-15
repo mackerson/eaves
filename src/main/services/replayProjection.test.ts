@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('electron', () => ({
-  app: { getPath: () => '/tmp/enclave-test', isPackaged: true },
+  app: { getPath: () => '/tmp/eaves-test', isPackaged: true },
 }));
 
 import { scanTurnFailures, failureSection } from './replayProjection';

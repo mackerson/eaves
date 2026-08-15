@@ -11,7 +11,7 @@ import './UserMenu.css';
  * leaves the avatar with exactly one honest job: showing who you are and
  * getting you to the settings that change it.
  *
- * Enclave is local and single-user — there is no account, session or
+ * Eaves is local and single-user — there is no account, session or
  * workspace behind this, so it does not pretend to be a dropdown.
  */
 export function UserMenu() {
