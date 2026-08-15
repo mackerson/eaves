@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getPersisted } from '@/lib/legacyStorage';
 import { GeneralSection } from '@/components/settings/GeneralSection';
 import { AppearanceSection } from '@/components/settings/AppearanceSection';
 import { DefaultsSection } from '@/components/settings/DefaultsSection';
@@ -37,7 +38,7 @@ const LAST_TAB_KEY = 'eaves.settings.lastTab';
 
 function loadLastTab(): TabId {
   try {
-    const saved = localStorage.getItem(LAST_TAB_KEY);
+    const saved = getPersisted(LAST_TAB_KEY);
     if (saved && TABS.some(t => t.id === saved)) return saved as TabId;
   } catch { /* localStorage unavailable */ }
   return 'general';

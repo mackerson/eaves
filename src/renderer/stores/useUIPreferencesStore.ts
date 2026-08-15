@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getPersisted } from '@/lib/legacyStorage';
 
 /**
  * Per-device UI preferences persisted to localStorage. These are cosmetic,
@@ -16,7 +17,7 @@ const COMPACT_HEADER_KEY = 'eaves-compact-header';
 
 function readMessageLayout(): MessageLayout {
   try {
-    return localStorage.getItem(MESSAGE_LAYOUT_KEY) === 'stacked' ? 'stacked' : 'inline';
+    return getPersisted(MESSAGE_LAYOUT_KEY) === 'stacked' ? 'stacked' : 'inline';
   } catch {
     return 'inline';
   }
@@ -24,7 +25,7 @@ function readMessageLayout(): MessageLayout {
 
 function readActionGutterCollapsed(): boolean {
   try {
-    return localStorage.getItem(ACTION_GUTTER_KEY) === 'true';
+    return getPersisted(ACTION_GUTTER_KEY) === 'true';
   } catch {
     return false;
   }
@@ -32,7 +33,7 @@ function readActionGutterCollapsed(): boolean {
 
 function readSidebarCollapsed(): boolean {
   try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+    return getPersisted(SIDEBAR_COLLAPSED_KEY) === 'true';
   } catch {
     return false;
   }
@@ -40,7 +41,7 @@ function readSidebarCollapsed(): boolean {
 
 function readCompactMode(): boolean {
   try {
-    return localStorage.getItem(COMPACT_MODE_KEY) === 'true';
+    return getPersisted(COMPACT_MODE_KEY) === 'true';
   } catch {
     return false;
   }
@@ -67,7 +68,7 @@ export const DEFAULT_COMPACT_HEADER: CompactHeaderPrefs = {
 
 function readCompactHeader(): CompactHeaderPrefs {
   try {
-    const raw = localStorage.getItem(COMPACT_HEADER_KEY);
+    const raw = getPersisted(COMPACT_HEADER_KEY);
     if (!raw) return DEFAULT_COMPACT_HEADER;
     const parsed = JSON.parse(raw) as Partial<CompactHeaderPrefs>;
     // Merged onto the defaults rather than trusted wholesale: a stored blob

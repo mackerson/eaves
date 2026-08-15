@@ -104,6 +104,34 @@ describe('migrateLegacyProfile', () => {
     expect(fs.existsSync(path.join(current, 'plugins', 'p', 'plugin.json'))).toBe(true);
   });
 
+  it('merges into directories the destination already has', () => {
+    seedLegacyProfile();
+    write(path.join(legacy, 'logs', 'eaves-2026-01-01.log'), 'history');
+    // Electron creates these before the migration runs, so skipping a
+    // top-level entry that already exists stranded everything inside it.
+    write(path.join(current, 'logs', 'eaves-2026-08-15.log'), 'today');
+
+    migrateLegacyProfile();
+
+    expect(fs.readFileSync(path.join(current, 'logs', 'eaves-2026-01-01.log'), 'utf8')).toBe('history');
+    expect(fs.readFileSync(path.join(current, 'logs', 'eaves-2026-08-15.log'), 'utf8')).toBe('today');
+  });
+
+  it('does not follow a symlink when merging', () => {
+    seedLegacyProfile();
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(outside, { recursive: true });
+    fs.mkdirSync(current, { recursive: true });
+    // The real profile carries SingletonLock and friends. Recursing through one
+    // would merge into whatever it points at, outside the profile entirely.
+    fs.symlinkSync(outside, path.join(legacy, 'SingletonLock'));
+    fs.symlinkSync(outside, path.join(current, 'SingletonLock'));
+
+    migrateLegacyProfile();
+
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
   it('is idempotent — a second run is a no-op', () => {
     seedLegacyProfile();
 
@@ -129,6 +157,46 @@ describe('migrateLegacyProfile', () => {
     expect(config['com.enclave.openmemory']).toBeUndefined();
     // Third-party ids are not ours to rename.
     expect(config['org.example.thing']).toEqual({ setting: 1 });
+  });
+
+  it('rewrites the id an installed plugin declares, and moves its directory', () => {
+    seedLegacyProfile();
+    write(path.join(legacy, 'plugins', 'com-enclave-openmemory', 'plugin.json'),
+      JSON.stringify({ id: 'com.enclave.openmemory', name: 'OpenMemory', sandboxVersion: 1 }));
+
+    migrateLegacyProfile();
+
+    const pluginsDir = path.join(current, 'plugins');
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(pluginsDir, 'com-eaves-openmemory', 'plugin.json'), 'utf8'));
+    // Discovery reads the id from the manifest, so leaving it stale would load
+    // the plugin under its old id — with its migrated grants, storage and
+    // enabled flag all filed under the new one.
+    expect(manifest.id).toBe('com.eaves.openmemory');
+    expect(manifest.name).toBe('OpenMemory');
+    // The install directory is derived from the id, so it has to move with it.
+    expect(fs.existsSync(path.join(pluginsDir, 'com-enclave-openmemory'))).toBe(false);
+  });
+
+  it('leaves a third-party installed plugin untouched', () => {
+    seedLegacyProfile();
+    write(path.join(legacy, 'plugins', 'org-example-thing', 'plugin.json'),
+      JSON.stringify({ id: 'org.example.thing', sandboxVersion: 1 }));
+
+    migrateLegacyProfile();
+
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(current, 'plugins', 'org-example-thing', 'plugin.json'), 'utf8'));
+    expect(manifest.id).toBe('org.example.thing');
+  });
+
+  it('survives an unreadable plugin manifest', () => {
+    seedLegacyProfile();
+    write(path.join(legacy, 'plugins', 'broken', 'plugin.json'), '{ not json');
+
+    expect(() => migrateLegacyProfile()).not.toThrow();
+    // The database still made it across.
+    expect(fs.existsSync(path.join(current, 'eaves-data', 'eaves.db'))).toBe(true);
   });
 
   it('ignores a legacy profile that has no database', () => {

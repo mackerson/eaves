@@ -343,12 +343,15 @@ app.on('child-process-gone', (_event, details) => {
   logger.error('[Main] Child process gone:', details);
 });
 
-// Move the profile off the old Enclave path before anything reads or writes
-// userData — the single-instance lock below and the logger's first write both
-// land there, and either one would create the destination out from under the
-// migration. Failing here is not fatal on its own, but it means starting
-// against an empty profile, so say so loudly rather than looking like a fresh
-// install.
+// Move the profile off the old Enclave path, as early as main can manage: the
+// single-instance lock below and the database both depend on userData holding
+// the user's data rather than an empty directory.
+//
+// It cannot run before *everything* — Electron and the crash reporter above
+// already wrote into userData — so the migration merges into whatever exists
+// rather than assuming it owns an empty destination. Failing here is not fatal
+// on its own, but it means starting against an empty profile, so say so loudly
+// rather than looking like a fresh install.
 let profileMigrationNote: string | null = null;
 let profileMigrationError: unknown = null;
 try {

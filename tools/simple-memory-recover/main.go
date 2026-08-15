@@ -51,17 +51,37 @@ WHERE ps.plugin_id = ?
   AND json_valid(ps.value)
   AND json_extract(ps.value, '$.value') IS NOT NULL;`
 
-func defaultDBPath() string {
+// profileRoot is the directory holding per-app profiles on this platform.
+func profileRoot() string {
 	switch runtime.GOOS {
 	case "windows":
-		return filepath.Join(os.Getenv("APPDATA"), "eaves", "eaves-data", "eaves.db")
+		return os.Getenv("APPDATA")
 	case "darwin":
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "eaves", "eaves-data", "eaves.db")
+		return filepath.Join(home, "Library", "Application Support")
 	default:
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", "eaves", "eaves-data", "eaves.db")
+		return filepath.Join(home, ".config")
 	}
+}
+
+// defaultDBPath prefers the current profile but falls back to the pre-rename
+// one. The app migrates the profile on its first launch under the new name —
+// so someone reaching for a recovery tool because the app won't start is
+// exactly the person whose data is still at the old path.
+func defaultDBPath() string {
+	root := profileRoot()
+	current := filepath.Join(root, "eaves", "eaves-data", "eaves.db")
+	if _, err := os.Stat(current); err == nil {
+		return current
+	}
+
+	legacy := filepath.Join(root, "enclave", "enclave-data", "enclave.db")
+	if _, err := os.Stat(legacy); err == nil {
+		return legacy
+	}
+
+	return current
 }
 
 func main() {

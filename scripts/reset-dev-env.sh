@@ -51,7 +51,7 @@ fi
 
 # Kill any running Eaves processes (not all Electron apps!).
 #
-# Match on this checkout's own path rather than the literal "personal/eaves",
+# Match on this checkout's own path rather than the literal "personal/enclave",
 # which only matched one developer's directory layout. Anywhere else it killed
 # nothing and the script went on to rm -rf the database out from under a still
 # running app.
