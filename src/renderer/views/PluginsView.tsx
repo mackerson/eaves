@@ -45,6 +45,12 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
   const showToast = useToastStore((state) => state.showToast);
 
   const isUserPlugin = (plugin: Plugin) => plugin.source === 'user';
+
+  /** Why a plugin has no Uninstall button, and what would actually remove it. */
+  const originHint = (plugin: Plugin) =>
+    plugin.source === 'dev'
+      ? 'Linked from your dev checkout. Remove its symlink from plugins/ and restart to unload it — Disable stops it in the meantime.'
+      : 'Ships with Enclave and cannot be uninstalled. Disable stops it from running.';
   const isTrusted = (plugin: Plugin) => !isUserPlugin(plugin) || trustedPlugins.has(plugin.id);
 
   const handleTrustPlugin = (pluginId: string) => {
@@ -297,7 +303,7 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
                       >
                         {plugin.enabled ? 'Disable' : 'Enable'}
                       </Button>
-                      {isUserPlugin(plugin) && (
+                      {isUserPlugin(plugin) ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -307,6 +313,17 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
                         >
                           Uninstall
                         </Button>
+                      ) : (
+                        // Only user-installed plugins can be removed from here.
+                        // Silently omitting the button read as "this plugin
+                        // can't be removed at all" — say where it comes from
+                        // and what would actually remove it.
+                        <span
+                          className="text-xs text-muted-foreground self-center"
+                          title={originHint(plugin)}
+                        >
+                          {plugin.source === 'dev' ? 'Linked' : 'Built in'}
+                        </span>
                       )}
                     </div>
                   </div>
