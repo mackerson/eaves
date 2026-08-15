@@ -828,7 +828,11 @@ export interface PluginManifest {
 
   // Runtime fields (added by PluginManager, not stored in plugin.json)
   path?: string; // Full path to plugin directory
-  source?: 'bundled' | 'user'; // Where the plugin was loaded from
+  // Where the plugin was loaded from. 'dev' is the symlink tree in the repo's
+  // plugins/ (dev only) and is deliberately distinct from 'user': it decides
+  // where the renderer fetches the UI bundle from, and only 'user' plugins live
+  // in userData and can be uninstalled.
+  source?: 'bundled' | 'user' | 'dev';
   folderName?: string; // Plugin folder name
 }
 

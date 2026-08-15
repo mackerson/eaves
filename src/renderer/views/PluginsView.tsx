@@ -14,7 +14,7 @@ interface Plugin {
   enabled: boolean;
   hasView?: boolean;
   viewId?: string;
-  source?: 'bundled' | 'user';
+  source?: 'bundled' | 'user' | 'dev';
 }
 
 // Get trusted plugins from localStorage

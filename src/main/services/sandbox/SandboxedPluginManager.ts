@@ -282,11 +282,11 @@ export class SandboxedPluginManager {
     const manifests: PluginManifest[] = [];
     const seenIds = new Set<string>();
 
-    // Priority: source > user > bundled
-    const directories: Array<{ dir: string; source: 'bundled' | 'user' }> = [];
+    // Priority: dev > user > bundled
+    const directories: Array<{ dir: string; source: 'bundled' | 'user' | 'dev' }> = [];
 
     if (this.sourcePluginsDir && fs.existsSync(this.sourcePluginsDir)) {
-      directories.push({ dir: this.sourcePluginsDir, source: 'user' });
+      directories.push({ dir: this.sourcePluginsDir, source: 'dev' });
     }
     if (fs.existsSync(this.userPluginsDir)) {
       directories.push({ dir: this.userPluginsDir, source: 'user' });
@@ -313,7 +313,7 @@ export class SandboxedPluginManager {
    */
   private async discoverPluginsInDirectory(
     directory: string,
-    source: 'bundled' | 'user'
+    source: 'bundled' | 'user' | 'dev'
   ): Promise<PluginManifest[]> {
     const manifests: PluginManifest[] = [];
 
@@ -321,9 +321,22 @@ export class SandboxedPluginManager {
       const entries = fs.readdirSync(directory, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-
+        // `withFileTypes` reports from lstat, so a symlink is never isDirectory()
+        // — which silently disabled the entire dev-symlink load path, since
+        // `yarn setup:plugins` populates plugins/ with symlinks to sibling repos.
+        // Dev appeared to work only because the same plugins were also present in
+        // dist/plugins, so edits in a linked repo did nothing until a rebuild.
+        // Resolve links and ask the filesystem what they actually point at.
         const pluginDir = path.join(directory, entry.name);
+        if (!entry.isDirectory()) {
+          if (!entry.isSymbolicLink()) continue;
+          try {
+            if (!fs.statSync(pluginDir).isDirectory()) continue;
+          } catch {
+            continue; // dangling link — a stale sibling checkout, not a plugin
+          }
+        }
+
         const manifestPath = path.join(pluginDir, 'plugin.json');
 
         if (!fs.existsSync(manifestPath)) continue;
@@ -979,8 +992,11 @@ export class SandboxedPluginManager {
    */
   async removeUserPlugin(pluginId: string): Promise<void> {
     const manifest = this.getPluginManifest(pluginId);
-    if (manifest && (manifest as any).source && (manifest as any).source !== 'user') {
-      throw new Error(`Cannot uninstall bundled plugin ${pluginId}`);
+    const loadedFrom = manifest && (manifest as any).source;
+    if (loadedFrom && loadedFrom !== 'user') {
+      // Only userData installs are ours to delete. Bundled ships with the app;
+      // 'dev' is a symlink into the author's own checkout.
+      throw new Error(`Cannot uninstall ${loadedFrom} plugin ${pluginId}`);
     }
     // Prefer the folder the plugin was actually discovered in; fall back to
     // the same derivation the installer uses, so uninstall can always name
