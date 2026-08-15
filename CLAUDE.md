@@ -97,9 +97,30 @@ Architecture diagrams and invariants live in `docs/architecture/README.md` — t
   specifiers also miss the list. Treat plugin code as trusted-by-install;
   the enforced boundaries are the worker thread, `PermissionGate` on the RPC
   bridge, and `ResourceMonitor`.
+- Lifecycle: `activate` on load; `deactivate` on disable/reload/update/uninstall,
+  called only if `activate` resolved, before the RPC channel is torn down, bounded
+  at 3s and best-effort — plugin code cannot block an uninstall
 - Plugins live in separate repos (`mackerson/enclave-plugin-*`), symlinked for dev
 - `bundled-plugins.json` defines which plugins ship with packaged builds
-- Three load paths: `plugins/` (dev symlinks) > `~/.config/enclave/plugins/` (user) > `dist/plugins/` (bundled)
+- Three load paths, first match wins (deduped by id):
+  `plugins/` (dev symlinks, `source: 'dev'`, dev builds only) >
+  `~/.config/enclave/plugins/` (`'user'`) > `dist/plugins/` (`'bundled'`)
+- `source` is not cosmetic — it decides where the renderer fetches the UI bundle
+  (`'user'` → `plugin://` in userData; `'dev'`/`'bundled'` → the served `plugins/`
+  tree) and only `'user'` plugins can be uninstalled
+
+**Marketplace** (`src/main/services/MarketplaceService.ts`, live):
+- Installs by **registry id, never a URL** — confined to entries in the curated
+  [`enclave-plugin-registry`](https://github.com/mackerson/enclave-plugin-registry).
+  A curated entry + its sha256 is the V1 trust root; there is no signing
+- Install: download → verify sha256 → unpack (zip-slip guarded) → manifest must
+  declare the same id and *exactly* the registry's permissions → move into
+  `userData/plugins/<sanitized-id>` → load, no restart
+- Consent is a **modal window owned by main** (`src/main/windows/pluginConsentWindow.ts`),
+  not renderer UI: plugin bundles are `import()`ed into the main window's realm and
+  could otherwise script or spoof the dialog gating their own install.
+  `ENCLAVE_PLUGIN_AUTO_CONSENT` (1/0) bypasses it for headless tests only
+- Re-prompts only when the permission set changes; new grants are badged on update
 
 ### Chat vs Channel Architecture
 
@@ -161,6 +182,18 @@ Uses Vercel AI SDK with multiple providers:
 - Ollama (local models) via its OpenAI-compatible endpoint
 - MCP protocol support via `@modelcontextprotocol/sdk`
 
+**MCP server lifetimes** differ by origin, and mixing them up leaks processes:
+- **Auto-injected filesystem servers** (one per project directory) are **pooled for
+  the process lifetime**, keyed by directory path, and reused across turns and
+  agents. They are deliberately *excluded* from the `clients` array
+  `connectMCPServers` returns, because callers disconnect that array when a turn
+  ends — closing a pooled server would kill it for every other turn. Torn down by
+  `shutdownMCPPool()` on quit
+- **User-configured servers** are per-turn: they're in the returned `clients`, and
+  the caller disconnects them when the turn finishes
+- `build:mcp` writes `{"type":"module"}` into `dist/main/mcp-servers/` — that output
+  is ESM while the root manifest is CJS
+
 ## Directory Structure
 
 ```
@@ -192,7 +225,8 @@ docs/                          # Architecture RFCs, roadmap
 - Use `yarn dev:clean` to avoid orphaned processes
 - Run `yarn setup:plugins` once after cloning to populate plugins/ with symlinks
 - Dev tools auto-open in development mode
-- Plugin changes auto-reload in dev mode
+- `PluginWatcher` watches `*/plugin.json` only — manifest edits auto-reload; backend
+  code needs the Reload button on the plugin card, UI changes need `yarn build:plugins`
 - macOS: Cmd+Q to fully quit (closing window keeps app in dock)
 - When adding new IPC handlers, add Zod validation schema to `src/shared/validation.ts`
 - IPC handlers use `ipcResult()` wrapper for consistent error envelopes

@@ -168,7 +168,16 @@ Host-provided UI: plugin components pull React and shadcn/ui primitives off
 - **Bundled**: `bundled-plugins.json` lists what ships in a packaged build;
   those are copied into `dist/plugins/`.
 - **Load-path precedence** (`SandboxedPluginManager`): dev symlinks
-  (`plugins/`) → user (`userData/plugins/`) → bundled (`dist/plugins/`).
+  (`plugins/`, `source: 'dev'`, non-packaged builds only) → user
+  (`userData/plugins/`, `'user'`) → bundled (`dist/plugins/`, `'bundled'`).
+  Discovery walks them in that order and dedupes by plugin id, so the first
+  directory declaring an id wins and the later copies are ignored.
+
+  `source` drives behaviour downstream, so the tiers are not interchangeable:
+  the renderer fetches `'user'` bundles over `plugin://` (the only way to reach
+  userData from a packaged renderer) and `'dev'`/`'bundled'` bundles from the
+  served `plugins/` tree, and only `'user'` plugins can be uninstalled — the
+  others are the app's own files or a symlink into your checkout.
 - **Marketplace / install-from-registry**: **live (V1).**
   `MarketplaceService.ts` fetches the curated registry from
   [`mackerson/enclave-plugin-registry`](https://github.com/mackerson/enclave-plugin-registry)
@@ -198,8 +207,16 @@ Host-provided UI: plugin components pull React and shadcn/ui primitives off
   `/node_modules/react*` externalization above and that `moduleShim` is
   registered (`main.ts`).
 - **Plugin silently skipped at load** → missing `sandboxVersion: 1`.
+- **Edits to a linked plugin do nothing** → the watcher only picks up
+  `plugin.json` changes. Backend edits need the **Reload** button on the plugin's
+  card; UI edits need `yarn build:plugins` to rebuild `ui/dist` first.
+- **A linked plugin loads an old build** → check its `source` in Plugins. If it
+  reads `bundled`, the symlink isn't resolving and `dist/plugins/` is winning;
+  `dev` means the linked copy is live.
 
 ---
 
-**Last updated:** 2026-08-14 — marketplace section rewritten: install-from-registry
-shipped, so it is no longer a "not built" stub.
+**Last updated:** 2026-08-15 — corrected the load-path section: dev symlinks were
+documented as taking precedence but were never discovered (readdir reports a
+symlink as a non-directory), so dev silently ran the `dist/plugins/` copy. Fixed
+in `SandboxedPluginManager`, and the tier now carries its own `source: 'dev'`.

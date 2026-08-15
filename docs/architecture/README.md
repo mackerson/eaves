@@ -232,6 +232,16 @@ above are wrong and this page must be updated.
    worker-message side channel (not the RPC funnel): worker emit/subscribe is
    PermissionGate-gated; renderer `plugin:event` is deny-list-only — see
    Sharp edges.
+7. **MCP servers have two lifetimes, and the split is load-bearing.** The
+   auto-injected filesystem servers (one per project directory) are pooled for
+   the process lifetime, keyed by directory path, and reused across turns and
+   agents; `connectMCPServers` keeps them *out* of the `clients` array it
+   returns, because callers disconnect that array when a turn ends and closing a
+   pooled server would kill it for every other turn. `shutdownMCPPool()` closes
+   them on quit. User-configured servers are the opposite: per-turn, returned in
+   `clients`, disconnected by the caller. Putting a pooled client in that array
+   turns every turn into a respawn; leaving a per-turn client out of it leaks a
+   child process per turn — which is what channel turns did before pooling.
 
 ### Sharp edges (verified, worth knowing)
 

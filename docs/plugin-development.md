@@ -89,6 +89,22 @@ because it has no UI.
 
 \* Effectively required — the loader skips any manifest without `sandboxVersion: 1`.
 
+## Lifecycle
+
+`activate(context)` runs once when the plugin loads. `deactivate(context)` runs on
+the way out — disable, reload, update, and uninstall all take that path.
+
+What `deactivate` can rely on:
+
+- It is called **only if `activate` resolved**. A plugin whose `activate` threw
+  never took ownership of anything, so it is not asked to release anything.
+- It still has a working `context`. The host tears down the RPC channel *after*
+  the hook returns, so flushing state through `context.storage` works.
+- It gets **3 seconds**, inside the host's 5s graceful-shutdown budget. Overrun
+  or throw and the host logs it and continues shutting down — an uninstall
+  cannot be blocked by plugin code, so treat cleanup as best-effort.
+- It runs at most once per load.
+
 ## The `context` API
 
 `activate(context)` receives a proxied object. Everything is async (calls cross the
@@ -215,20 +231,42 @@ A UI plugin ships a React bundle and wires it in the manifest:
 
 ## Build, test, publish
 
-- **Local dev:** `yarn setup:plugins` symlinks sibling plugin repos into `plugins/`;
-  changes hot-reload in `yarn dev`. Details in `plugin-build-system.md`.
+- **Local dev:** `yarn setup:plugins` symlinks sibling plugin repos into `plugins/`,
+  which is the first load path Enclave checks, so a linked repo shadows the bundled
+  copy of the same id. The dev watcher only watches `*/plugin.json`: editing the
+  manifest reloads the plugin, but editing backend code needs the **Reload** button
+  on the plugin's card in Plugins, and UI changes need `yarn build:plugins` to
+  regenerate `ui/dist` first. Details in `plugin-build-system.md`.
 - **Standalone build:** each plugin repo ships a `release.mjs` that builds → packs →
   checksums a distributable tarball, so authors don't need a full Enclave dev tree.
-- **Publish:** first-party plugins land in Enclave's curated registry. Third-party
-  submission and bundle signing are planned later phases of the marketplace; until
-  then, distribution is by curated inclusion.
+- **Publish:** bump `version` in `plugin.json`, then push a `vX.Y.Z` tag. The repo's
+  `.github/workflows/release.yml` builds the bundle, checksums it, and publishes a
+  GitHub release; paste the emitted `release` block into
+  [`enclave-plugin-registry`](https://github.com/mackerson/enclave-plugin-registry)
+  and bump `latest`. `scripts/validate.mjs` is the merge gate.
+
+  The bundle is the built runtime only — `plugin.json`, the backend entry, `lib/`
+  if present, and `ui/dist` — at the tar root. Not the source repo.
+
+  Two checks will reject a bundle at install time, so keep them in mind:
+  its `plugin.json` `id` must match the registry entry, and its `permissions`
+  must equal the registry's **exactly** — the user consented to that list, and
+  differing in either direction fails the install.
+- **Trust model:** the registry is first-party only, and a curated entry plus its
+  sha256 is the whole trust root — there is no bundle signing yet. Third-party
+  submission and signing are later phases.
 
 ## Checklist before you ship
 
 - [ ] `id` is reverse-DNS and final (it keys storage + grants).
 - [ ] `sandboxVersion: 1` is set.
-- [ ] `permissions` lists **only** what the code uses — no `network:http` /
-      `system:filesystem` unless truly needed.
-- [ ] `deactivate` unregisters tools/views and removes event listeners.
+- [ ] `permissions` lists **only** what the code uses. `network:http` and
+      `system:filesystem` are the two the sandbox treats as elevated, and the
+      install dialog calls them out with a warning marker above everything else —
+      asking for either buys real scrutiny from users.
+- [ ] `deactivate` unregisters tools/views and removes event listeners, and
+      finishes well inside its 3s budget.
+- [ ] `permissions` match the registry entry exactly — install rejects any
+      difference, in either direction.
 - [ ] No blocked-module `require`s; all outside access goes through `context`.
 - [ ] UI `component` names match the `ui.components` map.
