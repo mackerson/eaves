@@ -79,15 +79,29 @@ describe('migrateLegacyProfile', () => {
     expect(fs.existsSync(current)).toBe(false);
   });
 
-  it('does not touch an existing Eaves database', () => {
+  it('never imports a legacy database over a live one', () => {
     seedLegacyProfile();
     write(path.join(current, 'eaves-data', 'eaves.db'), 'current');
 
     expect(migrateLegacyProfile()).toBeNull();
 
+    // renameSync replaces its destination silently, so importing here would
+    // destroy the profile this build has actually been writing to.
     expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db'), 'utf8')).toBe('current');
     // The legacy profile is left exactly where it was, not half-consumed.
     expect(fs.existsSync(path.join(legacy, 'enclave-data', 'enclave.db'))).toBe(true);
+  });
+
+  it('still adopts orphaned sidecars sitting beside a live database', () => {
+    // Interrupted after the main file was renamed: the -wal is this database's,
+    // not a competing profile's, so it must be completed rather than ignored.
+    write(path.join(current, 'eaves-data', 'eaves.db'), 'current');
+    write(path.join(current, 'eaves-data', 'enclave.db-wal'), 'uncheckpointed');
+
+    expect(migrateLegacyProfile()).toBeNull();
+
+    expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db-wal'), 'utf8')).toBe('uncheckpointed');
+    expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db'), 'utf8')).toBe('current');
   });
 
   it('merges into a userData directory Chromium already created', () => {
@@ -197,6 +211,93 @@ describe('migrateLegacyProfile', () => {
     expect(() => migrateLegacyProfile()).not.toThrow();
     // The database still made it across.
     expect(fs.existsSync(path.join(current, 'eaves-data', 'eaves.db'))).toBe(true);
+  });
+
+  describe('resuming an interrupted migration', () => {
+    // The failure these cover: the work is a sequence of renames, so an
+    // interruption partway through used to look identical to "already done" on
+    // the next launch. The app then booted, created a fresh database over the
+    // top, and the real one was never read again.
+
+    it('finishes a run interrupted before the data directory was renamed', () => {
+      // State left by dying after the profile moved but before the rename.
+      write(path.join(current, 'enclave-data', 'enclave.db'), 'main');
+      write(path.join(current, 'enclave-data', 'enclave.db-wal'), 'uncheckpointed');
+
+      expect(migrateLegacyProfile()).not.toBeNull();
+
+      expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db'), 'utf8')).toBe('main');
+      expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db-wal'), 'utf8')).toBe('uncheckpointed');
+      expect(fs.existsSync(path.join(current, 'enclave-data'))).toBe(false);
+    });
+
+    it('does not fail when the renamed data directory already exists', () => {
+      // Renaming a directory onto a non-empty one is ENOTEMPTY, which threw
+      // partway through and split the profile across both names.
+      seedLegacyProfile();
+      write(path.join(current, 'eaves-data', 'backups', 'x.db'), 'backup');
+
+      expect(() => migrateLegacyProfile()).not.toThrow();
+
+      expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db'), 'utf8')).toBe('main');
+      expect(fs.readFileSync(path.join(current, 'eaves-data', 'backups', 'x.db'), 'utf8')).toBe('backup');
+      expect(fs.existsSync(path.join(current, 'enclave-data'))).toBe(false);
+    });
+  });
+
+  it('moves a rollback journal, not just the WAL sidecars', () => {
+    seedLegacyProfile();
+    // WAL silently degrades to a rollback journal on filesystems without
+    // shared-memory support. Moving the database without a hot -journal means
+    // SQLite treats a file that should have been rolled back as clean.
+    write(path.join(legacy, 'enclave-data', 'enclave.db-journal'), 'hot');
+
+    migrateLegacyProfile();
+
+    expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db-journal'), 'utf8')).toBe('hot');
+  });
+
+  it('renames backups so the restore UI can still see them', () => {
+    seedLegacyProfile();
+    write(path.join(legacy, 'enclave-data', 'backups', 'enclave-20260815T165004405Z-startup.db'), 'backup');
+
+    migrateLegacyProfile();
+
+    const backups = path.join(current, 'eaves-data', 'backups');
+    // Backups are matched by filename, so one named for the old app is
+    // invisible to restore and never pruned — the one thing a user reaches for
+    // after a bad migration.
+    expect(fs.readFileSync(path.join(backups, 'eaves-20260815T165004405Z-startup.db'), 'utf8')).toBe('backup');
+    expect(fs.existsSync(path.join(backups, 'enclave-20260815T165004405Z-startup.db'))).toBe(false);
+  });
+
+  it('never migrates Chromium singleton state', () => {
+    seedLegacyProfile();
+    fs.symlinkSync('somehost-12345', path.join(legacy, 'SingletonLock'));
+    write(path.join(legacy, '.org.chromium.Chromium.abc123'), 'scratch');
+
+    migrateLegacyProfile();
+
+    // These encode a pid, host and socket path belonging to another process.
+    // Inheriting one can make requestSingleInstanceLock quit the first launch
+    // after the migration, with no window and no message.
+    expect(fs.existsSync(path.join(current, 'SingletonLock'))).toBe(false);
+    expect(fs.existsSync(path.join(current, '.org.chromium.Chromium.abc123'))).toBe(false);
+    expect(fs.existsSync(path.join(current, 'eaves-data', 'eaves.db'))).toBe(true);
+  });
+
+  it('rekeys plugin ids even when there is no profile left to move', () => {
+    // A profile migrated by an earlier build has nothing to move, but its
+    // manifests may still be on the old ids while the database was remapped.
+    write(path.join(current, 'eaves-data', 'eaves.db'), 'main');
+    write(path.join(current, 'plugins', 'com-enclave-openmemory', 'plugin.json'),
+      JSON.stringify({ id: 'com.enclave.openmemory', sandboxVersion: 1 }));
+
+    expect(migrateLegacyProfile()).toBeNull();
+
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(current, 'plugins', 'com-eaves-openmemory', 'plugin.json'), 'utf8'));
+    expect(manifest.id).toBe('com.eaves.openmemory');
   });
 
   it('ignores a legacy profile that has no database', () => {

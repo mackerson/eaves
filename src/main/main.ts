@@ -4,10 +4,11 @@ import { registerProtocolHandlers } from './protocols';
 import { MODULE_SHIM_SCHEME, moduleShimRedirectTarget } from './protocols/moduleShim';
 import { PLUGIN_BUNDLE_SCHEME } from './protocols/pluginBundle';
 import { migrateLegacyProfile } from './services/profileMigration';
+import { repairProfilePaths } from './services/repairProfilePaths';
 import { loadAppState, initializeAppState } from './services/appStateLoader';
 import { registerCoreMemoryBackend, backfillCoreVectors } from './services/CoreMemoryBackend';
 import { ipcResult } from './utils/ipcValidation';
-import { closeDatabase } from './services/database';
+import { closeDatabase, getDatabase } from './services/database';
 import { registerAgentHandlers } from './ipc/agents';
 import { registerChannelHandlers } from './ipc/channels';
 import { registerChatHandlers } from './ipc/chats';
@@ -419,6 +420,24 @@ app.whenReady().then(async () => {
     );
     app.exit(1);
     return;
+  }
+
+  // Repoint stored absolute paths that used to live inside the old profile.
+  // Runs unconditionally: it is a no-op once nothing carries the old root, and
+  // gating it on this launch having done the move would skip a profile an
+  // earlier build already migrated. Never fatal — a wrong path is a broken
+  // attachment, not a reason to refuse to start.
+  try {
+    const { updated } = repairProfilePaths(
+      getDatabase(),
+      path.join(path.dirname(app.getPath('userData')), 'enclave'),
+      app.getPath('userData'),
+    );
+    if (Object.keys(updated).length > 0) {
+      logger.info('[Main] Repointed paths left by the profile rename:', updated);
+    }
+  } catch (error) {
+    logger.error('[Main] Could not repoint paths from the old profile:', error);
   }
 
   // Register the core default memory-backend as the fallback floor. Must run

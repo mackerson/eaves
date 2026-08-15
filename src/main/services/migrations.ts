@@ -961,17 +961,41 @@ export const migrations: Migration[] = [
     description: 'Rename to Eaves: remap persisted plugin ids and the guide tool name',
     migrate: (db) => {
       // Deliberately column-by-column rather than a sweep over every text
-      // column. Three columns hold prose or paths that legitimately contain
-      // the old name and must not be rewritten:
-      //   projects.directory — a real path on disk, which has not moved
-      //   messages.content / activities.data — conversation and audit history,
-      //     which recorded what actually happened under the old name
-      // Rewriting any of those would corrupt user data to cosmetic ends.
+      // column. messages.content and activities.data are conversation and
+      // audit history: they recorded what actually happened under the old
+      // name, and rewriting them would corrupt user data to cosmetic ends.
+      //
+      // Paths are a separate problem and are NOT handled here. Some of them
+      // point inside the profile and therefore did move (projects.directory
+      // for app-created projects, attachment paths); others are external
+      // directories the user chose, which did not. Telling those apart needs
+      // the old and new profile roots, which a schema migration does not have
+      // — see repairProfilePaths, which runs with both.
 
       // Plugin ids key three tables. Missing the remap does not merely orphan
       // config: plugin_state carries the enabled flag, so a plugin the user
       // had explicitly disabled would come back enabled under its new id.
+      //
+      // Rows already at the target id are possible — a build between the
+      // rename and this migration could have written one — and the id is a
+      // primary key in all three tables, so a blind UPDATE raises a UNIQUE
+      // violation, rolls the migration back and leaves the app unable to
+      // start. The pre-rename row is the one with the user's history, so it
+      // wins and the newer row is dropped.
       for (const table of ['plugin_state', 'plugin_grants', 'plugin_storage']) {
+        const key = table === 'plugin_storage' ? 'plugin_id, key' : 'plugin_id';
+
+        db.prepare(
+          `DELETE FROM ${table}
+            WHERE (${key}) IN (
+              SELECT ${table === 'plugin_storage'
+                        ? `'com.eaves.' || substr(plugin_id, length('com.enclave.') + 1), key`
+                        : `'com.eaves.' || substr(plugin_id, length('com.enclave.') + 1)`}
+                FROM ${table}
+               WHERE plugin_id LIKE 'com.enclave.%'
+            )`
+        ).run();
+
         db.prepare(
           `UPDATE ${table}
               SET plugin_id = 'com.eaves.' || substr(plugin_id, length('com.enclave.') + 1)

@@ -32,13 +32,20 @@ const LEGACY_ID_PREFIX = 'com.enclave.';
 const ID_PREFIX = 'com.eaves.';
 
 /**
- * SQLite derives the WAL and shared-memory filenames from the database
- * filename, so they have to travel with it and under the matching name. Moving
- * `enclave.db` alone orphans its `-wal`, discarding every transaction
- * committed since the last checkpoint — which for a profile closed uncleanly
- * is the entire recent history, silently.
+ * Chromium's process-singleton state. Never migrated: these encode a pid, a
+ * host and a socket path belonging to whichever process created them, and
+ * `app.requestSingleInstanceLock()` would then evaluate a lock inherited from
+ * a different app. If it reads as live, the first launch after the migration
+ * quits with no window and no message.
  */
-const DB_SIDECARS = ['', '-wal', '-shm'];
+const NEVER_MIGRATE = /^(Singleton|\.org\.chromium\.Chromium\.)/;
+
+/**
+ * Backups are matched by filename, so one named for the old app is invisible
+ * to the restore UI and never pruned by retention — the one thing a user
+ * reaches for after a bad migration is exactly what would be hidden.
+ */
+const LEGACY_BACKUP = /^enclave-(\d{8}T\d{9}Z-(?:startup|periodic|manual|pre-restore)(?:-\d+)?\.db)$/;
 
 /** Rename, falling back to a copy when src and dst are on different filesystems. */
 function move(src: string, dst: string): void {
@@ -65,11 +72,17 @@ function move(src: string, dst: string): void {
  * is to fill gaps, never to overwrite live state.
  */
 function mergeInto(src: string, dst: string): void {
+  fs.mkdirSync(dst, { recursive: true });
+
   for (const entry of fs.readdirSync(src)) {
+    if (NEVER_MIGRATE.test(entry)) continue;
+
     const from = path.join(src, entry);
     const to = path.join(dst, entry);
 
-    if (!fs.existsSync(to)) {
+    // lstat, not existsSync: the latter follows symlinks, so a dangling one at
+    // the destination reads as absent and would be silently clobbered.
+    if (!fs.lstatSync(to, { throwIfNoEntry: false })) {
       move(from, to);
       continue;
     }
@@ -92,36 +105,126 @@ export function migrateLegacyProfile(): string | null {
   const userData = app.getPath('userData');
   const legacyProfile = path.join(path.dirname(userData), LEGACY_APP_DIR);
 
-  // Already migrated, or a genuinely fresh install. Keying on the database
-  // rather than on the directory matters: Chromium may have created userData
-  // before this runs, so directory existence proves nothing.
-  if (fs.existsSync(path.join(userData, DATA_DIR, DB))) return null;
-  if (!fs.existsSync(path.join(legacyProfile, LEGACY_DATA_DIR, LEGACY_DB))) return null;
+  // Anything still carrying an old name means there is work left, wherever it
+  // sits. Keying "already done" on the new database existing was wrong: the
+  // work is a sequence of renames and that file is created partway through it,
+  // so an interruption immediately after it — but before its -wal followed —
+  // read as complete on the next launch. The app then booted, created a fresh
+  // database over the top, and the real one was never looked at again.
+  const dataDir = path.join(userData, DATA_DIR);
 
-  if (!fs.existsSync(userData)) {
-    // The whole profile in one move, which keeps the Chromium state (localStorage,
-    // cookies, window bounds) attached to the data it belongs with.
-    move(legacyProfile, userData);
-  } else {
-    mergeInto(legacyProfile, userData);
+  // A database already at the new name is authoritative: it is the one this
+  // build has been writing to. Never import a legacy database over it —
+  // renameSync replaces the destination silently, so that would destroy the
+  // live profile in favour of a stale one.
+  //
+  // Sidecars still under the old name next to it are a different thing: they
+  // belong to that same database, left behind by a rename interrupted after
+  // the main file moved. Finish that, and nothing else.
+  if (fs.existsSync(path.join(dataDir, DB))) {
+    renameDatabaseFiles(dataDir);
+    rekeyPluginIds(userData);
+    return null;
   }
 
-  const dataDir = path.join(userData, LEGACY_DATA_DIR);
-  if (fs.existsSync(dataDir)) move(dataDir, path.join(userData, DATA_DIR));
+  const pending =
+    fs.existsSync(path.join(legacyProfile, LEGACY_DATA_DIR)) ||
+    fs.existsSync(path.join(userData, LEGACY_DATA_DIR)) ||
+    // A lone sidecar counts. Interrupting after the main file was renamed but
+    // before its -wal followed leaves exactly this, and treating it as done
+    // is what discards the WAL.
+    hasLegacyDatabaseFile(dataDir);
 
-  const renamedDataDir = path.join(userData, DATA_DIR);
-  for (const suffix of DB_SIDECARS) {
-    const src = path.join(renamedDataDir, `${LEGACY_DB}${suffix}`);
-    if (fs.existsSync(src)) move(src, path.join(renamedDataDir, `${DB}${suffix}`));
+  if (!pending) {
+    // Nothing to move, but the id and path rewrites are cheap and idempotent,
+    // and gating them on the move meant a profile migrated by an earlier build
+    // never received them — leaving manifests on the old ids while the
+    // database had already been remapped.
+    rekeyPluginIds(userData);
+    return null;
   }
 
-  const attachments = path.join(renamedDataDir, LEGACY_ATTACHMENTS);
-  if (fs.existsSync(attachments)) move(attachments, path.join(renamedDataDir, ATTACHMENTS));
+  // Always a merge, never a wholesale directory rename. The destination
+  // usually exists already (Electron writes into userData before this runs),
+  // and merging is the only form that both handles that and applies the
+  // skip list uniformly. Everything not skipped comes across, so the Chromium
+  // state — localStorage, cookies, window bounds — stays with the data it
+  // belongs to.
+  if (fs.existsSync(legacyProfile)) mergeInto(legacyProfile, userData);
 
-  migratePluginConfigIds(userData);
-  migrateInstalledPluginIds(userData);
+  // Merge rather than rename: the destination can already exist from an
+  // interrupted run, and renaming a directory onto a non-empty one is ENOTEMPTY
+  // — which threw partway through and left the profile split across both names.
+  const legacyDataDir = path.join(userData, LEGACY_DATA_DIR);
+  if (fs.existsSync(legacyDataDir)) {
+    mergeInto(legacyDataDir, dataDir);
+    fs.rmSync(legacyDataDir, { recursive: true, force: true });
+  }
+
+  renameDatabaseFiles(dataDir);
+
+  const attachments = path.join(dataDir, LEGACY_ATTACHMENTS);
+  if (fs.existsSync(attachments)) mergeInto(attachments, path.join(dataDir, ATTACHMENTS));
+
+  renameBackups(path.join(dataDir, 'backups'));
+  rekeyPluginIds(userData);
 
   return `Migrated profile from ${legacyProfile} to ${userData}`;
+}
+
+/** Whether a directory still holds the database or any sidecar under its old name. */
+function hasLegacyDatabaseFile(dir: string): boolean {
+  if (!fs.existsSync(dir)) return false;
+  return fs.readdirSync(dir).some(name => name.startsWith(LEGACY_DB));
+}
+
+/**
+ * Rename the database and every sidecar SQLite derives from its filename.
+ *
+ * Matched by prefix rather than a fixed list. `-wal` and `-shm` are the ones
+ * WAL mode uses, but WAL silently falls back to a rollback journal on
+ * filesystems without shared-memory support (network and FUSE homes), and
+ * moving the database without a hot `-journal` means SQLite opens a file that
+ * should have been rolled back and treats it as clean.
+ *
+ * The main `.db` is renamed last, so an interruption always leaves a legacy
+ * name behind for the resume check above to find.
+ */
+function renameDatabaseFiles(dataDir: string): void {
+  if (!fs.existsSync(dataDir)) return;
+
+  const sidecars = fs.readdirSync(dataDir)
+    .filter(name => name.startsWith(LEGACY_DB) && name !== LEGACY_DB)
+    .sort();
+
+  for (const name of [...sidecars, LEGACY_DB]) {
+    const from = path.join(dataDir, name);
+    const to = path.join(dataDir, `${DB}${name.slice(LEGACY_DB.length)}`);
+    // renameSync replaces the destination without complaint, so guard rather
+    // than trust the caller: overwriting here would mean losing a live
+    // database to a stale one.
+    if (!fs.existsSync(from) || fs.existsSync(to)) continue;
+    move(from, to);
+  }
+}
+
+/** Bring existing backups under the filename pattern the restore UI matches. */
+function renameBackups(backupsDir: string): void {
+  if (!fs.existsSync(backupsDir)) return;
+
+  for (const name of fs.readdirSync(backupsDir)) {
+    const match = LEGACY_BACKUP.exec(name);
+    if (!match) continue;
+
+    const to = path.join(backupsDir, `eaves-${match[1]}`);
+    if (!fs.existsSync(to)) move(path.join(backupsDir, name), to);
+  }
+}
+
+/** The id rewrites that no database migration can reach. Idempotent. */
+function rekeyPluginIds(userData: string): void {
+  migratePluginConfigIds(userData);
+  migrateInstalledPluginIds(userData);
 }
 
 /**

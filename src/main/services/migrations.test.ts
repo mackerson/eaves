@@ -822,3 +822,43 @@ describe('v77: rename to Eaves', () => {
     db.close();
   });
 });
+
+describe('v77: plugin id collisions', () => {
+  function preRenameDatabase(): Database.Database {
+    const db = new Database(':memory:');
+    db.pragma('foreign_keys = OFF');
+    for (const m of migrations.filter(m => m.version <= 76)) m.migrate(db);
+    db.pragma('foreign_keys = ON');
+    db.pragma('user_version = 76');
+    return db;
+  }
+
+  it('does not fail when a row already exists at the new id', () => {
+    const db = preRenameDatabase();
+    // Reachable: a build between the rename and this migration could have
+    // written the new id. plugin_id is a primary key, so a blind UPDATE raises
+    // UNIQUE, rolls the migration back, and leaves the app unable to start.
+    db.prepare(`INSERT INTO plugin_state (plugin_id, enabled) VALUES ('com.enclave.openmemory', 0)`).run();
+    db.prepare(`INSERT INTO plugin_state (plugin_id, enabled) VALUES ('com.eaves.openmemory', 1)`).run();
+
+    expect(() => runMigrations(db, 76)).not.toThrow();
+
+    // The pre-rename row carries the user's history, so it wins.
+    expect(db.prepare(`SELECT plugin_id, enabled FROM plugin_state`).all())
+      .toEqual([{ plugin_id: 'com.eaves.openmemory', enabled: 0 }]);
+    db.close();
+  });
+
+  it('resolves collisions per key in plugin_storage', () => {
+    const db = preRenameDatabase();
+    db.prepare(`INSERT INTO plugin_storage (plugin_id, key, value, created_at, updated_at) VALUES ('com.enclave.x', 'a', 'old', 1, 1)`).run();
+    db.prepare(`INSERT INTO plugin_storage (plugin_id, key, value, created_at, updated_at) VALUES ('com.eaves.x', 'a', 'new', 1, 1)`).run();
+    db.prepare(`INSERT INTO plugin_storage (plugin_id, key, value, created_at, updated_at) VALUES ('com.eaves.x', 'b', 'untouched', 1, 1)`).run();
+
+    expect(() => runMigrations(db, 76)).not.toThrow();
+
+    expect(db.prepare(`SELECT key, value FROM plugin_storage ORDER BY key`).all())
+      .toEqual([{ key: 'a', value: 'old' }, { key: 'b', value: 'untouched' }]);
+    db.close();
+  });
+});
