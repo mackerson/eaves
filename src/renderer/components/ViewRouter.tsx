@@ -1,23 +1,39 @@
+import { lazy, Suspense } from 'react';
+import { Loader2 } from 'lucide-react';
 import { useUIStore, useAgentStore } from '@/stores';
 import { getPluginComponent } from '@/components/plugins/PluginViewRegistry';
 import { ChannelView } from '@/views/ChannelView';
 import { ChatsView } from '@/views/ChatsView';
-import { TasksView } from '@/views/TasksView';
-import { NotesView } from '@/views/NotesView';
 import { AgentsView } from '@/views/AgentsView';
 import { ProjectsView } from '@/views/ProjectsView';
 import { SettingsView } from '@/views/SettingsView';
 import { PluginsView } from '@/views/PluginsView';
 import { ImportsView } from '@/views/ImportsView';
-import { WorkflowsView } from '@/views/WorkflowsView';
 import { FilesView } from '@/views/FilesView';
-import { CalendarView } from '@/views/CalendarView';
 import { RoutinesView } from '@/views/RoutinesView';
 import { ActivityView } from '@/views/ActivityView';
 import { MemoryView } from '@/views/MemoryView';
 import { ProjectDashboard } from '@/views/ProjectDashboard';
 import { PluginImportView } from '@/views/PluginImportView';
 import { AgentEditorView } from '@/views/AgentEditorView';
+
+/**
+ * Views split out of the initial chunk, chosen by what they drag in rather than
+ * by how often they're opened:
+ *   calendar  — react-big-calendar, and with it lodash, moment, luxon, popper
+ *   workflows — the reactflow packages
+ *   notes/tasks — dnd-kit
+ *
+ * Together that's the bulk of the third-party weight that only ever renders on
+ * one screen. Everything else stays static: the remaining views are mostly app
+ * code, and splitting them would trade parse time for a flash of fallback.
+ *
+ * Named exports, so each import is mapped onto the default React.lazy expects.
+ */
+const CalendarView = lazy(() => import('@/views/CalendarView').then(m => ({ default: m.CalendarView })));
+const WorkflowsView = lazy(() => import('@/views/WorkflowsView').then(m => ({ default: m.WorkflowsView })));
+const NotesView = lazy(() => import('@/views/NotesView').then(m => ({ default: m.NotesView })));
+const TasksView = lazy(() => import('@/views/TasksView').then(m => ({ default: m.TasksView })));
 
 const simpleViews: Record<string, React.ComponentType> = {
   chats: ChatsView,
@@ -34,13 +50,29 @@ const simpleViews: Record<string, React.ComponentType> = {
   dashboard: ProjectDashboard,
 };
 
+function ViewLoading() {
+  return (
+    <div className="flex flex-1 items-center justify-center py-12 text-muted-foreground">
+      <Loader2 size={20} className="animate-spin" />
+    </div>
+  );
+}
+
 export function ViewRouter({ loadMemory }: { loadMemory: () => Promise<void> }) {
   const { view, pluginViews, editingAgentIdForView, setView } = useUIStore();
   const { agents } = useAgentStore();
 
-  // Simple views with no props
+  // Simple views with no props. Suspense covers the whole map rather than just
+  // the lazy entries — a static view resolves immediately and never suspends,
+  // so the boundary costs nothing and survives future entries becoming lazy.
   const SimpleView = simpleViews[view];
-  if (SimpleView) return <SimpleView />;
+  if (SimpleView) {
+    return (
+      <Suspense fallback={<ViewLoading />}>
+        <SimpleView />
+      </Suspense>
+    );
+  }
 
   if (view === 'channels') {
     return <ChannelView />;
