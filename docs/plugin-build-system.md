@@ -163,19 +163,30 @@ Host-provided UI: plugin components pull React and shadcn/ui primitives off
 `window.EnclaveAPI` (`.React`, `.UI.{Button, Input, Card, …}`) — see
 `src/renderer/lib/plugin-api.ts` for the full surface.
 
-## Distribution today · marketplace (not built)
+## Distribution · bundled + marketplace
 
 - **Bundled**: `bundled-plugins.json` lists what ships in a packaged build;
   those are copied into `dist/plugins/`.
 - **Load-path precedence** (`SandboxedPluginManager`): dev symlinks
   (`plugins/`) → user (`userData/plugins/`) → bundled (`dist/plugins/`).
-- **Marketplace / install-from-registry**: **not built.** There is no install
-  IPC and no registry — the marketplace plugin is a UI stub with mock data.
-  Greenfield; the V1 design (first-party GitHub `registry.json` + assisted
-  install) is planned — distribution today is by curated inclusion.
-  Note: publishing a plugin to the registry requires a **built bundle** as a
-  GitHub release asset (not source), so each plugin repo needs a release
-  workflow — a V1 prerequisite.
+- **Marketplace / install-from-registry**: **live (V1).**
+  `MarketplaceService.ts` fetches the curated registry from
+  [`mackerson/enclave-plugin-registry`](https://github.com/mackerson/enclave-plugin-registry)
+  (main process, over TLS; cached to `userData/marketplace/` for offline), and
+  installs by registry **id** — never a URL — so installs are confined to
+  curated entries. Install downloads the release asset, verifies its `sha256`,
+  unpacks it zip-slip-guarded, checks the manifest declares the same
+  permissions the registry listed (no silent escalation), and loads it without
+  a restart. Consent is a **native dialog from main**, not renderer UI: the
+  marketplace runs unsandboxed in the renderer and could otherwise spoof it.
+  Override the registry for testing with `ENCLAVE_REGISTRY_URL`; see
+  `scripts/qa/local-marketplace.mjs`.
+
+  Publishing a plugin requires a **built bundle** as a GitHub release asset
+  (not source) — `plugin.json` + entry + `ui/dist` at the tar root. Each
+  plugin repo carries `scripts/release.mjs` + `.github/workflows/release.yml`
+  from the registry's `templates/`; bump `plugin.json`, push a `vX.Y.Z` tag,
+  then paste the emitted `release` block into `registry.json`.
 
 ## Troubleshooting
 
@@ -190,5 +201,5 @@ Host-provided UI: plugin components pull React and shadcn/ui primitives off
 
 ---
 
-**Last updated:** 2026-07-17 — rewritten from the stale "Plugin Distribution
-Strategy" doc (Nov 2025); distribution/marketplace split out to a future RFC.
+**Last updated:** 2026-08-14 — marketplace section rewritten: install-from-registry
+shipped, so it is no longer a "not built" stub.
