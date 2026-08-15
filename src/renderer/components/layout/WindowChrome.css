@@ -1,0 +1,40 @@
+/**
+ * Caption row for states rendered outside AppLayout (see WindowChrome.tsx).
+ *
+ * Pinned rather than in flow: the OOBE wizard is a `fixed inset-0` overlay, so
+ * a bar in normal flow would sit behind it. The z-index matches .top-menu-bar
+ * so this behaves like the title bar it stands in for.
+ */
+
+.window-chrome {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  height: var(--topbar-height);
+  background-color: var(--bg-secondary);
+  border-bottom: var(--border-width) solid var(--border-primary);
+  user-select: none;
+  z-index: 100;
+}
+
+/* Windows: the OS paints the caption buttons into the overlay, so this is only
+   a drag strip — held clear of those buttons the same way .top-menu-bar is. */
+[data-titlebar-overlay='true'] .window-chrome {
+  -webkit-app-region: drag;
+  padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px));
+}
+
+/* Linux is fully frameless: this bar is the entire title bar. */
+[data-custom-frame='true'] .window-chrome {
+  -webkit-app-region: drag;
+}
+
+/* The caption buttons have to opt back out or the drag region swallows them. */
+[data-titlebar-overlay='true'] .window-chrome button,
+[data-custom-frame='true'] .window-chrome button {
+  -webkit-app-region: no-drag;
+}

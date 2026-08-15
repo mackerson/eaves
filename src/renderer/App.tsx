@@ -9,6 +9,7 @@ import { DropdownTerminal } from '@/components/DropdownTerminal';
 import { PluginHotReload } from '@/components/PluginHotReload';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { OOBEWizard } from '@/components/oobe/OOBEWizard';
+import { WindowChrome } from '@/components/layout/WindowChrome';
 import { useAppInit } from '@/hooks/useAppInit';
 import { useChatStream } from '@/hooks/useChatStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -40,14 +41,19 @@ function App() {
   // root to render. Without this guard the OOBE wizard flashes on every
   // cold start, because the store's initial `oobeCompleted` is undefined
   // and the gate below reads that as falsy.
+  // Both of the early returns below render instead of AppLayout, so they get
+  // no TopMenuBar — and on a frameless window that is the only title bar there
+  // is. WindowChrome keeps them movable and closable; without it a stalled
+  // hydration leaves a blank window the user cannot even shut.
   if (!settingsHydrated) {
-    return null;
+    return <WindowChrome />;
   }
 
   // Show OOBE wizard for first-time users
   if (!oobeCompleted) {
     return (
       <ErrorBoundary>
+        <WindowChrome />
         <OOBEWizard onComplete={loadMemory} />
       </ErrorBoundary>
     );
