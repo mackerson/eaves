@@ -225,8 +225,15 @@ docs/                          # Architecture RFCs, roadmap
 - Use `yarn dev:clean` to avoid orphaned processes
 - Run `yarn setup:plugins` once after cloning to populate plugins/ with symlinks
 - Dev tools auto-open in development mode
-- `PluginWatcher` watches `*/plugin.json` only — manifest edits auto-reload; backend
-  code needs the Reload button on the plugin card, UI changes need `yarn build:plugins`
+- `PluginWatcher` watches each plugin tier's directory (depth 1) and acts on
+  `plugin.json` only. A **new** plugin directory hot-loads into the running app —
+  no restart — and the watcher pushes `plugin-views-changed` so the sidebar picks
+  it up. Editing an existing `plugin.json` reloads that plugin; backend code edits
+  need the Reload button on the plugin card, and UI changes need
+  `yarn build:plugins` unless the bundle is hand-written (see below).
+  Never watch with a glob: chokidar 4 dropped glob support and matches a pattern
+  path literally, silently watching nothing — which disabled hot reload entirely
+  until 2026-08-15. `PluginWatcher.test.ts` pins this down
 - macOS: Cmd+Q to fully quit (closing window keeps app in dock)
 - When adding new IPC handlers, add Zod validation schema to `src/shared/validation.ts`
 - IPC handlers use `ipcResult()` wrapper for consistent error envelopes

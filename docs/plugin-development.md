@@ -233,10 +233,17 @@ A UI plugin ships a React bundle and wires it in the manifest:
 
 - **Local dev:** `yarn setup:plugins` symlinks sibling plugin repos into `plugins/`,
   which is the first load path Enclave checks, so a linked repo shadows the bundled
-  copy of the same id. The dev watcher only watches `*/plugin.json`: editing the
-  manifest reloads the plugin, but editing backend code needs the **Reload** button
-  on the plugin's card in Plugins, and UI changes need `yarn build:plugins` to
-  regenerate `ui/dist` first. Details in `plugin-build-system.md`.
+  copy of the same id. The dev watcher acts on `plugin.json` only: adding a new
+  plugin directory loads it into the running app, and editing the manifest reloads
+  it — but editing backend code needs the **Reload** button on the plugin's card in
+  Plugins, and UI changes need `yarn build:plugins` to regenerate `ui/dist` first.
+  Details in `plugin-build-system.md`.
+- **Authoring into a running app:** drop a plugin directory into
+  `<userData>/plugins/` and it loads within seconds, no restart. A hand-written UI
+  bundle (no JSX, no imports, React off `window.EnclaveAPI`) needs no build step at
+  all. `docs/templates/AGENTS.md` is a self-contained brief for this — copy it into
+  a project directory to give a coding agent everything it needs to write a plugin
+  without reading this repo.
 - **Standalone build:** each plugin repo ships a `release.mjs` that builds → packs →
   checksums a distributable tarball, so authors don't need a full Enclave dev tree.
 - **Publish:** bump `version` in `plugin.json`, then push a `vX.Y.Z` tag. The repo's

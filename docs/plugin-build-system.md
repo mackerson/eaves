@@ -64,8 +64,32 @@ Plugin UI source lives in each plugin's `ui/src/`; the built bundle
 
 - **`postinstall`** → builds all plugin UIs after `yarn install`
 - **`prebuild`** → rebuilds before a production `yarn build`
-- **`yarn build:plugins`** → manual full build; single plugin: `node scripts/build-plugins.js <name>`
-- **Hot reload in dev** → `PluginWatcher` rebuilds + reloads a plugin on source changes, no restart
+- **`yarn build:plugins`** → manual full build; single plugin:
+  `node scripts/build-plugins.js <name>`, or `node scripts/build-plugins.js <dir>`
+  for a plugin outside `plugins/` (a marketplace install under userData, say)
+- **Hot load** → `PluginWatcher` loads a *newly added* plugin directory into the
+  running app, building its UI bundle first if it has a `vite.config`. Edits to
+  an existing plugin's source do **not** rebuild — see Troubleshooting
+
+### Hand-written UI bundles (no build)
+
+A UI bundle is loaded as a plain ES module, so a plugin can skip Vite entirely by
+writing `ui/dist/index.js` (or any `ui.entry` path) by hand: no JSX, no imports,
+React off `window.EnclaveAPI`. Nothing to install and nothing to build, which is
+what makes authoring a UI plugin into a *running* app practical:
+
+```js
+const React = window.EnclaveAPI.React;
+const { Card } = window.EnclaveAPI.UI;
+
+export function MyView() {
+  return React.createElement(Card, { className: 'p-6' }, 'Hello');
+}
+```
+
+Prefer the Vite path for anything real — this exists for live authoring and small
+views. A plugin with a `vite.config.ts` but no `node_modules` triggers a full
+`yarn install` on first load, which is slow and needs the network.
 
 `build-plugins.js` discovers plugins that have both `package.json` and
 `vite.config.ts`, runs `yarn install` if `node_modules/` is missing, then
@@ -207,16 +231,28 @@ Host-provided UI: plugin components pull React and shadcn/ui primitives off
   `/node_modules/react*` externalization above and that `moduleShim` is
   registered (`main.ts`).
 - **Plugin silently skipped at load** → missing `sandboxVersion: 1`.
-- **Edits to a linked plugin do nothing** → the watcher only picks up
-  `plugin.json` changes. Backend edits need the **Reload** button on the plugin's
+- **Edits to a linked plugin do nothing** → the watcher only acts on
+  `plugin.json`. Backend edits need the **Reload** button on the plugin's
   card; UI edits need `yarn build:plugins` to rebuild `ui/dist` first.
+- **A new plugin directory isn't detected** → the watcher reads `plugin.json`
+  last and validates it, so a manifest missing `sandboxVersion: 1` (or any
+  required field) is dropped with a log line and no toast. It watches one level
+  deep, so the manifest must sit directly in `<pluginDir>/<plugin>/plugin.json`.
+  Never reintroduce a glob path here — chokidar 4 removed glob support and
+  matches such a path literally, watching nothing and reporting no error.
 - **A linked plugin loads an old build** → check its `source` in Plugins. If it
   reads `bundled`, the symlink isn't resolving and `dist/plugins/` is winning;
   `dev` means the linked copy is live.
 
 ---
 
-**Last updated:** 2026-08-15 — corrected the load-path section: dev symlinks were
+**Last updated:** 2026-08-15 — hot load was inert: `PluginWatcher` watched a
+`*/plugin.json` glob, and chokidar 4 (removed glob support) matched it literally,
+watching nothing and raising no error. Fixed to a depth-1 directory watch, and the
+manifest it hands the loader now carries `path`/`source` with a *relative* entry —
+the previous shape threw on every hot load. Added `PluginWatcher.test.ts`.
+
+**2026-08-15** — corrected the load-path section: dev symlinks were
 documented as taking precedence but were never discovered (readdir reports a
 symlink as a non-directory), so dev silently ran the `dist/plugins/` copy. Fixed
 in `SandboxedPluginManager`, and the tier now carries its own `source: 'dev'`.
