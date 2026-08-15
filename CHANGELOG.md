@@ -7,6 +7,38 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 and versions follow [semantic versioning](https://semver.org/) with the caveat
 above: in 0.x, a minor bump can carry breaking changes.
 
+## [Unreleased]
+
+The project is now called **Eaves**. Enclave and Eaves are the same app; only
+the name changed.
+
+### Changed
+
+- **Renamed throughout.** Application name, window title, packaging identity
+  (`com.eaves.app`), the data directory, and the `ENCLAVE_*` environment
+  variables, which are now `EAVES_*`. The old variable names still work and
+  warn once.
+- **Your data moves itself.** On first launch the profile is migrated from the
+  old location to the new one — conversations, agents, memories, plugins,
+  settings and API keys, with the database's write-ahead log carried across
+  intact. Nothing is deleted from the old path; if the move fails, the app says
+  so rather than starting up looking empty.
+- **Plugin ids changed** from `com.enclave.*` to `com.eaves.*`, and the API
+  plugins render against is now `window.EavesAPI`. Installed plugins are
+  remapped in place, keeping their settings, permissions and enabled state. A
+  plugin built against the old API needs rebuilding; the bundled ones already
+  are.
+- **The `enclave_guide` tool is now `eaves_guide`**, and agents that had it
+  keep it.
+
+### Note for existing installs
+
+The rename changes the packaging identity, so on Windows and Linux the new
+build installs **alongside** the old one rather than replacing it. Remove the
+old "Enclave AI" install once you have confirmed Eaves starts with your data.
+Do not run both: they now have separate profiles, and the one still called
+Enclave will look empty, because its data has moved.
+
 ## [0.4.2] — 2026-08-13
 
 Approvals, from the point of view of everyone waiting on them.
