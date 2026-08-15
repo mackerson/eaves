@@ -237,6 +237,49 @@ describe('SandboxedPluginManager', () => {
       expect(getPluginStateRepository().setEnabled).toHaveBeenCalledWith(manifest.id, true);
     });
 
+    it('does not start a plugin that is persisted as disabled', async () => {
+      const manifest = makeManifest();
+      (getPluginStateRepository().isEnabled as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+
+      await manager.loadPlugin(manifest);
+
+      // The load path used to spawn first and record `enabled: false` after,
+      // so a disabled plugin came back to life on every launch — activated,
+      // holding its grants, still receiving events — while the UI showed it
+      // as off. Nothing may be spawned or registered here.
+      expect(createdWorkers.length).toBe(0);
+      expect(permissionGateMock.registerPlugin).not.toHaveBeenCalled();
+      expect(eventBridgeMock.registerWorker).not.toHaveBeenCalled();
+      expect(resourceMonitorMock.track).not.toHaveBeenCalled();
+
+      // It is still loaded and listed, just not running — otherwise it could
+      // never be re-enabled from the UI.
+      expect(manager.isPluginLoaded(manifest.id)).toBe(true);
+      expect(manager.isPluginEnabled(manifest.id)).toBe(false);
+    });
+
+    it('enables a plugin that was loaded disabled', async () => {
+      const manifest = makeManifest();
+      (getPluginStateRepository().isEnabled as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+      await manager.loadPlugin(manifest);
+      vi.clearAllMocks();
+
+      await manager.enablePlugin(manifest.id);
+
+      expect(createdWorkers.length).toBe(1);
+      expect(createdWorkers[0].start).toHaveBeenCalledTimes(1);
+      expect(manager.isPluginEnabled(manifest.id)).toBe(true);
+    });
+
+    it('unloads a plugin that was loaded disabled without a worker to stop', async () => {
+      const manifest = makeManifest();
+      (getPluginStateRepository().isEnabled as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+      await manager.loadPlugin(manifest);
+
+      await expect(manager.unloadPlugin(manifest.id)).resolves.not.toThrow();
+      expect(manager.isPluginLoaded(manifest.id)).toBe(false);
+    });
+
     it('disabling an already-disabled plugin is a no-op', async () => {
       const manifest = makeManifest();
       await manager.loadPlugin(manifest);

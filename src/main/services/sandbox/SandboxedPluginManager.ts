@@ -42,7 +42,8 @@ import { dispatchDataMethod } from '../PluginDataAccess';
 
 interface LoadedPlugin {
   manifest: PluginManifest;
-  worker: PluginWorker;
+  /** Absent while the plugin is disabled — a disabled plugin has no worker at all. */
+  worker?: PluginWorker;
   enabled: boolean;
   loadedAt: number;
 }
@@ -400,10 +401,19 @@ export class SandboxedPluginManager {
       throw new Error(`Plugin entry point not found: ${entryPath}`);
     }
 
-    const worker = await this.spawnWorker(manifest);
-
     const persistedState = getPluginStateRepository().isEnabled(pluginId);
     const enabled = persistedState !== null ? persistedState : true;
+
+    // Consult the persisted state *before* spawning. Spawning first and
+    // recording `enabled: false` afterwards left a disabled plugin fully
+    // alive on every launch — activated, holding its grants, and still
+    // receiving events — while the UI showed it as off. Disabling only stuck
+    // until the next restart.
+    const worker = enabled ? await this.spawnWorker(manifest) : undefined;
+
+    if (!enabled) {
+      logger.info(`[SandboxedPluginManager] Plugin ${pluginId} is disabled — not starting it`);
+    }
 
     this.plugins.set(pluginId, {
       manifest,
@@ -882,8 +892,8 @@ export class SandboxedPluginManager {
     logger.info(`[SandboxedPluginManager] Unloading plugin: ${pluginId}`);
 
     try {
-      // Stop worker
-      await plugin.worker.stop();
+      // Stop worker — absent if the plugin was loaded disabled, or disabled since.
+      await plugin.worker?.stop();
 
       // Cleanup bridges
       this.eventBridge.unregisterWorker(pluginId);
@@ -1116,7 +1126,8 @@ export class SandboxedPluginManager {
     // and ServiceBridge kept routing calls to it — a plugin holding
     // network:http kept making network calls while the UI showed it as off.
     // Actually stop it and unregister its surface.
-    await plugin.worker.stop();
+    await plugin.worker?.stop();
+    plugin.worker = undefined;
     this.eventBridge.unregisterWorker(pluginId);
     this.toolBridge.unregisterWorker(pluginId);
     this.serviceBridge.unregisterWorker(pluginId);
