@@ -45,18 +45,21 @@ function DynamicPluginLoader({
       return;
     }
 
-    // Resolve the bundle URL by where the plugin lives:
-    // - dev: Vite serves the project's plugins/ symlinks from root
-    // - packaged + user-installed (userData/plugins): the plugin:// scheme, which
-    //   is the only way the packaged renderer can reach userData (no-dev-build
-    //   install path). See protocols/pluginBundle.ts.
+    // Resolve the bundle URL by where the plugin lives. Source is checked before
+    // dev: a marketplace-installed plugin lives in userData under its full-id
+    // folder name (com-enclave-webview), which the dev server's /plugins/ root
+    // has no entry for — resolving it there 404s. The plugin:// scheme is
+    // registered unconditionally, so it serves userData in dev and packaged
+    // alike. See protocols/pluginBundle.ts.
+    // - user-installed (userData/plugins): plugin://
+    // - dev + bundled: Vite serves the project's plugins/ tree from root
     // - packaged + bundled (dist/plugins): relative to dist/renderer
     const isDev = import.meta.env.DEV;
     const pathSegment = folderName || pluginId;
-    const pluginPath = isDev
-      ? `/plugins/${pathSegment}/${uiMetadata.entry}`
-      : source === 'user'
-        ? `plugin://${pathSegment}/${uiMetadata.entry}`
+    const pluginPath = source === 'user'
+      ? `plugin://${pathSegment}/${uiMetadata.entry}`
+      : isDev
+        ? `/plugins/${pathSegment}/${uiMetadata.entry}`
         : `../../plugins/${pathSegment}/${uiMetadata.entry}`;
 
     const metadata: PluginComponentMetadata = {
