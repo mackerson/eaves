@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, protocol } from 'electron';
+import { app, BrowserWindow, crashReporter, dialog, ipcMain, protocol } from 'electron';
 import * as path from 'path';
 import { registerProtocolHandlers } from './protocols';
 import { MODULE_SHIM_SCHEME, moduleShimRedirectTarget } from './protocols/moduleShim';
@@ -321,6 +321,26 @@ function createWindow() {
     getTerminalManager().cleanup();
   });
 }
+
+// A main-process abort — a Chromium CHECK, a V8 fatal like OOM — is delivered
+// as SIGILL, because Chromium crashes deliberately by executing an undefined
+// instruction. No JS handler runs, nothing reaches the app log, and the process
+// is simply gone: exactly the shape of the 2026-08-15 crash, which left no
+// evidence at all. Collecting minidumps is the only way such a crash is
+// diagnosable after the fact.
+//
+// `uploadToServer: false` keeps them entirely local (userData/crashDumps).
+// Note a minidump is a memory image and can contain whatever the process held
+// at the time — conversation text, and in principle API keys. It never leaves
+// the machine, but treat the directory as sensitive.
+crashReporter.start({ uploadToServer: false });
+
+// The main process cannot report its own abort, and `render-process-gone` on a
+// webContents only covers the renderer. This catches the GPU and utility
+// children, whose death is otherwise invisible.
+app.on('child-process-gone', (_event, details) => {
+  logger.error('[Main] Child process gone:', details);
+});
 
 // Single-instance lock. Enclave has no multi-window feature, so a second launch
 // only ever means a rival OS process on the same SQLite DB — two writers with no
