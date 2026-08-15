@@ -724,6 +724,13 @@ async function runShutdown(): Promise<void> {
     logger.error('Error emitting app:shutdown:', error);
   }
 
+  // Close pooled MCP servers. They are stdio children that deliberately outlive
+  // the turn that spawned them, so nothing else would reap them on the way out.
+  await boundedStep('mcp pool shutdown', async () => {
+    const { shutdownMCPPool } = await import('./services/mcp');
+    await shutdownMCPPool();
+  });
+
   // Stop plugin watcher
   if (pluginWatcher) {
     pluginWatcher.stop();

@@ -1040,8 +1040,10 @@ async function runChatAssistantTurn(
       metrics: streamMetrics,
     };
   } finally {
-    // Channel turns intentionally skip this: their MCP clients live for the
-    // process rather than the turn, so the dispatcher never disconnects them.
+    // Only per-turn (user-configured) servers are in here. The auto-injected
+    // filesystem servers are pooled for the process lifetime and owned by
+    // connectMCPServers, which keeps them out of this list precisely so closing
+    // a turn does not kill a server other turns are still using.
     const { disconnectMCPClients } = await import('./mcp');
     disconnectMCPClients(mcpClients);
   }

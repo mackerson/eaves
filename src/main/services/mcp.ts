@@ -134,39 +134,119 @@ export function shouldGateMcpTool(serverId: string, toolName: string): boolean {
     && GATED_BUILTIN_FILESYSTEM_TOOLS.has(toolName);
 }
 
+/**
+ * Long-lived filesystem servers, keyed by project directory path.
+ *
+ * The auto-injected filesystem server is identical for a given directory no
+ * matter which agent or turn asks for it, so there is nothing to gain from a
+ * process per turn — and plenty to lose. Every turn used to spawn one node
+ * process per project directory; chat turns closed theirs in a finally, channel
+ * turns never did, so they accumulated at ~75MB each for the life of the app,
+ * and every turn paid a cold process boot before its first tool call.
+ *
+ * Entries hold the connect promise, not the resolved client, so concurrent
+ * turns racing for the same directory share one spawn instead of both starting
+ * a server. A server that closes or errors evicts itself, so the next turn
+ * respawns it rather than handing out a dead client.
+ */
+interface PooledServer {
+  client: MCPClientInstance;
+  /** Cached from the one listTools call at spawn — a static server's tool list
+   *  does not change, and re-listing every turn is a round trip per directory. */
+  tools: McpToolDescriptor[];
+}
+const filesystemPool = new Map<string, Promise<PooledServer>>();
+
+function filesystemServerFor(dir: ProjectDirectory): MCPServer {
+  return {
+    id: `${BUILTIN_FILESYSTEM_PREFIX}${dir.name}`,
+    name: `Filesystem: ${dir.name}`,
+    transport: 'stdio',
+    enabled: true,
+    config: {
+      command: 'node',
+      args: [path.join(app.getAppPath(), 'dist/main/mcp-servers/filesystem.js')],
+      env: { ...process.env, PROJECT_DIR: dir.path },
+    },
+  };
+}
+
+/** Get (or spawn) the pooled filesystem server for a project directory. */
+function acquireFilesystemServer(dir: ProjectDirectory): Promise<PooledServer> {
+  const existing = filesystemPool.get(dir.path);
+  if (existing) return existing;
+
+  const spawning = (async (): Promise<PooledServer> => {
+    const server = filesystemServerFor(dir);
+    const transport = new StdioClientTransport({
+      command: server.config.command!,
+      args: server.config.args || [],
+      env: server.config.env,
+    });
+    const client = new Client({ name: 'enclave', version: '0.0.0' }, { capabilities: {} });
+
+    // Evict before the caller can be handed a dead client on a later turn.
+    const evict = () => {
+      if (filesystemPool.get(dir.path) === spawning) filesystemPool.delete(dir.path);
+    };
+    client.onclose = evict;
+    client.onerror = (error) => {
+      logger.error('Pooled filesystem MCP server errored', { path: dir.path, error: error.message });
+      evict();
+    };
+
+    await client.connect(transport);
+    const listing = await client.listTools();
+    logger.info('Spawned pooled filesystem MCP server', { name: dir.name, path: dir.path });
+    return { client, tools: listing.tools as McpToolDescriptor[] };
+  })();
+
+  // A failed spawn must not poison the pool for every later turn.
+  spawning.catch(() => {
+    if (filesystemPool.get(dir.path) === spawning) filesystemPool.delete(dir.path);
+  });
+
+  filesystemPool.set(dir.path, spawning);
+  return spawning;
+}
+
+/** Close every pooled filesystem server. Called on app shutdown. */
+export async function shutdownMCPPool(): Promise<void> {
+  const entries = [...filesystemPool.values()];
+  filesystemPool.clear();
+  for (const entry of entries) {
+    try {
+      const { client } = await entry;
+      client.onclose = undefined;
+      client.close();
+    } catch {
+      /* never spawned successfully, or already gone */
+    }
+  }
+}
+
 export async function connectMCPServers(
   servers: MCPServer[],
   projectDirectories?: ProjectDirectory[]
 ): Promise<{ clients: MCPClientInstance[]; tools: ToolSet }> {
+  // Only per-turn servers land here. Pooled filesystem clients are deliberately
+  // excluded: callers disconnect everything in `clients` when the turn ends, and
+  // closing a pooled server would defeat the pool and kill it for other turns.
   const mcpClients: MCPClientInstance[] = [];
   const allTools: ToolSet = {};
   const toolOrigins = new Map<string, string>();
 
-  let serversToConnect = [...servers].filter(s => s.enabled);
+  const serversToConnect = [...servers].filter(s => s.enabled);
 
-  // Auto-inject filesystem MCP servers for each project directory
-  if (projectDirectories && projectDirectories.length > 0) {
-    for (const dir of projectDirectories) {
-      const filesystemServer: MCPServer = {
-        id: `__builtin_filesystem__:${dir.name}`,
-        name: `Filesystem: ${dir.name}`,
-        transport: 'stdio',
-        enabled: true,
-        config: {
-          command: 'node',
-          args: [
-            path.join(app.getAppPath(), 'dist/main/mcp-servers/filesystem.js')
-          ],
-          env: {
-            ...process.env,
-            PROJECT_DIR: dir.path,
-          },
-        },
-      };
-
-      // Add at the beginning so project filesystem tools have priority
-      serversToConnect.unshift(filesystemServer);
-      logger.info('Auto-configured filesystem MCP server', { name: dir.name, path: dir.path });
+  // Project filesystem tools are registered first so they win name conflicts,
+  // matching the previous unshift-onto-the-front ordering.
+  for (const dir of projectDirectories || []) {
+    try {
+      const pooled = await acquireFilesystemServer(dir);
+      registerServerTools(pooled.client, filesystemServerFor(dir), pooled.tools, allTools, toolOrigins);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to connect filesystem MCP server for ${dir.name}:`, message);
     }
   }
 
@@ -203,52 +283,7 @@ export async function connectMCPServers(
       mcpClients.push(client);
 
       const listing = await client.listTools();
-      for (const t of listing.tools) {
-        if (allTools[t.name]) {
-          logger.warn('MCP tool conflict detected; keeping first definition', {
-            toolName: t.name,
-            existingServer: toolOrigins.get(t.name),
-            conflictingServer: server.name,
-          });
-          continue;
-        }
-
-        const needsApproval = shouldGateMcpTool(server.id, t.name);
-
-        allTools[t.name] = tool({
-          description: t.description,
-          ...(needsApproval ? { needsApproval: true as const } : {}),
-          inputSchema: jsonSchema(t.inputSchema as Record<string, unknown>),
-          execute: async (args: unknown) => {
-            const result = (await client.callTool({
-              name: t.name,
-              arguments: args as Record<string, unknown>,
-            })) as McpToolResult;
-            // Return both shapes:
-            //   text   — flat string for the renderer's pre/JSON display
-            //   parts  — raw MCP content for toModelOutput to translate
-            // toModelOutput is what actually reaches the model, so the model
-            // gets full media fidelity even though the renderer keeps a tidy
-            // text summary.
-            return {
-              text: summarizeMcpContent(result?.content),
-              parts: result?.content ?? [],
-              isError: !!result?.isError,
-            };
-          },
-          toModelOutput: ({ output }) => {
-            const o = output as { text?: string; parts?: McpContentPart[]; isError?: boolean } | null;
-            const parts = mcpContentToModelOutput(o?.parts);
-            // No usable parts (rare) → fall back to text or a placeholder so
-            // the model still sees *something* and can continue.
-            if (parts.length === 0) {
-              return { type: 'text', value: o?.text || '(empty tool result)' };
-            }
-            return { type: 'content', value: parts };
-          },
-        });
-        toolOrigins.set(t.name, server.name);
-      }
+      registerServerTools(client, server, listing.tools as McpToolDescriptor[], allTools, toolOrigins);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error(`Failed to connect to MCP server ${server.name}:`, message);
@@ -256,6 +291,72 @@ export async function connectMCPServers(
   }
 
   return { clients: mcpClients, tools: allTools };
+}
+
+interface McpToolDescriptor {
+  name: string;
+  description?: string;
+  inputSchema: unknown;
+}
+
+/**
+ * Wrap a server's advertised tools into the toolset. Shared by pooled and
+ * per-turn servers so both get identical conflict handling, approval gating,
+ * and result translation. First registration wins a name conflict.
+ */
+function registerServerTools(
+  client: MCPClientInstance,
+  server: MCPServer,
+  descriptors: McpToolDescriptor[],
+  allTools: ToolSet,
+  toolOrigins: Map<string, string>,
+): void {
+  for (const t of descriptors) {
+    if (allTools[t.name]) {
+      logger.warn('MCP tool conflict detected; keeping first definition', {
+        toolName: t.name,
+        existingServer: toolOrigins.get(t.name),
+        conflictingServer: server.name,
+      });
+      continue;
+    }
+
+    const needsApproval = shouldGateMcpTool(server.id, t.name);
+
+    allTools[t.name] = tool({
+      description: t.description,
+      ...(needsApproval ? { needsApproval: true as const } : {}),
+      inputSchema: jsonSchema(t.inputSchema as Record<string, unknown>),
+      execute: async (args: unknown) => {
+        const result = (await client.callTool({
+          name: t.name,
+          arguments: args as Record<string, unknown>,
+        })) as McpToolResult;
+        // Return both shapes:
+        //   text   — flat string for the renderer's pre/JSON display
+        //   parts  — raw MCP content for toModelOutput to translate
+        // toModelOutput is what actually reaches the model, so the model
+        // gets full media fidelity even though the renderer keeps a tidy
+        // text summary.
+        return {
+          text: summarizeMcpContent(result?.content),
+          parts: result?.content ?? [],
+          isError: !!result?.isError,
+        };
+      },
+      toModelOutput: ({ output }) => {
+        const o = output as { text?: string; parts?: McpContentPart[]; isError?: boolean } | null;
+        const parts = mcpContentToModelOutput(o?.parts);
+        // No usable parts (rare) → fall back to text or a placeholder so
+        // the model still sees *something* and can continue.
+        if (parts.length === 0) {
+          return { type: 'text', value: o?.text || '(empty tool result)' };
+        }
+        return { type: 'content', value: parts };
+      },
+    });
+    toolOrigins.set(t.name, server.name);
+  }
 }
 
 /** Test surface only — keep helpers internal but reachable from unit tests. */
