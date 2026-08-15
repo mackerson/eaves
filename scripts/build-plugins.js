@@ -4,9 +4,10 @@
  * Automatically builds plugin UI bundles, skipping unchanged plugins
  *
  * Usage:
- *   node scripts/build-plugins.js           # Build changed plugins only
- *   node scripts/build-plugins.js --force   # Force rebuild all
- *   node scripts/build-plugins.js my-plugin # Build specific plugin
+ *   node scripts/build-plugins.js             # Build changed plugins only
+ *   node scripts/build-plugins.js --force     # Force rebuild all
+ *   node scripts/build-plugins.js my-plugin   # Build specific plugin in plugins/
+ *   node scripts/build-plugins.js /abs/path   # Build a plugin outside plugins/
  */
 
 const { spawnSync } = require('child_process');
@@ -125,11 +126,49 @@ function buildPlugin(pluginName, buildDir, reason) {
   }
 }
 
+/**
+ * Build a plugin addressed by directory rather than by name. Plugins installed
+ * from the marketplace, or authored live, live under userData — outside the
+ * repo's `plugins/` tree — so a bare name cannot reach them.
+ */
+function buildByPath(pluginPath) {
+  const name = path.basename(pluginPath);
+
+  if (!fs.existsSync(pluginPath) || !fs.statSync(pluginPath).isDirectory()) {
+    console.log(`\n⚠️  Plugin directory not found: ${pluginPath}`);
+    process.exit(1);
+  }
+
+  const hasUI = fs.existsSync(path.join(pluginPath, 'package.json')) &&
+    fs.existsSync(path.join(pluginPath, 'vite.config.ts'));
+
+  if (!hasUI) {
+    console.log(`\n✅ ${name} has no UI bundle to build`);
+    process.exit(0);
+  }
+
+  const { needed, reason } = forceRebuild
+    ? { needed: true, reason: 'forced' }
+    : needsRebuild(pluginPath);
+
+  if (!needed) {
+    console.log(`\n✅ Plugin "${name}" is up to date`);
+    process.exit(0);
+  }
+
+  process.exit(buildPlugin(name, pluginPath, reason || 'unknown') ? 0 : 1);
+}
+
 function main() {
   console.log('🔧 Enclave Plugin Builder (Incremental)\n');
 
   if (forceRebuild) {
     console.log('⚡ Force rebuild mode - rebuilding all plugins\n');
+  }
+
+  if (specificPlugin && (path.isAbsolute(specificPlugin) || specificPlugin.includes(path.sep))) {
+    buildByPath(path.resolve(specificPlugin));
+    return;
   }
 
   // Get list of plugins with UI

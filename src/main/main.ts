@@ -504,7 +504,7 @@ app.whenReady().then(async () => {
     // In development, also watch the source plugins directory
     if (!app.isPackaged) {
       const sourcePluginsDir = path.join(app.getAppPath(), 'plugins');
-      pluginWatcher.start(sourcePluginsDir, 'user');
+      pluginWatcher.start(sourcePluginsDir, 'dev');
       logger.info('[Main] Dev mode: Also watching source plugins directory');
     }
 
