@@ -100,29 +100,6 @@ export async function getMarketplaceListing(): Promise<{
   return { plugins: reg.plugins, installed };
 }
 
-/** Human-readable labels for the permission grants shown at install consent. */
-const PERMISSION_LABELS: Record<string, string> = {
-  'data:agents:read': 'Read your agents',
-  'data:agents:write': 'Create or modify agents',
-  'data:chats:read': 'Read your chats',
-  'data:chats:write': 'Create or modify chats',
-  'data:messages:read': 'Read messages',
-  'data:messages:write': 'Write messages',
-  'data:projects:read': 'Read projects',
-  'data:projects:write': 'Modify projects',
-  'storage:read': 'Read its own stored data',
-  'storage:write': 'Store its own data',
-  'tools:register': 'Add tools your agents can use',
-  'services:register': 'Provide services to other plugins',
-  'services:call': 'Use services from other plugins',
-  'ui:views:register': 'Add its own views to the app',
-  'ui:notifications:show': 'Show notifications',
-  'events:listen': 'Observe app events',
-  'events:emit': 'Emit app events',
-  'network:http': 'Make network requests',
-  'system:filesystem': 'Read and write files on your computer',
-};
-
 function permsEqual(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
   const sa = new Set(a);
@@ -132,33 +109,29 @@ function permsEqual(a: string[], b: string[]): boolean {
 /**
  * Host-enforced pre-install consent. Because the marketplace UI runs unsandboxed
  * in the renderer and can call install directly, consent must be shown by a
- * trusted surface the plugin can't spoof — a native dialog from main. Returns
- * true if the user approves. `ENCLAVE_PLUGIN_AUTO_CONSENT` (1=approve, 0=decline)
- * bypasses the dialog for headless tests only.
+ * trusted surface the plugin can't spoof — a modal window owned by main, whose
+ * page and preload the renderer cannot reach (see windows/pluginConsentWindow).
+ * Returns true if the user approves. `ENCLAVE_PLUGIN_AUTO_CONSENT` (1=approve,
+ * 0=decline) bypasses the window for headless tests only.
+ *
+ * `priorPermissions` drives the update case: grants the user has not previously
+ * consented to are badged, so an update that widens access reads as one.
  */
-async function promptConsent(entry: RegistryPlugin): Promise<boolean> {
+async function promptConsent(entry: RegistryPlugin, priorPermissions?: string[]): Promise<boolean> {
   const flag = process.env.ENCLAVE_PLUGIN_AUTO_CONSENT;
   if (flag === '1') return true;
   if (flag === '0') return false;
 
-  const { dialog, BrowserWindow } = await import('electron');
-  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
-  const perms = entry.permissions.length
-    ? entry.permissions.map((p) => `  • ${PERMISSION_LABELS[p] || p}`).join('\n')
-    : '  • No special access';
-  const opts = {
-    type: 'question' as const,
-    buttons: ['Cancel', 'Install'],
-    defaultId: 1,
-    cancelId: 0,
-    title: 'Install plugin',
-    message: `Install “${entry.name}” by ${entry.author}?`,
-    detail: `This plugin will be able to:\n${perms}\n\nSource: ${entry.homepage}`,
-  };
-  const { response } = win
-    ? await dialog.showMessageBox(win, opts)
-    : await dialog.showMessageBox(opts);
-  return response === 1;
+  const { showPluginConsent } = await import('../windows/pluginConsentWindow');
+  return showPluginConsent({
+    name: entry.name,
+    author: entry.author,
+    version: entry.latest,
+    tier: entry.tier,
+    homepage: entry.homepage,
+    permissions: entry.permissions,
+    priorPermissions,
+  });
 }
 
 /**
@@ -244,7 +217,7 @@ export async function installPlugin(id: string): Promise<{ id: string; folderNam
   const grants = getPluginGrantsRepository();
   const priorGrant = grants.get(id);
   if (!priorGrant || !permsEqual(priorGrant.permissions, entry.permissions)) {
-    const approved = await promptConsent(entry);
+    const approved = await promptConsent(entry, priorGrant?.permissions);
     if (!approved) throw new Error('Installation cancelled');
   }
 
