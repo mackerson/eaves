@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
+import { legacyEnv } from '../utils/legacyEnv';
 
 enum LogLevel {
   DEBUG = 0,
@@ -103,7 +104,7 @@ class Logger {
     this.currentLogFile = this.getCurrentLogPath();
     this.rotateIfNeeded();
 
-    const envLevel = process.env.EAVES_LOG_LEVEL?.toUpperCase();
+    const envLevel = legacyEnv('EAVES_LOG_LEVEL')?.toUpperCase();
     if (envLevel) {
       switch (envLevel) {
         case 'DEBUG':

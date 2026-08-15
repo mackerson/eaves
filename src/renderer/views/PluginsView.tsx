@@ -17,10 +17,18 @@ interface Plugin {
   source?: 'bundled' | 'user' | 'dev';
 }
 
+const TRUSTED_PLUGINS_KEY = 'eaves:trustedPlugins';
+const LEGACY_TRUSTED_PLUGINS_KEY = 'enclave:trustedPlugins';
+
 // Get trusted plugins from localStorage
 const getTrustedPlugins = (): Set<string> => {
   try {
-    const stored = localStorage.getItem('eaves:trustedPlugins');
+    // Fall back to the pre-rename key so the profile migration doesn't quietly
+    // revoke trust the user already granted. Reading it is safe: it is the same
+    // profile and the same user's decision, only under the old name.
+    const stored =
+      localStorage.getItem(TRUSTED_PLUGINS_KEY) ??
+      localStorage.getItem(LEGACY_TRUSTED_PLUGINS_KEY);
     return new Set(stored ? JSON.parse(stored) : []);
   } catch {
     return new Set();
@@ -29,7 +37,10 @@ const getTrustedPlugins = (): Set<string> => {
 
 // Save trusted plugins to localStorage
 const saveTrustedPlugins = (plugins: Set<string>): void => {
-  localStorage.setItem('eaves:trustedPlugins', JSON.stringify([...plugins]));
+  localStorage.setItem(TRUSTED_PLUGINS_KEY, JSON.stringify([...plugins]));
+  // Drop the legacy key once we've written the new one, so a later revoke
+  // can't be undone by the fallback read above resurrecting stale trust.
+  localStorage.removeItem(LEGACY_TRUSTED_PLUGINS_KEY);
 };
 
 interface PluginsViewProps {

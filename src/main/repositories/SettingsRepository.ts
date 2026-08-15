@@ -4,6 +4,7 @@ import { Settings, BackgroundSettings, BackgroundType, UpdateMode, FontPreferenc
 import { getDatabase } from '../services/database';
 import { encryptAPIKey, decryptAPIKey } from '../services/encryption';
 import { logger } from '../services/logger';
+import { legacyEnv } from '../utils/legacyEnv';
 import { SettingsRow, CurrentStateRow } from './row-types';
 import { PROVIDER_IDS, ProviderId } from '../../shared/providers';
 
@@ -23,7 +24,7 @@ function devEnvKeyOverrides(): Partial<Record<ProviderId, string>> {
   const out: Partial<Record<ProviderId, string>> = {};
   for (const id of PROVIDER_IDS) {
     const P = id.toUpperCase();
-    const v = process.env[`EAVES_${P}_API_KEY`] ?? process.env[`EAVES_QA_${P}_KEY`];
+    const v = legacyEnv(`EAVES_${P}_API_KEY`) ?? legacyEnv(`EAVES_QA_${P}_KEY`);
     if (v && v.trim()) out[id] = v.trim();
   }
   if (!loggedKeyOverrides) {

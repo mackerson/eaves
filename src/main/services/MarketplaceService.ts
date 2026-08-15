@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import * as tar from 'tar';
+import { legacyEnv } from '../utils/legacyEnv';
 import { getSandboxedPluginManager } from './sandbox';
 import { isInsideDirectory, sanitizeFolderName } from './sandbox/pathContainment';
 import { getPluginGrantsRepository } from '../repositories';
@@ -21,7 +22,7 @@ import { logger } from './logger';
  */
 
 const REGISTRY_URL =
-  process.env.EAVES_REGISTRY_URL ||
+  legacyEnv('EAVES_REGISTRY_URL') ||
   'https://raw.githubusercontent.com/mackerson/eaves-plugin-registry/main/registry.json';
 
 export interface RegistryRelease {
@@ -118,7 +119,7 @@ function permsEqual(a: string[], b: string[]): boolean {
  * consented to are badged, so an update that widens access reads as one.
  */
 async function promptConsent(entry: RegistryPlugin, priorPermissions?: string[]): Promise<boolean> {
-  const flag = process.env.EAVES_PLUGIN_AUTO_CONSENT;
+  const flag = legacyEnv('EAVES_PLUGIN_AUTO_CONSENT');
   if (flag === '1') return true;
   if (flag === '0') return false;
 

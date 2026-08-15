@@ -3,6 +3,7 @@ import * as path from 'path';
 import { registerProtocolHandlers } from './protocols';
 import { MODULE_SHIM_SCHEME, moduleShimRedirectTarget } from './protocols/moduleShim';
 import { PLUGIN_BUNDLE_SCHEME } from './protocols/pluginBundle';
+import { migrateLegacyProfile } from './services/profileMigration';
 import { loadAppState, initializeAppState } from './services/appStateLoader';
 import { registerCoreMemoryBackend, backfillCoreVectors } from './services/CoreMemoryBackend';
 import { ipcResult } from './utils/ipcValidation';
@@ -342,6 +343,20 @@ app.on('child-process-gone', (_event, details) => {
   logger.error('[Main] Child process gone:', details);
 });
 
+// Move the profile off the old Enclave path before anything reads or writes
+// userData — the single-instance lock below and the logger's first write both
+// land there, and either one would create the destination out from under the
+// migration. Failing here is not fatal on its own, but it means starting
+// against an empty profile, so say so loudly rather than looking like a fresh
+// install.
+let profileMigrationNote: string | null = null;
+let profileMigrationError: unknown = null;
+try {
+  profileMigrationNote = migrateLegacyProfile();
+} catch (error) {
+  profileMigrationError = error;
+}
+
 // Single-instance lock. Eaves has no multi-window feature, so a second launch
 // only ever means a rival OS process on the same SQLite DB — two writers with no
 // busy_timeout can silently drop each other's writes, and a post-update
@@ -365,6 +380,18 @@ app.whenReady().then(async () => {
   // A losing second instance is already quitting — never initialize services or
   // open the DB from it (that's the whole point of the lock above).
   if (!gotSingleInstanceLock) return;
+
+  // Report the profile migration now that the logger has somewhere to write.
+  if (profileMigrationNote) logger.info(`[Main] ${profileMigrationNote}`);
+  if (profileMigrationError) {
+    logger.error('[Main] Could not migrate the profile from the old Enclave path:', profileMigrationError);
+    dialog.showErrorBox(
+      'Could not migrate your data',
+      'Eaves could not move your existing profile from the old Enclave location, ' +
+      'so it is starting with an empty one. Your data has not been deleted.\n\n' +
+      `${profileMigrationError instanceof Error ? profileMigrationError.message : String(profileMigrationError)}`,
+    );
+  }
 
   // Initialize database and run migration if needed.
   //
