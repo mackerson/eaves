@@ -113,6 +113,24 @@ describe('migrateLegacyProfile', () => {
     expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db'), 'utf8')).toBe('main');
   });
 
+  it('rekeys plugin config, which lives outside the database', () => {
+    seedLegacyProfile();
+    write(path.join(legacy, 'plugin-configs.json'), JSON.stringify({
+      'com.enclave.openmemory': { apiKey: 'secret' },
+      'org.example.thing': { setting: 1 },
+    }));
+
+    migrateLegacyProfile();
+
+    const config = JSON.parse(fs.readFileSync(path.join(current, 'plugin-configs.json'), 'utf8'));
+    // Migration 77 remaps ids in the database; this file is not reached by it,
+    // and an orphaned key means the plugin loses its stored settings.
+    expect(config['com.eaves.openmemory']).toEqual({ apiKey: 'secret' });
+    expect(config['com.enclave.openmemory']).toBeUndefined();
+    // Third-party ids are not ours to rename.
+    expect(config['org.example.thing']).toEqual({ setting: 1 });
+  });
+
   it('ignores a legacy profile that has no database', () => {
     write(path.join(legacy, 'logs', 'enclave-2026-01-01.log'), 'log');
 

@@ -13,7 +13,7 @@ import { legacyMigrations } from './__fixtures__/legacyChain';
 // The newest migration's version. The v75 baseline is still where a fresh
 // database's schema comes from; anything after it is an incremental migration
 // on top, so HEAD moves and the baseline does not.
-const HEAD = 76;
+const HEAD = 77;
 
 /** The squashed baseline every fresh database starts from. */
 const BASELINE = 75;
@@ -760,6 +760,65 @@ describe('converging a database from any older build', () => {
     for (const version of [1, 37, 51]) {
       expect(() => runMigrations(db, version)).toThrow(/too old for this build/);
     }
+    db.close();
+  });
+});
+
+describe('v77: rename to Eaves', () => {
+  /** A v76 database — the last schema that still used the Enclave names. */
+  function preRenameDatabase(): Database.Database {
+    const db = new Database(':memory:');
+    db.pragma('foreign_keys = OFF');
+    for (const m of migrations.filter(m => m.version <= 76)) m.migrate(db);
+    db.pragma('foreign_keys = ON');
+    db.pragma('user_version = 76');
+    return db;
+  }
+
+  it('remaps persisted plugin ids so a disabled plugin stays disabled', () => {
+    const db = preRenameDatabase();
+    db.prepare(`INSERT INTO plugin_state (plugin_id, enabled) VALUES ('com.enclave.openmemory', 0)`).run();
+
+    runMigrations(db, 76);
+
+    expect(db.prepare(`SELECT plugin_id, enabled FROM plugin_state`).get())
+      .toEqual({ plugin_id: 'com.eaves.openmemory', enabled: 0 });
+    db.close();
+  });
+
+  it('leaves a third-party plugin id alone', () => {
+    const db = preRenameDatabase();
+    db.prepare(`INSERT INTO plugin_state (plugin_id, enabled) VALUES ('org.example.thing', 1)`).run();
+
+    runMigrations(db, 76);
+
+    expect(db.prepare(`SELECT plugin_id FROM plugin_state`).get())
+      .toEqual({ plugin_id: 'org.example.thing' });
+    db.close();
+  });
+
+  it('renames the guide tool inside persisted tool selections', () => {
+    const db = preRenameDatabase();
+    db.prepare(`INSERT INTO tool_session_states (context_id, enabled_tools, updated_at) VALUES ('c', ?, 1)`)
+      .run(JSON.stringify(['enclave_guide', 'list_agents']));
+
+    runMigrations(db, 76);
+
+    const row = db.prepare(`SELECT enabled_tools FROM tool_session_states WHERE context_id = 'c'`)
+      .get() as { enabled_tools: string };
+    expect(JSON.parse(row.enabled_tools)).toEqual(['eaves_guide', 'list_agents']);
+    db.close();
+  });
+
+  it('does not rewrite paths or history that legitimately say "enclave"', () => {
+    const db = preRenameDatabase();
+    // A real directory on disk, which the rename does not move.
+    db.prepare(`INSERT INTO projects (id, name, description, directory, created_at) VALUES ('p','P','','/home/u/personal/enclave/enclave-ai',1)`).run();
+
+    runMigrations(db, 76);
+
+    expect(db.prepare(`SELECT directory FROM projects WHERE id = 'p'`).get())
+      .toEqual({ directory: '/home/u/personal/enclave/enclave-ai' });
     db.close();
   });
 });

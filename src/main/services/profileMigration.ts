@@ -86,5 +86,35 @@ export function migrateLegacyProfile(): string | null {
   const attachments = path.join(renamedDataDir, LEGACY_ATTACHMENTS);
   if (fs.existsSync(attachments)) move(attachments, path.join(renamedDataDir, ATTACHMENTS));
 
+  migratePluginConfigIds(userData);
+
   return `Migrated profile from ${legacyProfile} to ${userData}`;
+}
+
+/**
+ * Plugin configuration is keyed by plugin id but lives in a JSON file rather
+ * than the database, so migration 77's id remap does not reach it. Left alone,
+ * a plugin comes back with its stored settings — including any API keys the
+ * user entered — orphaned under its old id.
+ *
+ * Rewrites keys only. Values are the plugin's own data and are never inspected.
+ */
+function migratePluginConfigIds(userData: string): void {
+  const configPath = path.join(userData, 'plugin-configs.json');
+  if (!fs.existsSync(configPath)) return;
+
+  const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+  const remapped: Record<string, unknown> = {};
+  let changed = false;
+
+  for (const [id, value] of Object.entries(parsed)) {
+    if (id.startsWith('com.enclave.')) {
+      remapped[`com.eaves.${id.slice('com.enclave.'.length)}`] = value;
+      changed = true;
+    } else {
+      remapped[id] = value;
+    }
+  }
+
+  if (changed) fs.writeFileSync(configPath, JSON.stringify(remapped, null, 2), 'utf-8');
 }

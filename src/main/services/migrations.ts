@@ -956,6 +956,51 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 77,
+    description: 'Rename to Eaves: remap persisted plugin ids and the guide tool name',
+    migrate: (db) => {
+      // Deliberately column-by-column rather than a sweep over every text
+      // column. Three columns hold prose or paths that legitimately contain
+      // the old name and must not be rewritten:
+      //   projects.directory — a real path on disk, which has not moved
+      //   messages.content / activities.data — conversation and audit history,
+      //     which recorded what actually happened under the old name
+      // Rewriting any of those would corrupt user data to cosmetic ends.
+
+      // Plugin ids key three tables. Missing the remap does not merely orphan
+      // config: plugin_state carries the enabled flag, so a plugin the user
+      // had explicitly disabled would come back enabled under its new id.
+      for (const table of ['plugin_state', 'plugin_grants', 'plugin_storage']) {
+        db.prepare(
+          `UPDATE ${table}
+              SET plugin_id = 'com.eaves.' || substr(plugin_id, length('com.enclave.') + 1)
+            WHERE plugin_id LIKE 'com.enclave.%'`
+        ).run();
+      }
+
+      // Tool names are persisted as JSON arrays. `enclave_guide` is always
+      // active for an agent that has it, so losing the name silently removes
+      // the app's own documentation tool from every existing agent.
+      //
+      // Matching on the quoted name keeps this from touching a tool that
+      // merely has `enclave_guide` as a prefix of its own name.
+      for (const [table, column] of [
+        ['agents', 'default_tools'],
+        ['tool_session_states', 'enabled_tools'],
+      ]) {
+        const exists = (db.pragma(`table_info(${table})`) as Array<{ name: string }>)
+          .some(c => c.name === column);
+        if (!exists) continue;
+
+        db.prepare(
+          `UPDATE ${table}
+              SET ${column} = replace(${column}, '"enclave_guide"', '"eaves_guide"')
+            WHERE ${column} LIKE '%"enclave_guide"%'`
+        ).run();
+      }
+    },
+  },
 ];
 
 /**
