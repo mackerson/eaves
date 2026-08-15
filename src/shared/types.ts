@@ -440,12 +440,31 @@ export interface AgentNodeData {
   maxOutputTokens?: number;
 }
 
+/**
+ * Where a routine delivers its run result.
+ *
+ * A routine without one still runs and still records its result, but only into
+ * the run history — which is how a scheduled routine could work perfectly and
+ * appear to do nothing. Setting this is what puts the output somewhere a person
+ * actually looks.
+ */
+export interface RoutineOutput {
+  /**
+   * Delivering to a channel is not offered yet — the `messages` CHECK admits
+   * only 'human' and 'agent' senders, so a routine has no honest one to post
+   * as. Widening it is a `messages` table rebuild; until then, a note is the
+   * durable place for a digest.
+   */
+  type: 'note' | 'task';
+}
+
 export interface Routine {
   id: string;
   projectId: string;
   name: string;
   description?: string;
   workflowId?: string;  // Optional workflow to execute
+  output?: RoutineOutput;
   cronSchedule: string;  // Cron expression (e.g., "0 9 * * *")
   enabled: boolean;
   pinned: boolean;

@@ -298,6 +298,8 @@ export interface RoutineRow {
   last_status: 'success' | 'failure' | null;
   last_error: string | null;
   consecutive_failures: number;
+  /** JSON `RoutineOutput`, or null when the routine delivers nowhere. */
+  output: string | null;
   created_at: number;
   updated_at: number;
 }

@@ -295,6 +295,51 @@ export function GenericNodeConfig({ id, data }: NodeConfigProps) {
 }
 
 /** Registry used by the inspector to render config for any selected node. */
+/**
+ * Sinks. Every other node type computes into the run's context; these are the
+ * only ones that put a result where a person will see it, which is why their
+ * shared field is `content` and why it takes `${node-id}` references.
+ */
+const CONTENT_PLACEHOLDER = 'Today: ${summarize-node-id}';
+
+export function NoteNodeConfig({ id, data }: NodeConfigProps) {
+  const write = useNodeFieldWriter(id);
+
+  return (
+    <>
+      <NodeTextField
+        label="Title (optional)"
+        value={data.title || ''}
+        onChange={(value) => write('title', value)}
+        placeholder="Daily weather"
+      />
+      <NodeTextAreaField
+        label="Note"
+        title="Note"
+        value={data.content || ''}
+        onChange={(value) => write('content', value)}
+        placeholder={CONTENT_PLACEHOLDER}
+        rows={4}
+      />
+    </>
+  );
+}
+
+export function TaskNodeConfig({ id, data }: NodeConfigProps) {
+  const write = useNodeFieldWriter(id);
+
+  return (
+    <NodeTextAreaField
+      label="Task"
+      title="Task"
+      value={data.content || ''}
+      onChange={(value) => write('content', value)}
+      placeholder={CONTENT_PLACEHOLDER}
+      rows={3}
+    />
+  );
+}
+
 export const NODE_CONFIGS: Record<string, (props: NodeConfigProps) => JSX.Element> = {
   agent: AgentNodeConfig,
   code: CodeNodeConfig,
@@ -304,6 +349,8 @@ export const NODE_CONFIGS: Record<string, (props: NodeConfigProps) => JSX.Elemen
   loop: LoopNodeConfig,
   break: BreakNodeConfig,
   webscraper: WebScraperNodeConfig,
+  note: NoteNodeConfig,
+  task: TaskNodeConfig,
 };
 
 export function configForNodeType(type?: string) {

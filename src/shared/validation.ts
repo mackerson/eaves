@@ -999,6 +999,16 @@ export const TogglePluginSchema = z.object({
 export const EventFilterSchema = z.string().min(1).max(100);
 
 // Routine IPC schemas
+
+/**
+ * Where a routine delivers its result. Channel delivery is deliberately not
+ * accepted yet (see `RoutineOutput`), so a caller asking for it is rejected at
+ * the boundary rather than failing at 9am when the routine fires.
+ */
+export const RoutineOutputSchema = z.object({
+  type: z.enum(['note', 'task']),
+});
+
 export const CreateRoutineSchema = z.object({
   projectId: EntityIdSchema,
   name: z.string().min(1).max(100),
@@ -1006,6 +1016,7 @@ export const CreateRoutineSchema = z.object({
   workflowId: EntityIdSchema.optional(),
   cronSchedule: z.string().min(1).max(100),
   enabled: z.boolean().default(true),
+  output: RoutineOutputSchema.optional(),
 });
 
 export const UpdateRoutineSchema = z.object({
@@ -1015,6 +1026,8 @@ export const UpdateRoutineSchema = z.object({
   workflowId: EntityIdSchema.optional(),
   cronSchedule: z.string().min(1).max(100).optional(),
   enabled: z.boolean().optional(),
+  // Nullable so a target can be cleared, not just changed.
+  output: RoutineOutputSchema.nullable().optional(),
 });
 
 // Task IPC schemas (extended)

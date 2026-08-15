@@ -21,6 +21,7 @@ import { LoopNode } from './nodes/LoopNode';
 import { DelayNode } from './nodes/DelayNode';
 import { BreakNode } from './nodes/BreakNode';
 import { WebScraperNode } from './nodes/WebScraperNode';
+import { NoteNode, TaskNode } from './nodes/SinkNodes';
 import { AgentNode } from './nodes/AgentNode';
 import { GenericNode } from './nodes/GenericNode';
 import { useResize } from '@/hooks/useResize';
@@ -37,6 +38,8 @@ import {
   Ban,
   Bot,
   Flag,
+  StickyNote,
+  CheckSquare,
   CloudSun,
   Import,
   Download,
@@ -224,6 +227,8 @@ export function WorkflowEditor({ workflowId: _workflowId, initialWorkflow, onSav
     break: BreakNode,
     webscraper: WebScraperNode,
     agent: AgentNode,
+    note: NoteNode,
+    task: TaskNode,
     start: GenericNode,
     action: GenericNode,
     end: GenericNode,
@@ -333,6 +338,25 @@ export function WorkflowEditor({ workflowId: _workflowId, initialWorkflow, onSav
         label: nodeName || 'Break',
         condition: '',
       },
+      position: {
+        x: Math.random() * 400 + 100,
+        y: Math.random() * 300 + 150,
+      },
+    };
+    setNodes((nds) => [...nds, newNode]);
+    setNodeName('');
+  };
+
+  /**
+   * Sinks all take a `content` body, so one builder covers them. They are the
+   * only node types that deliver anything out of the run — without one, a
+   * workflow computes an answer into its own context and stops there.
+   */
+  const addSinkNode = (type: 'note' | 'task', defaultLabel: string) => {
+    const newNode: Node = {
+      id: `${type}-${Date.now()}`,
+      type,
+      data: { label: nodeName || defaultLabel, content: '' },
       position: {
         x: Math.random() * 400 + 100,
         y: Math.random() * 300 + 150,
@@ -543,6 +567,12 @@ export function WorkflowEditor({ workflowId: _workflowId, initialWorkflow, onSav
             </button>
             <button onClick={addAgentNode} className="add-node-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--spacing-xs)' }}>
               <Bot size={14} /> Agent
+            </button>
+            <button onClick={() => addSinkNode('note', 'Save note')} className="add-node-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--spacing-xs)' }}>
+              <StickyNote size={14} /> Save Note
+            </button>
+            <button onClick={() => addSinkNode('task', 'Create task')} className="add-node-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--spacing-xs)' }}>
+              <CheckSquare size={14} /> Create Task
             </button>
             <button onClick={addEndNode} className="add-node-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--spacing-xs)' }}>
               <Flag size={14} /> End Node

@@ -1,7 +1,18 @@
 import Database from 'better-sqlite3';
-import { Routine } from '../types';
+import { Routine, RoutineOutput } from '../types';
 import { getDatabase } from '../services/database';
+import { safeJsonParseOptional } from '../utils/safeJson';
 import { RoutineRow } from './row-types';
+
+/**
+ * A routine whose output JSON is unreadable must still load — losing the
+ * delivery target is a degradation, but dropping the whole routine would stop
+ * it running at all.
+ */
+function parseRoutineOutput(row: RoutineRow): RoutineOutput | undefined {
+  if (!row.output) return undefined;
+  return safeJsonParseOptional<RoutineOutput>(row.output, `routine:${row.id}:output`);
+}
 
 export class RoutineRepository {
   private db: Database.Database;
@@ -20,7 +31,7 @@ export class RoutineRepository {
   getByProjectId(projectId: string): Routine[] {
     const rows = this.db.prepare(`
       SELECT id, project_id, name, description, workflow_id, cron_schedule, enabled,
-             last_run, next_run, pinned, last_status, last_error, consecutive_failures,
+             last_run, next_run, pinned, last_status, last_error, consecutive_failures, output,
              created_at, updated_at
       FROM routines
       WHERE project_id = ?
@@ -41,6 +52,7 @@ export class RoutineRepository {
       lastStatus: row.last_status ?? undefined,
       lastError: row.last_error ?? undefined,
       consecutiveFailures: row.consecutive_failures ?? 0,
+      output: parseRoutineOutput(row),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -49,7 +61,7 @@ export class RoutineRepository {
   getById(id: string): Routine | null {
     const row = this.db.prepare(`
       SELECT id, project_id, name, description, workflow_id, cron_schedule, enabled,
-             last_run, next_run, pinned, last_status, last_error, consecutive_failures,
+             last_run, next_run, pinned, last_status, last_error, consecutive_failures, output,
              created_at, updated_at
       FROM routines
       WHERE id = ?
@@ -71,6 +83,7 @@ export class RoutineRepository {
       lastStatus: row.last_status ?? undefined,
       lastError: row.last_error ?? undefined,
       consecutiveFailures: row.consecutive_failures ?? 0,
+      output: parseRoutineOutput(row),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -83,7 +96,7 @@ export class RoutineRepository {
     const now = Date.now();
     const rows = this.db.prepare(`
       SELECT id, project_id, name, description, workflow_id, cron_schedule, enabled,
-             last_run, next_run, pinned, last_status, last_error, consecutive_failures,
+             last_run, next_run, pinned, last_status, last_error, consecutive_failures, output,
              created_at, updated_at
       FROM routines
       WHERE enabled = 1 AND next_run <= ?
@@ -104,6 +117,7 @@ export class RoutineRepository {
       lastStatus: row.last_status ?? undefined,
       lastError: row.last_error ?? undefined,
       consecutiveFailures: row.consecutive_failures ?? 0,
+      output: parseRoutineOutput(row),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -121,8 +135,8 @@ export class RoutineRepository {
 
     this.db.prepare(`
       INSERT INTO routines (id, project_id, name, description, workflow_id, cron_schedule,
-                            enabled, last_run, next_run, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            enabled, last_run, next_run, output, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       data.projectId,
@@ -133,6 +147,7 @@ export class RoutineRepository {
       data.enabled ? 1 : 0,
       data.lastRun || null,
       data.nextRun || null,
+      data.output ? JSON.stringify(data.output) : null,
       now,
       now
     );
@@ -140,7 +155,16 @@ export class RoutineRepository {
     return this.getById(id)!;
   }
 
-  update(id: string, data: Partial<Omit<Routine, 'id' | 'projectId' | 'createdAt'>>): Routine | null {
+  /**
+   * `output: null` clears the delivery target, which `undefined` cannot express
+   * — undefined means "leave it alone" for every other field here.
+   */
+  update(
+    id: string,
+    data: Partial<Omit<Routine, 'id' | 'projectId' | 'createdAt' | 'output'>> & {
+      output?: RoutineOutput | null;
+    }
+  ): Routine | null {
     const routine = this.getById(id);
     if (!routine) return null;
 
@@ -178,6 +202,11 @@ export class RoutineRepository {
     if (data.nextRun !== undefined) {
       updates.push('next_run = ?');
       params.push(data.nextRun);
+    }
+    if (data.output !== undefined) {
+      // `null` clears the target; a value sets it.
+      updates.push('output = ?');
+      params.push(data.output ? JSON.stringify(data.output) : null);
     }
 
     if (updates.length > 0) {

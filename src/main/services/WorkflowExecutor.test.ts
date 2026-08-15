@@ -29,9 +29,17 @@ vi.mock('./ai', () => ({
 vi.mock('./appStateLoader', () => ({
   loadAppState: vi.fn().mockReturnValue({}),
 }));
+const { projectRepoMock } = vi.hoisted(() => ({
+  projectRepoMock: {
+    createNote: vi.fn(() => ({ id: 'note-1' })),
+    createTask: vi.fn(() => ({ id: 'task-1' })),
+  },
+}));
+
 vi.mock('../repositories', () => ({
   getAgentRepository: vi.fn(),
   getSettingsRepository: vi.fn(),
+  getProjectRepository: () => projectRepoMock,
 }));
 
 import { WorkflowExecutor } from './WorkflowExecutor';
@@ -415,5 +423,89 @@ describe('WorkflowExecutor agent node — project scope', () => {
 
     expect(result.success).toBe(true);
     expect(capturedProjectId).toBe('proj-workflow-own');
+  });
+});
+
+/**
+ * Sink nodes are the only node types that leave the workflow — every other
+ * type computes into the run's context, which is why a scheduled routine could
+ * previously produce an answer and deliver it nowhere a person would look.
+ */
+describe('WorkflowExecutor sink nodes', () => {
+  beforeEach(() => {
+    projectRepoMock.createNote.mockClear();
+    projectRepoMock.createTask.mockClear();
+  });
+
+  const sinkWorkflow = (type: string, data: Record<string, unknown>) =>
+    makeWorkflow({
+      dagDefinition: {
+        nodes: [{ id: 'sink', type, position: { x: 0, y: 0 }, data }],
+        edges: [],
+      },
+    });
+
+  it('interpolates a prior node result into the delivered content', async () => {
+    const executor = new WorkflowExecutor();
+    const result = await executor.executeWorkflow(
+      makeWorkflow({
+        dagDefinition: {
+          nodes: [
+            { id: 'n1', type: 'action', position: { x: 0, y: 0 }, data: {} },
+            { id: 'sink', type: 'note', position: { x: 1, y: 0 }, data: { content: 'result: ${n1}' } },
+          ],
+          edges: [{ id: 'e1', source: 'n1', target: 'sink' }],
+        },
+      })
+    );
+
+    expect(result.success).toBe(true);
+    const [, noteArg] = projectRepoMock.createNote.mock.calls[0];
+    expect((noteArg as { content: string }).content).not.toContain('${n1}');
+  });
+
+  it('scopes a note to the workflow project', async () => {
+    const executor = new WorkflowExecutor();
+    await executor.executeWorkflow(
+      makeWorkflow({
+        projectId: 'proj-own',
+        dagDefinition: {
+          nodes: [{ id: 'sink', type: 'note', position: { x: 0, y: 0 }, data: { content: 'hi' } }],
+          edges: [],
+        },
+      })
+    );
+
+    expect(projectRepoMock.createNote).toHaveBeenCalledWith('proj-own', expect.objectContaining({ content: 'hi' }));
+  });
+
+  it('creates a task', async () => {
+    const executor = new WorkflowExecutor();
+    const result = await executor.executeWorkflow(sinkWorkflow('task', { content: 'Move the shoot indoors' }));
+
+    expect(result.success).toBe(true);
+    expect(projectRepoMock.createTask).toHaveBeenCalledWith(
+      'proj-1',
+      expect.objectContaining({ content: 'Move the shoot indoors' })
+    );
+  });
+
+  it('fails rather than writing a blank when content resolves to nothing', async () => {
+    const executor = new WorkflowExecutor();
+    const result = await executor.executeWorkflow(sinkWorkflow('note', { content: '   ' }));
+
+    expect(result.success).toBe(false);
+    expect(projectRepoMock.createNote).not.toHaveBeenCalled();
+  });
+
+  it('refuses a message node — channel delivery is not supported yet', async () => {
+    const executor = new WorkflowExecutor();
+    const result = await executor.executeWorkflow(sinkWorkflow('message', { content: 'hi' }));
+
+    // The `messages` CHECK admits only human/agent senders, so there is no
+    // honest sender for workflow output. Until that changes the node type must
+    // not exist — a graph carrying one fails now rather than at 9am.
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Unknown node type/);
   });
 });

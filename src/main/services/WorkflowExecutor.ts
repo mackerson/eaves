@@ -19,7 +19,7 @@ import { getCodeExecutor } from './CodeExecutor';
 import { ExecutionLanguage } from '../types/code-execution';
 import { streamAIResponse } from './ai';
 import { emitAgentSpend, trackUsage, createStreamMetrics } from './streamEventRouter';
-import { getAgentRepository, getSettingsRepository } from '../repositories';
+import { getAgentRepository, getSettingsRepository, getProjectRepository } from '../repositories';
 import { resolveSystemAgent } from './systemAgent';
 
 /** Dynamic key-value context passed between workflow nodes */
@@ -511,6 +511,14 @@ export class WorkflowExecutor {
 
         case 'webscraper':
           output = await this.executeWebScraperNode(node, context);
+          break;
+
+        case 'note':
+          output = await this.executeNoteNode(node, context, state);
+          break;
+
+        case 'task':
+          output = await this.executeTaskNode(node, context, state);
           break;
 
         case 'start':
@@ -1196,6 +1204,61 @@ export class WorkflowExecutor {
   /**
    * Web scraper node - fetches and extracts text from a URL
    */
+  /**
+   * Resolve a sink node's `content`, which is the whole point of the node —
+   * an unresolved or empty body means the run delivered nothing, so treat it
+   * as a failure rather than posting a blank.
+   */
+  private resolveSinkContent(node: WorkflowNode, context: WorkflowContext): string {
+    const { content } = node.data as unknown as { content?: string };
+
+    if (!content) {
+      throw new Error(`${node.type} node missing content`);
+    }
+
+    const resolved = this.resolveVariables(content, context).trim();
+
+    if (!resolved) {
+      throw new Error(
+        `${node.type} node resolved to empty content — check the \${node-id} references in it`
+      );
+    }
+
+    return resolved;
+  }
+
+  private async executeNoteNode(
+    node: WorkflowNode,
+    context: WorkflowContext,
+    state: ExecutionState
+  ): Promise<unknown> {
+    const content = this.resolveSinkContent(node, context);
+    const { title } = node.data as unknown as { title?: string };
+
+    const note = getProjectRepository().createNote(state.workflow.projectId, {
+      content,
+      title: title ? this.resolveVariables(title, context) : undefined,
+    });
+
+    logger.info('[WorkflowExecutor] Note node created note', { noteId: note.id, nodeId: node.id });
+
+    return { noteId: note.id, content };
+  }
+
+  private async executeTaskNode(
+    node: WorkflowNode,
+    context: WorkflowContext,
+    state: ExecutionState
+  ): Promise<unknown> {
+    const content = this.resolveSinkContent(node, context);
+
+    const task = getProjectRepository().createTask(state.workflow.projectId, { content });
+
+    logger.info('[WorkflowExecutor] Task node created task', { taskId: task.id, nodeId: node.id });
+
+    return { taskId: task.id, content };
+  }
+
   private async executeWebScraperNode(node: WorkflowNode, context: WorkflowContext): Promise<unknown> {
     const data = node.data as unknown as WebScraperNodeData;
     const { url, timeout = 10000 } = data;

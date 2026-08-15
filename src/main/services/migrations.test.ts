@@ -10,7 +10,13 @@ vi.mock('./logger', () => ({
 import { migrations, runMigrations } from './migrations';
 import { legacyMigrations } from './__fixtures__/legacyChain';
 
-const HEAD = 75;
+// The newest migration's version. The v75 baseline is still where a fresh
+// database's schema comes from; anything after it is an incremental migration
+// on top, so HEAD moves and the baseline does not.
+const HEAD = 76;
+
+/** The squashed baseline every fresh database starts from. */
+const BASELINE = 75;
 
 // The schema the retired v52..v74 chain produced, frozen as executable SQL.
 // It is the only surviving witness to what the squashed migrations did, and
@@ -119,8 +125,24 @@ function freshDatabase(): Database.Database {
   return db;
 }
 
+/**
+ * A database with the v75 baseline applied and nothing after it.
+ *
+ * The parity claim below is about the *baseline* — that it reproduces what the
+ * retired v52..v74 chain built. Migrations added after it are supposed to
+ * change the schema, so comparing a fully-migrated database against the v74
+ * fixture would fail for exactly the reason it should.
+ */
+function baselineDatabase(): Database.Database {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = OFF');
+  migrations.find(m => m.version === BASELINE)!.migrate(db);
+  db.pragma('foreign_keys = ON');
+  return db;
+}
+
 describe('runMigrations (baseline v75)', () => {
-  it('builds the whole schema on a fresh DB and stamps user_version=75', () => {
+  it('builds the whole schema on a fresh DB and stamps user_version at HEAD', () => {
     const db = freshDatabase();
 
     expect(db.pragma('user_version', { simple: true })).toBe(HEAD);
@@ -128,8 +150,15 @@ describe('runMigrations (baseline v75)', () => {
     db.close();
   });
 
-  it('is one migration — the squash left nothing incremental behind', () => {
-    expect(migrations.map(m => m.version)).toEqual([HEAD]);
+  it('starts from the squashed baseline and only moves forward from there', () => {
+    const versions = migrations.map(m => m.version);
+
+    expect(versions[0]).toBe(BASELINE);
+    expect(versions[versions.length - 1]).toBe(HEAD);
+    // Strictly ascending and unique — two migrations at one version would let
+    // the runner skip whichever it saw second.
+    expect([...versions].sort((a, b) => a - b)).toEqual(versions);
+    expect(new Set(versions).size).toBe(versions.length);
   });
 
   it('does not create any of the retired chat_* / milestones / deadlines tables', () => {
@@ -160,7 +189,7 @@ describe('runMigrations (baseline v75)', () => {
  */
 describe('v75 baseline parity with the v52..v74 chain', () => {
   it('reproduces the chain-built schema object for object', () => {
-    const fresh = freshDatabase();
+    const fresh = baselineDatabase();
     const chain = new Database(':memory:');
     chain.exec(V74_FIXTURE);
 
@@ -177,7 +206,7 @@ describe('v75 baseline parity with the v52..v74 chain', () => {
     chain.close();
   });
 
-  it('upgrades a v74 database without touching its schema or its rows', () => {
+  it('upgrades a v74 database without disturbing its rows', () => {
     const db = v74Database();
     db.prepare(`INSERT INTO projects (id, name, description, created_at) VALUES ('p-1','P','',1)`).run();
     db.prepare(`INSERT INTO channels (id, name, type, project_id, created_at) VALUES ('c-1','general','public','p-1',1)`).run();
@@ -190,7 +219,16 @@ describe('v75 baseline parity with the v52..v74 chain', () => {
     runMigrations(db, 74);
 
     expect(db.pragma('user_version', { simple: true })).toBe(HEAD);
-    expect(schemaOf(db)).toEqual(before);
+    // The baseline itself is a no-op on a v74 database; only the migrations
+    // added after it may change the schema, and only additively. Anything
+    // dropped or rebuilt here would be data loss on a live database.
+    const after = schemaOf(db);
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+    for (const [name, sql] of before) {
+      if (name === 'table routines') continue; // gained `output` in v76
+      expect(`${name}: ${after.get(name)}`).toBe(`${name}: ${sql}`);
+    }
+    expect(columnNames(db, 'routines')).toContain('output');
     expect(db.prepare('SELECT content FROM messages WHERE id = ?').get('m-1')).toEqual({ content: 'still here' });
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);
@@ -645,7 +683,7 @@ describe('converging a database from any older build', () => {
     expect(LEGACY_VERSIONS).toHaveLength(23);
   });
 
-  it.each(LEGACY_VERSIONS)('brings a v%i database to the v75 baseline exactly', (version) => {
+  it.each(LEGACY_VERSIONS)('brings a v%i database to the HEAD schema exactly', (version) => {
     const db = legacyDatabase(version);
     expect(db.pragma('user_version', { simple: true })).toBe(version);
 

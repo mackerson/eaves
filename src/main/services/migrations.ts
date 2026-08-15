@@ -941,6 +941,21 @@ export const migrations: Migration[] = [
     requiresForeignKeysOff: true,
     migrate: createBaselineSchema,
   },
+  {
+    version: 76,
+    description: 'Routines carry an output target (where a run delivers its result)',
+    migrate: (db) => {
+      // Nullable and untouched for existing rows: a routine without a target
+      // keeps behaving exactly as before — it runs, and its result stays in
+      // the run record.
+      const hasOutput = (db.pragma('table_info(routines)') as Array<{ name: string }>)
+        .some(column => column.name === 'output');
+
+      if (!hasOutput) {
+        db.prepare('ALTER TABLE routines ADD COLUMN output TEXT').run();
+      }
+    },
+  },
 ];
 
 /**

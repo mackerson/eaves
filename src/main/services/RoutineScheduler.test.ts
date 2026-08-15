@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   settingsGet: vi.fn(),
   settingsUpdate: vi.fn(),
   executeWorkflow: vi.fn(),
+  createNote: vi.fn(),
+  createTask: vi.fn(),
 }));
 
 vi.mock('../repositories', () => ({
@@ -38,6 +40,10 @@ vi.mock('../repositories', () => ({
   getSettingsRepository: () => ({
     get: mocks.settingsGet,
     update: mocks.settingsUpdate,
+  }),
+  getProjectRepository: () => ({
+    createNote: mocks.createNote,
+    createTask: mocks.createTask,
   }),
 }));
 
@@ -260,5 +266,112 @@ describe('RoutineScheduler next-run scheduling', () => {
     expect(nextRun).toBeGreaterThan(completionTime);
     // And specifically not the stale start-based value the old code produced.
     expect(nextRun).not.toBe(start + 60000);
+  });
+});
+
+/**
+ * A routine used to run correctly and deliver nowhere — its result went into
+ * the run record and no further, which is why "make me a daily weather
+ * routine" had no good answer to "and where should the output go?".
+ */
+describe('RoutineScheduler output delivery', () => {
+  let scheduler: RoutineScheduler;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    scheduler = new RoutineScheduler();
+    mocks.getWorkflowById.mockReturnValue(makeWorkflow());
+    mocks.settingsGet.mockReturnValue({ routinesPaused: false });
+  });
+
+  const runWith = async (routine: Routine, outputs: Record<string, unknown>) => {
+    mocks.getById.mockReturnValue(routine);
+    mocks.executeWorkflow.mockResolvedValueOnce(makeExecutionResult({ outputs }));
+    return scheduler.executeRoutine(routine.id);
+  };
+
+  it('writes a note titled after the routine', async () => {
+    const outcome = await runWith(
+      makeRoutine({ name: 'Weather Log', output: { type: 'note' } }),
+      { n1: { response: 'Sunny, high of 88.' } },
+    );
+
+    expect(outcome.status).toBe('success');
+    expect(mocks.createNote).toHaveBeenCalledWith('proj-1', {
+      content: 'Sunny, high of 88.',
+      title: 'Weather Log',
+    });
+  });
+
+  it('creates a task', async () => {
+    await runWith(makeRoutine({ output: { type: 'task' } }), { n1: { response: 'Move the shoot indoors.' } });
+
+    expect(mocks.createTask).toHaveBeenCalledWith('proj-1', { content: 'Move the shoot indoors.' });
+  });
+
+  it('delivers the last node to produce text, not the first', async () => {
+    await runWith(
+      makeRoutine({ output: { type: 'note' } }),
+      { fetch: { response: 'raw json blob' }, summarize: { response: 'Sunny, high of 88.' } },
+    );
+
+    expect(mocks.createNote).toHaveBeenCalledWith('proj-1', expect.objectContaining({ content: 'Sunny, high of 88.' }));
+  });
+
+  it('ignores pass-through markers when picking the text to deliver', async () => {
+    await runWith(
+      makeRoutine({ output: { type: 'note' } }),
+      { summarize: { response: 'Sunny, high of 88.' }, 'end-n': { passed: true, type: 'end' } },
+    );
+
+    // An end marker completing last must not displace the real answer.
+    expect(mocks.createNote).toHaveBeenCalledWith('proj-1', expect.objectContaining({ content: 'Sunny, high of 88.' }));
+  });
+
+  it('delivers nothing when the routine has no output target', async () => {
+    const outcome = await runWith(makeRoutine(), { n1: { response: 'Sunny.' } });
+
+    expect(outcome.status).toBe('success');
+    expect(mocks.createNote).not.toHaveBeenCalled();
+    expect(mocks.createTask).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when the run produced no text', async () => {
+    await runWith(makeRoutine({ output: { type: 'note' } }), { 'end-n': { passed: true, type: 'end' } });
+
+    expect(mocks.createNote).not.toHaveBeenCalled();
+  });
+
+  it('does not deliver the output of a failed run', async () => {
+    mocks.getById.mockReturnValue(makeRoutine({ output: { type: 'note' } }));
+    mocks.executeWorkflow.mockResolvedValueOnce(
+      makeExecutionResult({ success: false, error: 'boom', outputs: { n1: { response: 'half an answer' } } }),
+    );
+
+    const outcome = await scheduler.executeRoutine('routine-1');
+
+    expect(outcome.status).toBe('failure');
+    expect(mocks.createNote).not.toHaveBeenCalled();
+  });
+
+  it('still reports the run as successful when delivery throws', async () => {
+    mocks.createNote.mockImplementation(() => {
+      throw new Error('note content cannot be empty');
+    });
+
+    const outcome = await runWith(makeRoutine({ output: { type: 'note' } }), { n1: { response: 'Sunny.' } });
+
+    // The routine ran. Blaming it for a delivery fault would trip the
+    // consecutive-failure badge on an otherwise healthy routine.
+    expect(outcome.status).toBe('success');
+  });
+
+  it('truncates an oversized result rather than delivering all of it', async () => {
+    await runWith(makeRoutine({ output: { type: 'note' } }), { n1: { response: 'x'.repeat(9000) } });
+
+    const [, noteArg] = mocks.createNote.mock.calls[0];
+    const { content } = noteArg as { content: string };
+    expect(content.length).toBeLessThan(9000);
+    expect(content).toMatch(/truncated/);
   });
 });

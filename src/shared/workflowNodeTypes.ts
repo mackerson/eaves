@@ -18,6 +18,16 @@ export const WORKFLOW_NODE_TYPES = [
   'start',
   'end',
   'action',
+  // Sinks. Every other node type computes; without these a workflow could
+  // reason its way to an answer and then have nowhere to put it, which left
+  // scheduled routines writing into a run record nobody reads.
+  //
+  // Posting to a channel is deliberately absent: the `messages` CHECK admits
+  // only 'human' and 'agent', so a workflow has no honest sender to write as.
+  // Offering the node before that is fixed would just move the dead end from
+  // "no output exists" to "the output fails at 9am".
+  'note',
+  'task',
 ] as const;
 
 export type WorkflowNodeType = typeof WORKFLOW_NODE_TYPES[number];
@@ -118,6 +128,18 @@ export const WORKFLOW_NODE_SPECS: Record<WorkflowNodeType, NodeTypeSpec> = {
       { name: 'url', type: 'string', required: true },
       { name: 'selector', type: 'string' },
       { name: 'timeout', type: 'number (ms)', note: 'default 10000' },
+    ],
+  },
+  note: {
+    summary: 'save a note in the project',
+    fields: [
+      { name: 'content', type: 'string', required: true, note: 'supports ${node-id} references' },
+    ],
+  },
+  task: {
+    summary: 'create a task in the project',
+    fields: [
+      { name: 'content', type: 'string', required: true, note: 'supports ${node-id} references' },
     ],
   },
 };

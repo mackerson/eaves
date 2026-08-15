@@ -1,4 +1,10 @@
-import { getRoutineRepository, getWorkflowRepository, getSettingsRepository } from '../repositories';
+import {
+  getRoutineRepository,
+  getWorkflowRepository,
+  getSettingsRepository,
+  getProjectRepository,
+} from '../repositories';
+import { Routine } from '../types';
 import { getWorkflowExecutor } from './WorkflowExecutor';
 import { logger } from './logger';
 import { getActiveWorkRegistry } from './ActiveWorkRegistry';
@@ -255,6 +261,84 @@ export class RoutineScheduler {
     return { rescheduled };
   }
 
+  /**
+   * Reduce a run's per-node outputs to the text worth delivering.
+   *
+   * The last node to complete is the one that produced the answer, so its text
+   * wins. Node outputs are objects rather than strings — an agent node returns
+   * `{ response }`, a sink returns `{ content }` — so unwrap the known shapes
+   * before falling back to JSON, which is a legible last resort rather than
+   * the normal case.
+   */
+  private static extractText(value: unknown): string {
+    if (typeof value === 'string') return value.trim();
+    if (!value || typeof value !== 'object') return '';
+
+    const record = value as Record<string, unknown>;
+    for (const key of ['response', 'content', 'text', 'output', 'result']) {
+      const candidate = record[key];
+      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+    }
+
+    // A marker node ({ passed: true }) carries no result; delivering it would
+    // post noise in place of an answer.
+    if (record.passed === true) return '';
+
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return '';
+    }
+  }
+
+  /** The delivered body, or '' when the run produced nothing worth sending. */
+  private static summarizeOutputs(outputs: Record<string, unknown>): string {
+    const texts = Object.values(outputs ?? {})
+      .map(value => RoutineScheduler.extractText(value))
+      .filter(Boolean);
+
+    const last = texts[texts.length - 1] ?? '';
+    const LIMIT = 4000;
+    return last.length > LIMIT ? `${last.slice(0, LIMIT)}\n\n… (truncated)` : last;
+  }
+
+  /**
+   * Deliver a successful run's result to the routine's configured target.
+   *
+   * Never throws into the run: the routine *did* run, and reporting it failed
+   * because delivery failed would misattribute the fault and trip the
+   * consecutive-failure badge on an otherwise healthy routine.
+   */
+  private async deliverOutput(routine: Routine, outputs: Record<string, unknown>): Promise<void> {
+    const output = routine.output;
+    if (!output) return;
+
+    const content = RoutineScheduler.summarizeOutputs(outputs);
+    if (!content) {
+      logger.info('[RoutineScheduler] Run produced no deliverable output', { routineId: routine.id });
+      return;
+    }
+
+    try {
+      if (output.type === 'note') {
+        getProjectRepository().createNote(routine.projectId, { content, title: routine.name });
+      } else if (output.type === 'task') {
+        getProjectRepository().createTask(routine.projectId, { content });
+      }
+
+      logger.info('[RoutineScheduler] Delivered routine output', {
+        routineId: routine.id,
+        target: output.type,
+      });
+    } catch (error) {
+      logger.error('[RoutineScheduler] Failed to deliver routine output', {
+        routineId: routine.id,
+        target: output.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   private async checkAndExecuteDueRoutines(): Promise<void> {
     try {
       // Short-circuit rather than stopping the interval, so scheduler status and
@@ -430,6 +514,14 @@ export class RoutineScheduler {
             ...(result.success ? {} : { error: result.error ?? 'Workflow execution failed' }),
           }
         );
+
+        // Deliver the result somewhere a person will see it. Without this a
+        // routine could run correctly for weeks with its output visible only
+        // in the run record — which is what made "create a daily weather
+        // routine" have no good answer to "and where should it go?".
+        if (result.success && routine.output) {
+          await this.deliverOutput(routine, result.outputs as Record<string, unknown>);
+        }
 
         outcome = result.success
           ? { status: 'success', execution }
