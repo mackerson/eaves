@@ -113,8 +113,10 @@ release/src/shared/*.js
 
 # Plugins (symlinked from sibling repos via setup-plugins.sh)
 # Run `yarn setup:plugins` to clone and link plugin repos
-plugins/
-!plugins/README.md
+# Leading slash anchors this to the repo root: unanchored, it also matched
+# src/renderer/components/plugins/, so new files there were silently ignored.
+/plugins/
+!/plugins/README.md
 
 # Prevent compiled JS files in source directories
 src/shared/*.js
