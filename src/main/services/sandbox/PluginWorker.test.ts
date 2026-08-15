@@ -163,6 +163,40 @@ describe('PluginWorker', () => {
     });
   });
 
+  describe('exit handling', () => {
+    async function running(): Promise<PluginWorker> {
+      const worker = new PluginWorker(makeConfig());
+      const startPromise = worker.start();
+      lastMockWorker!.emit('message', readyMessage());
+      await startPromise;
+      return worker;
+    }
+
+    it('treats an unrequested exit code 0 as a clean stop, not a crash', async () => {
+      const worker = await running();
+      const onCrash = vi.fn();
+      worker.on('crash', onCrash);
+
+      // A plugin whose entry simply returns exits 0. Calling that a crash put
+      // a scary line in the log and inflated restartCount for normal exits.
+      lastMockWorker!.emit('exit', 0);
+
+      expect(onCrash).not.toHaveBeenCalled();
+      expect(worker.getState()).toBe('stopped');
+    });
+
+    it('still reports a non-zero exit as a crash', async () => {
+      const worker = await running();
+      const onCrash = vi.fn();
+      worker.on('crash', onCrash);
+
+      lastMockWorker!.emit('exit', 1);
+
+      expect(onCrash).toHaveBeenCalledWith(1);
+      expect(worker.getState()).toBe('crashed');
+    });
+  });
+
   describe('executeTool', () => {
     async function startedWorker(): Promise<PluginWorker> {
       const worker = new PluginWorker(makeConfig());

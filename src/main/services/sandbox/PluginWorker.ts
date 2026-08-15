@@ -371,12 +371,21 @@ export class PluginWorker extends EventEmitter {
     this.stopHealthChecks();
     this.rpcCorrelator.cancelAll('Worker exited');
 
-    if (this.state !== 'stopping' && this.state !== 'stopped') {
+    const stopping = this.state === 'stopping' || this.state === 'stopped';
+
+    // Exit code 0 is a clean exit, whether or not we asked for it — a plugin
+    // whose entry simply returns is not a crash, and reporting it as one
+    // inflated restartCount and put a scary line in the log for normal
+    // shutdown. Only a non-zero code is a crash.
+    if (!stopping && code !== 0) {
       this.state = 'crashed';
       this.restartCount++;
       logger.error(`[PluginWorker] Plugin ${this.config.pluginId} crashed with code ${code}`);
       this.emit('crash', code);
     } else {
+      if (!stopping) {
+        logger.info(`[PluginWorker] Plugin ${this.config.pluginId} exited cleanly`);
+      }
       this.state = 'stopped';
     }
 
