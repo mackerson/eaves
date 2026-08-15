@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToastStore } from '@/stores';
 import { ConfigurePluginModal } from '@/components/modals/ConfigurePluginModal';
+import { ConfirmDialog } from '@/components/modals/ConfirmDialog';
 import { AlertTriangle, Shield, ShieldCheck } from 'lucide-react';
 
 interface Plugin {
@@ -39,6 +40,7 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [loading, setLoading] = useState(true);
   const [configuringPluginId, setConfiguringPluginId] = useState<string | null>(null);
+  const [uninstallTarget, setUninstallTarget] = useState<Plugin | null>(null);
   const [trustedPlugins, setTrustedPlugins] = useState<Set<string>>(getTrustedPlugins);
   const showToast = useToastStore((state) => state.showToast);
 
@@ -90,6 +92,31 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
     } catch (error: any) {
       console.error('Failed to toggle plugin:', error);
       showToast(error.message || 'Failed to toggle plugin', 'error');
+    }
+  };
+
+  // Only user-source plugins can be uninstalled — bundled ones ship with the
+  // app and would reappear on the next launch.
+  const handleUninstallPlugin = async (plugin: Plugin) => {
+    try {
+      const result = await window.electron.uninstallPlugin(plugin.id);
+      if (!result?.success) {
+        showToast(result?.error || 'Failed to uninstall plugin', 'error');
+        return;
+      }
+      // Trust is keyed by plugin id and outlives the install otherwise, so a
+      // later reinstall of the same id would silently inherit it.
+      if (trustedPlugins.has(plugin.id)) {
+        const remaining = new Set(trustedPlugins);
+        remaining.delete(plugin.id);
+        setTrustedPlugins(remaining);
+        saveTrustedPlugins(remaining);
+      }
+      showToast(`${plugin.name} uninstalled`, 'success');
+      await loadPlugins();
+    } catch (error: any) {
+      console.error('Failed to uninstall plugin:', error);
+      showToast(error.message || 'Failed to uninstall plugin', 'error');
     }
   };
 
@@ -270,6 +297,17 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
                       >
                         {plugin.enabled ? 'Disable' : 'Enable'}
                       </Button>
+                      {isUserPlugin(plugin) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setUninstallTarget(plugin)}
+                          title="Remove this plugin from your computer"
+                        >
+                          Uninstall
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -296,6 +334,21 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
               // Reload plugins list to reflect any changes
               loadPlugins();
             }
+          }}
+        />
+      )}
+
+      {uninstallTarget && (
+        <ConfirmDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setUninstallTarget(null); }}
+          title={`Uninstall ${uninstallTarget.name}?`}
+          message={`This removes ${uninstallTarget.name} from your computer, along with its stored data and the permissions you granted it. You can install it again from the Marketplace.`}
+          confirmLabel="Uninstall"
+          onConfirm={() => {
+            const target = uninstallTarget;
+            setUninstallTarget(null);
+            handleUninstallPlugin(target);
           }}
         />
       )}

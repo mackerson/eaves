@@ -6,6 +6,9 @@ interface ConfirmDialogProps {
   onOpenChange: (open: boolean) => void;
   title?: string;
   message: string;
+  /** Label for the destructive action. Defaults to 'Delete'; name the actual
+   *  verb when the action isn't a deletion (e.g. 'Uninstall'). */
+  confirmLabel?: string;
   onConfirm: () => void;
 }
 
@@ -14,6 +17,7 @@ export function ConfirmDialog({
   onOpenChange,
   title = 'Confirm Action',
   message,
+  confirmLabel = 'Delete',
   onConfirm
 }: ConfirmDialogProps) {
   const handleConfirm = () => {
@@ -33,7 +37,7 @@ export function ConfirmDialog({
             Cancel
           </Button>
           <Button variant="destructive" onClick={handleConfirm}>
-            Delete
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
