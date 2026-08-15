@@ -546,11 +546,60 @@ function createPluginContext() {
 // Message Handler
 // ============================================================================
 
+type PluginModule = {
+  activate?: (ctx: unknown) => void | Promise<void>;
+  deactivate?: (ctx: unknown) => void | Promise<void>;
+};
+
+/**
+ * Set once activate() resolves, so the shutdown handler can reach the module
+ * and its context. deactivate is only called for a plugin that finished
+ * activating — a plugin whose activate threw never had a chance to take
+ * ownership of anything worth releasing.
+ */
+let activePlugin: { module: PluginModule; context: unknown } | null = null;
+
+/**
+ * The host waits 5s for a graceful exit (PluginWorker.stop), so deactivate gets
+ * a strictly smaller slice of that. It runs at most once, and a hook that
+ * throws or hangs is logged and stepped over: shutdown is also the path taken
+ * by disable, update, and uninstall, and plugin code must not be able to wedge
+ * any of them.
+ */
+const DEACTIVATE_TIMEOUT_MS = 3000;
+
+async function runDeactivate(): Promise<void> {
+  const active = activePlugin;
+  activePlugin = null;
+  if (!active || typeof active.module.deactivate !== 'function') return;
+
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      Promise.resolve(active.module.deactivate(active.context)),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`deactivate exceeded ${DEACTIVATE_TIMEOUT_MS}ms`)),
+          DEACTIVATE_TIMEOUT_MS
+        );
+        timer.unref?.();
+      }),
+    ]);
+  } catch (error) {
+    console.error(`[Plugin:${data.pluginId}] deactivate failed:`, error);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 parentPort?.on('message', async (message: MainToWorkerMessage) => {
   try {
     switch (message.type) {
       case 'plugin:shutdown':
-        // Cleanup and exit
+        // Give the plugin its deactivate hook before tearing anything down.
+        // Ordered ahead of cancelAll on purpose: deactivate's whole point is
+        // flushing state, which it does over RPC to the host.
+        await runDeactivate();
         rpcCorrelator.cancelAll('Shutdown');
         process.exit(0);
         break;
@@ -651,15 +700,15 @@ async function main(): Promise<void> {
     const context = createPluginContext();
 
     // Load the plugin module
-    const pluginModule = sandboxedRequire(data.entryPath) as {
-      activate?: (ctx: unknown) => void | Promise<void>;
-      deactivate?: (ctx: unknown) => void | Promise<void>;
-    };
+    const pluginModule = sandboxedRequire(data.entryPath) as PluginModule;
 
     // Activate the plugin
     if (typeof pluginModule.activate === 'function') {
       await pluginModule.activate(context);
     }
+
+    // Only now is the plugin eligible for deactivate on shutdown.
+    activePlugin = { module: pluginModule, context };
 
     // Signal ready
     const readyMessage: PluginReadyMessage = {
