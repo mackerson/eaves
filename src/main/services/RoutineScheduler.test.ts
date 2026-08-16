@@ -280,15 +280,44 @@ describe('RoutineScheduler output delivery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     scheduler = new RoutineScheduler();
-    mocks.getWorkflowById.mockReturnValue(makeWorkflow());
     mocks.settingsGet.mockReturnValue({ routinesPaused: false });
   });
 
-  const runWith = async (routine: Routine, outputs: Record<string, unknown>) => {
+  /**
+   * `nodeIds` defaults to the keys of `outputs`, i.e. the workflow really
+   * contains the nodes whose results the test hands over. Pass it explicitly
+   * to model the executor context holding something that is *not* a node.
+   */
+  const runWith = async (
+    routine: Routine,
+    outputs: Record<string, unknown>,
+    nodeIds: string[] = Object.keys(outputs),
+  ) => {
     mocks.getById.mockReturnValue(routine);
+    mocks.getWorkflowById.mockReturnValue(makeWorkflow({
+      dagDefinition: {
+        nodes: nodeIds.map(id => ({ id, type: 'action', position: { x: 0, y: 0 }, data: {} })),
+        edges: [],
+      },
+    }));
     mocks.executeWorkflow.mockResolvedValueOnce(makeExecutionResult({ outputs }));
     return scheduler.executeRoutine(routine.id);
   };
+
+  it('never delivers the run inputs the scheduler seeded the context with', async () => {
+    // executeWorkflow is given { routineId, routineName, scheduledTime }, and
+    // those land in the context alongside node results. Summarising over all
+    // of it made a workflow that produced no text deliver the routine's own
+    // name — defeating the "nothing to deliver" guard entirely.
+    const outcome = await runWith(
+      makeRoutine({ name: 'Weather Log', output: { type: 'note' } }),
+      { routineId: 'routine-1', routineName: 'Weather Log', scheduledTime: 123, n1: { passed: true } },
+      ['n1'],
+    );
+
+    expect(outcome.status).toBe('success');
+    expect(mocks.createNote).not.toHaveBeenCalled();
+  });
 
   it('writes a note titled after the routine', async () => {
     const outcome = await runWith(

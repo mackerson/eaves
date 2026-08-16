@@ -13,6 +13,7 @@ import {
   AgentNodeData,
   Agent,
 } from '../types';
+import { textFromResult } from '../utils/resultText';
 import { logger } from './logger';
 import { eventBus } from './EventBus';
 import { getCodeExecutor } from './CodeExecutor';
@@ -1338,7 +1339,15 @@ export class WorkflowExecutor {
           }
         }
 
-        return result !== undefined && result !== null ? String(result) : '';
+        if (result === undefined || result === null) return '';
+
+        // A bare ${node-id} resolves to that node's whole result, and every
+        // node that produces anything interesting produces an object — so
+        // String() rendered the placeholder the sink-node UI teaches as
+        // "[object Object]". Reach for the text the node actually produced.
+        if (typeof result === 'object') return textFromResult(result);
+
+        return String(result);
       });
     } else if (typeof value === 'object' && value !== null) {
       // Recursively resolve objects

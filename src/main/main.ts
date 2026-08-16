@@ -5,6 +5,7 @@ import { MODULE_SHIM_SCHEME, moduleShimRedirectTarget } from './protocols/module
 import { PLUGIN_BUNDLE_SCHEME } from './protocols/pluginBundle';
 import { migrateLegacyProfile } from './services/profileMigration';
 import { repairProfilePaths } from './services/repairProfilePaths';
+import { pruneCrashDumps } from './services/crashDumpRetention';
 import { loadAppState, initializeAppState } from './services/appStateLoader';
 import { registerCoreMemoryBackend, backfillCoreVectors } from './services/CoreMemoryBackend';
 import { ipcResult } from './utils/ipcValidation';
@@ -331,11 +332,19 @@ function createWindow() {
 // evidence at all. Collecting minidumps is the only way such a crash is
 // diagnosable after the fact.
 //
-// `uploadToServer: false` keeps them entirely local (userData/crashDumps).
-// Note a minidump is a memory image and can contain whatever the process held
-// at the time — conversation text, and in principle API keys. It never leaves
-// the machine, but treat the directory as sensitive.
+// `uploadToServer: false` keeps them entirely local. A minidump is a memory
+// image and can contain whatever the process held at the time — conversation
+// text, and in principle API keys.
+//
+// So they deliberately do NOT live under userData. `app:open-data-dir` opens
+// that directory and the settings UI calls it the thing to back up, which
+// would have swept memory images of the user's conversations into whatever
+// they back up to. Keeping dumps beside the profile rather than inside it
+// means "back up your data" stays true without also meaning "back up your
+// process memory".
+app.setPath('crashDumps', path.join(path.dirname(app.getPath('userData')), 'eaves-diagnostics'));
 crashReporter.start({ uploadToServer: false });
+pruneCrashDumps();
 
 // The main process cannot report its own abort, and `render-process-gone` on a
 // webContents only covers the renderer. This catches the GPU and utility

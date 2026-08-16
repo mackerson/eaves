@@ -4,6 +4,7 @@ import {
   getSettingsRepository,
   getProjectRepository,
 } from '../repositories';
+import { textFromResult } from '../utils/resultText';
 import { Routine } from '../types';
 import { getWorkflowExecutor } from './WorkflowExecutor';
 import { logger } from './logger';
@@ -271,30 +272,15 @@ export class RoutineScheduler {
    * the normal case.
    */
   private static extractText(value: unknown): string {
-    if (typeof value === 'string') return value.trim();
-    if (!value || typeof value !== 'object') return '';
-
-    const record = value as Record<string, unknown>;
-    for (const key of ['response', 'content', 'text', 'output', 'result']) {
-      const candidate = record[key];
-      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
-    }
-
-    // A marker node ({ passed: true }) carries no result; delivering it would
-    // post noise in place of an answer.
-    if (record.passed === true) return '';
-
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      return '';
-    }
+    return textFromResult(value);
   }
 
   /** The delivered body, or '' when the run produced nothing worth sending. */
-  private static summarizeOutputs(outputs: Record<string, unknown>): string {
-    const texts = Object.values(outputs ?? {})
-      .map(value => RoutineScheduler.extractText(value))
+  private static summarizeOutputs(outputs: Record<string, unknown>, nodeIds: string[]): string {
+    // Keyed on the workflow's node ids rather than everything in the context,
+    // which also holds the variables the scheduler seeded the run with.
+    const texts = nodeIds
+      .map(id => RoutineScheduler.extractText((outputs ?? {})[id]))
       .filter(Boolean);
 
     const last = texts[texts.length - 1] ?? '';
@@ -309,11 +295,15 @@ export class RoutineScheduler {
    * because delivery failed would misattribute the fault and trip the
    * consecutive-failure badge on an otherwise healthy routine.
    */
-  private async deliverOutput(routine: Routine, outputs: Record<string, unknown>): Promise<void> {
+  private async deliverOutput(
+    routine: Routine,
+    outputs: Record<string, unknown>,
+    nodeIds: string[],
+  ): Promise<void> {
     const output = routine.output;
     if (!output) return;
 
-    const content = RoutineScheduler.summarizeOutputs(outputs);
+    const content = RoutineScheduler.summarizeOutputs(outputs, nodeIds);
     if (!content) {
       logger.info('[RoutineScheduler] Run produced no deliverable output', { routineId: routine.id });
       return;
@@ -520,7 +510,15 @@ export class RoutineScheduler {
         // in the run record — which is what made "create a daily weather
         // routine" have no good answer to "and where should it go?".
         if (result.success && routine.output) {
-          await this.deliverOutput(routine, result.outputs as Record<string, unknown>);
+          // Only the nodes' own results. The executor's context also carries
+          // the variables seeded below (routineId, routineName, scheduledTime),
+          // and summarising over those made a workflow that produced no text
+          // deliver the routine's own name instead of nothing.
+          await this.deliverOutput(
+            routine,
+            result.outputs as Record<string, unknown>,
+            (workflow.dagDefinition?.nodes ?? []).map(node => node.id),
+          );
         }
 
         outcome = result.success

@@ -185,6 +185,18 @@ describe('PluginWorker', () => {
       expect(worker.getState()).toBe('stopped');
     });
 
+    it('fails an in-flight tool call when the worker exits cleanly mid-call', async () => {
+      const worker = await running();
+      const call = worker.executeTool('do-thing', {});
+
+      // Not a crash — but the call is just as dead, and waiting on the crash
+      // event alone left the caller blocked for the full 120s tool timeout
+      // with the worker already gone.
+      lastMockWorker!.emit('exit', 0);
+
+      await expect(call).rejects.toThrow(/exited during tool do-thing/);
+    });
+
     it('still reports a non-zero exit as a crash', async () => {
       const worker = await running();
       const onCrash = vi.fn();

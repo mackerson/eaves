@@ -462,6 +462,32 @@ describe('WorkflowExecutor sink nodes', () => {
     expect(result.success).toBe(true);
     const [, noteArg] = projectRepoMock.createNote.mock.calls[0];
     expect((noteArg as { content: string }).content).not.toContain('${n1}');
+    // Asserting only "the placeholder is gone" passed while the note read
+    // "result: [object Object]" — every node worth referencing outputs an
+    // object, so String() on it is exactly the wrong answer.
+    expect((noteArg as { content: string }).content).not.toContain('[object Object]');
+  });
+
+  it('interpolates the text of an object-valued node result', async () => {
+    const executor = new WorkflowExecutor();
+    const result = await executor.executeWorkflow(
+      makeWorkflow({
+        dagDefinition: {
+          nodes: [
+            { id: 'n1', type: 'action', position: { x: 0, y: 0 }, data: {} },
+            { id: 'sink', type: 'note', position: { x: 1, y: 0 }, data: { content: 'said: ${upstream}' } },
+          ],
+          edges: [{ id: 'e1', source: 'n1', target: 'sink' }],
+        },
+      }),
+      // Stands in for an agent node's { response, agentId, ... } shape, which
+      // is what every node worth referencing actually puts in the context.
+      { upstream: { response: 'the answer', agentId: 'a1' } }
+    );
+
+    expect(result.success).toBe(true);
+    const [, noteArg] = projectRepoMock.createNote.mock.calls[0];
+    expect((noteArg as { content: string }).content).toBe('said: the answer');
   });
 
   it('scopes a note to the workflow project', async () => {

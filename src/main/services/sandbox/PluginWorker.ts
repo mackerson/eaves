@@ -383,10 +383,16 @@ export class PluginWorker extends EventEmitter {
       logger.error(`[PluginWorker] Plugin ${this.config.pluginId} crashed with code ${code}`);
       this.emit('crash', code);
     } else {
+      this.state = 'stopped';
+
       if (!stopping) {
         logger.info(`[PluginWorker] Plugin ${this.config.pluginId} exited cleanly`);
+        // Clean, but nobody asked for it — so anything waiting on this worker
+        // is still waiting. Not a crash (no restart count, no error), but it
+        // has to be terminal for callers, or a tool call in flight blocks for
+        // the full 120s timeout with the worker already gone.
+        this.emit('exited', code);
       }
-      this.state = 'stopped';
     }
 
     this.worker = null;
@@ -514,6 +520,7 @@ export class PluginWorker extends EventEmitter {
         clearTimeout(timeout);
         this.removeListener('tool-result', onResult);
         this.removeListener('crash', onCrash);
+        this.removeListener('exited', onExited);
       };
 
       const timeout = setTimeout(() => {
@@ -537,15 +544,23 @@ export class PluginWorker extends EventEmitter {
         }
       };
 
-      // Without this, a worker that dies mid-call leaves the caller blocked
+      // Without these, a worker that dies mid-call leaves the caller blocked
       // for the full tool timeout (up to 120s) instead of failing promptly.
+      // Both endings have to be covered: a plugin that exits 0 while a call is
+      // in flight is not a crash, but the call is just as dead.
       const onCrash = () => {
         cleanup();
         reject(new Error(`Plugin ${this.config.pluginId} crashed during tool ${toolName} execution`));
       };
 
+      const onExited = () => {
+        cleanup();
+        reject(new Error(`Plugin ${this.config.pluginId} exited during tool ${toolName} execution`));
+      };
+
       this.on('tool-result', onResult);
       this.once('crash', onCrash);
+      this.once('exited', onExited);
 
       const message: ToolExecuteMessage = {
         type: 'tool:execute',
