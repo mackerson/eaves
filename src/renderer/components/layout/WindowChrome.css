@@ -38,3 +38,15 @@
 [data-custom-frame='true'] .window-chrome button {
   -webkit-app-region: no-drag;
 }
+
+/*
+ * The wizard is a `fixed inset-0` overlay that centres its card, reserving no
+ * space at the top — so on a window short enough for the card to fill it, the
+ * step indicator ended up under this bar, which is opaque and a drag region
+ * and therefore swallows the clicks too. Only the platforms that actually
+ * render the bar pay for the offset.
+ */
+[data-titlebar-overlay='true'] .oobe-root,
+[data-custom-frame='true'] .oobe-root {
+  padding-top: var(--topbar-height);
+}

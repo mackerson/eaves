@@ -15,9 +15,12 @@ import './WindowChrome.css';
  * those into the Window Controls Overlay.
  */
 export function WindowChrome() {
-  const platform = window.electron?.platform ?? 'linux';
+  const platform = window.electron?.platform;
 
-  if (platform === 'darwin') return null;
+  // No bridge means no window controls to drive — and the Linux branch below
+  // is the one that calls through `window.electron` unguarded, so defaulting
+  // to it was the one choice that could white-screen the pre-hydration state.
+  if (!platform || platform === 'darwin') return null;
 
   return (
     <div className="window-chrome">

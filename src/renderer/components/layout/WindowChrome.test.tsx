@@ -44,4 +44,15 @@ describe('WindowChrome', () => {
 
     expect(container.firstChild).toBeNull();
   });
+
+  it('renders nothing when the preload bridge is missing', () => {
+    delete (window as any).electron;
+
+    const { container } = render(<WindowChrome />);
+
+    // Assuming Linux here would mount WindowControls, which calls through
+    // window.electron unguarded — white-screening the one state that has no
+    // ErrorBoundary above it.
+    expect(container.firstChild).toBeNull();
+  });
 });

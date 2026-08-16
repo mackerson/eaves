@@ -91,7 +91,7 @@ export function OOBEWizard({ onComplete }: OOBEWizardProps) {
   }, [providerConfig, agentConfig, userName, onComplete]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center"
+    <div className="oobe-root fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'var(--bg-primary, #0a0a0f)' }}>
       {/* Subtle gradient background */}
       <div className="absolute inset-0 opacity-30"
