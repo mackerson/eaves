@@ -271,6 +271,18 @@ describe('migrateLegacyProfile', () => {
     expect(fs.existsSync(path.join(backups, 'enclave-20260815T165004405Z-startup.db'))).toBe(false);
   });
 
+  it('renames carried-over logs so the log viewer can see them', () => {
+    seedLegacyProfile();
+    write(path.join(legacy, 'logs', 'enclave-2026-08-15.log'), 'history');
+
+    migrateLegacyProfile();
+
+    // Logs are listed by prefix, so an old-named one is invisible to the
+    // viewer and skipped by retention — present but unreachable, forever.
+    expect(fs.readFileSync(path.join(current, 'logs', 'eaves-2026-08-15.log'), 'utf8')).toBe('history');
+    expect(fs.existsSync(path.join(current, 'logs', 'enclave-2026-08-15.log'))).toBe(false);
+  });
+
   it('never migrates Chromium singleton state', () => {
     seedLegacyProfile();
     fs.symlinkSync('somehost-12345', path.join(legacy, 'SingletonLock'));

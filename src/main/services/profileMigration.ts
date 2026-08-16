@@ -41,11 +41,14 @@ const ID_PREFIX = 'com.eaves.';
 const NEVER_MIGRATE = /^(Singleton|\.org\.chromium\.Chromium\.)/;
 
 /**
- * Backups are matched by filename, so one named for the old app is invisible
- * to the restore UI and never pruned by retention — the one thing a user
- * reaches for after a bad migration is exactly what would be hidden.
+ * Backups and logs are both found by filename prefix, so one named for the old
+ * app is invisible to the UI that lists them *and* to the retention that
+ * prunes them — it lingers forever while appearing not to exist. For backups
+ * that means the one thing a user reaches for after a bad migration is exactly
+ * what gets hidden.
  */
 const LEGACY_BACKUP = /^enclave-(\d{8}T\d{9}Z-(?:startup|periodic|manual|pre-restore)(?:-\d+)?\.db)$/;
+const LEGACY_LOG = /^enclave-(.+\.log)$/;
 
 /** Rename, falling back to a copy when src and dst are on different filesystems. */
 function move(src: string, dst: string): void {
@@ -166,7 +169,8 @@ export function migrateLegacyProfile(): string | null {
   const attachments = path.join(dataDir, LEGACY_ATTACHMENTS);
   if (fs.existsSync(attachments)) mergeInto(attachments, path.join(dataDir, ATTACHMENTS));
 
-  renameBackups(path.join(dataDir, 'backups'));
+  renamePrefixed(path.join(dataDir, 'backups'), LEGACY_BACKUP);
+  renamePrefixed(path.join(userData, 'logs'), LEGACY_LOG);
   rekeyPluginIds(userData);
 
   return `Migrated profile from ${legacyProfile} to ${userData}`;
@@ -208,16 +212,16 @@ function renameDatabaseFiles(dataDir: string): void {
   }
 }
 
-/** Bring existing backups under the filename pattern the restore UI matches. */
-function renameBackups(backupsDir: string): void {
-  if (!fs.existsSync(backupsDir)) return;
+/** Bring files named for the old app under the prefix their listing matches. */
+function renamePrefixed(dir: string, pattern: RegExp): void {
+  if (!fs.existsSync(dir)) return;
 
-  for (const name of fs.readdirSync(backupsDir)) {
-    const match = LEGACY_BACKUP.exec(name);
+  for (const name of fs.readdirSync(dir)) {
+    const match = pattern.exec(name);
     if (!match) continue;
 
-    const to = path.join(backupsDir, `eaves-${match[1]}`);
-    if (!fs.existsSync(to)) move(path.join(backupsDir, name), to);
+    const to = path.join(dir, `eaves-${match[1]}`);
+    if (!fs.existsSync(to)) move(path.join(dir, name), to);
   }
 }
 
