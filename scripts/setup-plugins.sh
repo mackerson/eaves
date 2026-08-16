@@ -95,10 +95,17 @@ while IFS=' ' read -r name repo ref; do
     fi
   fi
 
-  # Create symlink if not already present
+  # Create symlink if not already present. `-L` alone is true for a *dangling*
+  # symlink too, so a link whose target moved (a repo rename, a relocated
+  # checkout) was reported as "exists" and never healed — plugins/ looked
+  # populated while every entry pointed at nothing.
   link_path="${PLUGINS_LINK}/${name}"
-  if [ -L "$link_path" ]; then
+  if [ -L "$link_path" ] && [ -e "$link_path" ]; then
     echo "  Linked: ${name} (exists)"
+  elif [ -L "$link_path" ]; then
+    rm "$link_path"
+    ln -s "$clone_path" "$link_path"
+    echo "  Relinked: ${name} -> ${clone_path} (was dangling)"
   elif [ -d "$link_path" ]; then
     echo "  Warning: ${link_path} is a real directory, not a symlink. Skipping."
   else
