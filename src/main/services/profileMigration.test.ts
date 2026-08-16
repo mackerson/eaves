@@ -79,17 +79,30 @@ describe('migrateLegacyProfile', () => {
     expect(fs.existsSync(current)).toBe(false);
   });
 
-  it('never imports a legacy database over a live one', () => {
+  it('refuses outright when a database exists under both names', () => {
     seedLegacyProfile();
     write(path.join(current, 'eaves-data', 'eaves.db'), 'current');
 
-    expect(migrateLegacyProfile()).toBeNull();
+    expect(() => migrateLegacyProfile()).toThrow(/databases under both names/i);
 
-    // renameSync replaces its destination silently, so importing here would
-    // destroy the profile this build has actually been writing to.
+    // Nothing touched: the live database intact, the legacy profile whole.
     expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db'), 'utf8')).toBe('current');
-    // The legacy profile is left exactly where it was, not half-consumed.
     expect(fs.existsSync(path.join(legacy, 'enclave-data', 'enclave.db'))).toBe(true);
+  });
+
+  it('never binds a legacy WAL to a live database', () => {
+    // The worst state, and the one a caught error leaves behind. The main file
+    // is skipped because the destination exists — but SQLite binds a WAL by
+    // filename, so letting enclave.db-wal through as eaves.db-wal replays the
+    // legacy database's pages into the live one and then reports integrity ok.
+    write(path.join(current, 'eaves-data', 'eaves.db'), 'live');
+    write(path.join(current, 'eaves-data', 'enclave.db'), 'legacy');
+    write(path.join(current, 'eaves-data', 'enclave.db-wal'), 'legacy-wal');
+
+    expect(() => migrateLegacyProfile()).toThrow(/databases under both names/i);
+
+    expect(fs.existsSync(path.join(current, 'eaves-data', 'eaves.db-wal'))).toBe(false);
+    expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db'), 'utf8')).toBe('live');
   });
 
   it('still adopts orphaned sidecars sitting beside a live database', () => {
@@ -310,6 +323,48 @@ describe('migrateLegacyProfile', () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(current, 'plugins', 'com-eaves-openmemory', 'plugin.json'), 'utf8'));
     expect(manifest.id).toBe('com.eaves.openmemory');
+  });
+
+  it('finishes work left after the database was already renamed', () => {
+    // An interruption between the database rename and the steps that follow it
+    // used to look identical to "done", stranding these permanently.
+    write(path.join(current, 'eaves-data', 'eaves.db'), 'main');
+    write(path.join(current, 'eaves-data', 'backups', 'enclave-20260815T165004405Z-startup.db'), 'backup');
+    write(path.join(current, 'logs', 'enclave-2026-08-15.log'), 'history');
+    write(path.join(current, 'plugins', 'com-enclave-openmemory', 'plugin.json'),
+      JSON.stringify({ id: 'com.enclave.openmemory', sandboxVersion: 1 }));
+
+    migrateLegacyProfile();
+
+    expect(fs.existsSync(path.join(current, 'eaves-data', 'backups', 'eaves-20260815T165004405Z-startup.db'))).toBe(true);
+    expect(fs.existsSync(path.join(current, 'logs', 'eaves-2026-08-15.log'))).toBe(true);
+    expect(JSON.parse(fs.readFileSync(
+      path.join(current, 'plugins', 'com-eaves-openmemory', 'plugin.json'), 'utf8')).id)
+      .toBe('com.eaves.openmemory');
+  });
+
+  it('keeps retrying until it has finished, rather than once', () => {
+    // The caller catches and boots anyway, so without a completion marker a
+    // single transient failure meant the migration never ran again.
+    seedLegacyProfile();
+    migrateLegacyProfile();
+
+    // Marker present and legacy gone: genuinely nothing left to do.
+    expect(migrateLegacyProfile()).toBeNull();
+
+    // A legacy profile reappearing is picked up again even with the marker there.
+    write(path.join(legacy, 'enclave-data', 'enclave.db'), 'second');
+    fs.rmSync(path.join(current, 'eaves-data', 'eaves.db'));
+    expect(migrateLegacyProfile()).not.toBeNull();
+    expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves.db'), 'utf8')).toBe('second');
+  });
+
+  it('survives a corrupt plugin-configs.json instead of failing every launch', () => {
+    seedLegacyProfile();
+    write(path.join(legacy, 'plugin-configs.json'), '{ not json');
+
+    expect(() => migrateLegacyProfile()).not.toThrow();
+    expect(fs.existsSync(path.join(current, 'eaves-data', 'eaves.db'))).toBe(true);
   });
 
   it('ignores a legacy profile that has no database', () => {

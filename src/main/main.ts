@@ -400,8 +400,8 @@ app.whenReady().then(async () => {
     logger.error('[Main] Could not migrate the profile from the old Enclave path:', profileMigrationError);
     dialog.showErrorBox(
       'Could not migrate your data',
-      'Eaves could not move your existing profile from the old Enclave location, ' +
-      'so it is starting with an empty one. Your data has not been deleted.\n\n' +
+      'Eaves could not finish moving your profile from the old Enclave location. ' +
+      'Nothing has been deleted, and it will try again next time you start.\n\n' +
       `${profileMigrationError instanceof Error ? profileMigrationError.message : String(profileMigrationError)}`,
     );
   }

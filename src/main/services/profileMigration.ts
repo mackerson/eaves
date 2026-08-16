@@ -27,6 +27,13 @@ const DATA_DIR = 'eaves-data';
 const DB = 'eaves.db';
 const ATTACHMENTS = 'eaves-attachments';
 
+/**
+ * Written only once every step has completed. The migration's own progress is
+ * not inferable from the files, because the work continues past the point
+ * where the profile already looks migrated.
+ */
+const MARKER = '.migrated-from-enclave';
+
 /** Plugin ids the project owns. A third-party id is never ours to rewrite. */
 const LEGACY_ID_PREFIX = 'com.enclave.';
 const ID_PREFIX = 'com.eaves.';
@@ -115,18 +122,45 @@ export function migrateLegacyProfile(): string | null {
   // read as complete on the next launch. The app then booted, created a fresh
   // database over the top, and the real one was never looked at again.
   const dataDir = path.join(userData, DATA_DIR);
+  const marker = path.join(userData, MARKER);
 
-  // A database already at the new name is authoritative: it is the one this
-  // build has been writing to. Never import a legacy database over it —
-  // renameSync replaces the destination silently, so that would destroy the
-  // live profile in favour of a stale one.
+  // Completion is recorded explicitly rather than inferred from the state of
+  // the files. Inferring it was wrong in both directions: the work continues
+  // past the database rename (attachments, backups, logs, plugin ids), so an
+  // interruption after that point left those stranded forever, and any thrown
+  // error was equally permanent — the caller boots anyway, a fresh database
+  // appears, and every later launch concluded there was nothing to do.
   //
-  // Sidecars still under the old name next to it are a different thing: they
-  // belong to that same database, left behind by a rename interrupted after
-  // the main file moved. Finish that, and nothing else.
+  // Every step below is idempotent, so re-running until the marker lands
+  // costs nothing and is the only thing that makes a failure recoverable.
+  if (fs.existsSync(marker) && !fs.existsSync(legacyProfile)) return null;
+
+  // Two databases means two profiles, and nothing here can know which one the
+  // user wants. Renaming the legacy sidecars would be actively destructive:
+  // the main file is skipped because the destination exists, but its WAL is
+  // not, and SQLite binds a WAL by filename — so `enclave.db-wal` arriving as
+  // `eaves.db-wal` replays the legacy database's pages into the live one, and
+  // reports integrity_check: ok afterwards. Refuse, and say so.
+  const legacyDbLocations = [
+    path.join(legacyProfile, LEGACY_DATA_DIR, LEGACY_DB),
+    path.join(userData, LEGACY_DATA_DIR, LEGACY_DB),
+    path.join(dataDir, LEGACY_DB),
+  ].filter(candidate => fs.existsSync(candidate));
+
+  if (fs.existsSync(path.join(dataDir, DB)) && legacyDbLocations.length > 0) {
+    rekeyPluginIds(userData);
+    throw new Error(
+      `Found databases under both names: ${path.join(dataDir, DB)} and ${legacyDbLocations[0]}. ` +
+      'Refusing to migrate, because merging them automatically would mean choosing which of ' +
+      'your two profiles to discard. Move the one you do not want aside and restart.'
+    );
+  }
+
+  // Sidecars beside a live database with no legacy database anywhere belong to
+  // that live database — a rename interrupted after the main file moved.
   if (fs.existsSync(path.join(dataDir, DB))) {
     renameDatabaseFiles(dataDir);
-    rekeyPluginIds(userData);
+    finishRenames(userData, dataDir);
     return null;
   }
 
@@ -143,7 +177,7 @@ export function migrateLegacyProfile(): string | null {
     // and gating them on the move meant a profile migrated by an earlier build
     // never received them — leaving manifests on the old ids while the
     // database had already been remapped.
-    rekeyPluginIds(userData);
+    finishRenames(userData, dataDir);
     return null;
   }
 
@@ -161,7 +195,7 @@ export function migrateLegacyProfile(): string | null {
   const legacyDataDir = path.join(userData, LEGACY_DATA_DIR);
   if (fs.existsSync(legacyDataDir)) {
     mergeInto(legacyDataDir, dataDir);
-    fs.rmSync(legacyDataDir, { recursive: true, force: true });
+    removeIfEmptied(legacyDataDir);
   }
 
   renameDatabaseFiles(dataDir);
@@ -169,11 +203,51 @@ export function migrateLegacyProfile(): string | null {
   const attachments = path.join(dataDir, LEGACY_ATTACHMENTS);
   if (fs.existsSync(attachments)) mergeInto(attachments, path.join(dataDir, ATTACHMENTS));
 
+  finishRenames(userData, dataDir);
+
+  return `Migrated profile from ${legacyProfile} to ${userData}`;
+}
+
+/**
+ * Everything that follows the database rename, plus the completion marker.
+ *
+ * Shared by every exit path, because each of them leaves work that has to be
+ * finished — and the marker has to be written by all of them or the migration
+ * runs again on the next launch forever.
+ */
+function finishRenames(userData: string, dataDir: string): void {
   renamePrefixed(path.join(dataDir, 'backups'), LEGACY_BACKUP);
   renamePrefixed(path.join(userData, 'logs'), LEGACY_LOG);
   rekeyPluginIds(userData);
 
-  return `Migrated profile from ${legacyProfile} to ${userData}`;
+  // Only into a profile that already exists. A fresh install has nothing to
+  // migrate and no directory yet, and creating one here just to record that
+  // fact would have this function inventing the profile it exists to move.
+  if (!fs.existsSync(userData)) return;
+
+  try {
+    fs.writeFileSync(path.join(userData, MARKER), new Date().toISOString(), 'utf-8');
+  } catch {
+    // Unwritable marker just means doing this idempotent work again next time.
+  }
+}
+
+/**
+ * Remove a directory only once it is actually empty.
+ *
+ * A recursive delete here would discard whatever `mergeInto` could not
+ * transfer — a source entry whose destination exists with a conflicting type
+ * is skipped silently, and deleting it afterwards turns "stranded" into
+ * "gone". An empty directory means everything really did move.
+ */
+function removeIfEmptied(dir: string): void {
+  try {
+    fs.rmdirSync(dir);
+  } catch {
+    // Non-empty, so something did not transfer. Leaving the directory is both
+    // the safe outcome and the visible one — deliberately not logged, because
+    // this runs before the logger has anywhere to write.
+  }
 }
 
 /** Whether a directory still holds the database or any sidecar under its old name. */
@@ -287,7 +361,14 @@ function migratePluginConfigIds(userData: string): void {
   const configPath = path.join(userData, 'plugin-configs.json');
   if (!fs.existsSync(configPath)) return;
 
-  const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+  } catch {
+    // Unreadable config is not ours to repair, and throwing here would fail
+    // the migration on every launch over an otherwise healthy profile.
+    return;
+  }
   const remapped: Record<string, unknown> = {};
   let changed = false;
 
