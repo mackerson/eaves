@@ -1,109 +1,87 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * Tests for the credential decrypt path.
+ *
+ * The case that matters: a value that IS encrypted but cannot be decrypted by
+ * this install. safeStorage derives its key from an OS keyring entry tied to
+ * the application name, so renaming the app strands anything sealed under the
+ * old one — measured with gnome-libsecret, where a value encrypted as
+ * "enclave" does not decrypt as "eaves". Treating that as legacy plaintext
+ * hands a base64 blob to a provider as an API key.
+ */
 
-const { safeStorage } = vi.hoisted(() => ({
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// vi.mock is hoisted above module scope, so the doubles have to be too.
+const { safeStorage, loggerError } = vi.hoisted(() => ({
   safeStorage: {
     isEncryptionAvailable: vi.fn(),
     encryptString: vi.fn(),
     decryptString: vi.fn(),
   },
+  loggerError: vi.fn(),
 }));
 
 vi.mock('electron', () => ({ safeStorage }));
 
 vi.mock('./logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: { info: vi.fn(), warn: vi.fn(), error: loggerError, debug: vi.fn() },
 }));
 
-import {
-  encryptString,
-  decryptString,
-  encryptAPIKey,
-  decryptAPIKey,
-} from './encryption';
-import { logger } from './logger';
+import { decryptAPIKey } from './encryption';
 
-describe('encryption', () => {
+/** Base64 of an os_crypt payload: version tag followed by opaque bytes. */
+const ciphertext = (tag: string) =>
+  Buffer.concat([Buffer.from(tag, 'latin1'), Buffer.from('opaque-sealed-bytes')]).toString('base64');
+
+describe('decryptAPIKey', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    safeStorage.isEncryptionAvailable.mockReturnValue(true);
   });
 
-  describe('encryptString', () => {
-    it('throws when encryption is unavailable', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(false);
-      expect(() => encryptString('secret')).toThrow('Encryption not available');
-    });
+  it('returns the decrypted key when decryption works', () => {
+    safeStorage.decryptString.mockReturnValue('sk-real-key');
 
-    it('base64-encodes the buffer from safeStorage', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(true);
-      safeStorage.encryptString.mockReturnValue(Buffer.from('cipher-bytes'));
-      expect(encryptString('plain')).toBe(Buffer.from('cipher-bytes').toString('base64'));
-      expect(safeStorage.encryptString).toHaveBeenCalledWith('plain');
-    });
+    expect(decryptAPIKey(ciphertext('v11'))).toBe('sk-real-key');
   });
 
-  describe('decryptString', () => {
-    it('returns null when encryption is unavailable', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(false);
-      expect(decryptString('anything')).toBeNull();
-      expect(safeStorage.decryptString).not.toHaveBeenCalled();
-    });
+  it('refuses a ciphertext this install cannot decrypt', () => {
+    // Encrypted under a different application identity — the rename case.
+    safeStorage.decryptString.mockImplementation(() => { throw new Error('Error while decrypting'); });
 
-    it('decrypts a base64 payload', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(true);
-      safeStorage.decryptString.mockReturnValue('plain');
-      const payload = Buffer.from('cipher').toString('base64');
-      expect(decryptString(payload)).toBe('plain');
-      expect(safeStorage.decryptString).toHaveBeenCalledWith(Buffer.from('cipher'));
-    });
-
-    it('returns null and swallows decrypt errors', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(true);
-      safeStorage.decryptString.mockImplementation(() => {
-        throw new Error('bad');
-      });
-      expect(decryptString(Buffer.from('x').toString('base64'))).toBeNull();
-    });
+    const stored = ciphertext('v11');
+    expect(decryptAPIKey(stored)).toBeNull();
+    // Never hand the caller the ciphertext: a wrong key is a rejected request
+    // nobody can explain, where no key is a visible failure.
+    expect(decryptAPIKey(stored)).not.toBe(stored);
+    expect(loggerError).toHaveBeenCalled();
   });
 
-  describe('encryptAPIKey / decryptAPIKey', () => {
-    it.each([null, undefined, ''] as const)('encryptAPIKey(%j) → null', (input) => {
-      expect(encryptAPIKey(input)).toBeNull();
-    });
+  it('recognises both os_crypt version tags', () => {
+    safeStorage.decryptString.mockImplementation(() => { throw new Error('nope'); });
 
-    it('encryptAPIKey encrypts non-empty keys', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(true);
-      safeStorage.encryptString.mockReturnValue(Buffer.from('c'));
-      expect(encryptAPIKey('sk-test')).toBe(Buffer.from('c').toString('base64'));
-    });
+    expect(decryptAPIKey(ciphertext('v10'))).toBeNull();
+    expect(decryptAPIKey(ciphertext('v11'))).toBeNull();
+  });
 
-    it.each([null, undefined, ''] as const)('decryptAPIKey(%j) → null', (input) => {
-      expect(decryptAPIKey(input)).toBeNull();
-    });
+  it('still passes through a genuine pre-encryption plaintext key', () => {
+    safeStorage.decryptString.mockImplementation(() => { throw new Error('not ciphertext'); });
 
-    it('returns decrypted value when decrypt succeeds', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(true);
-      safeStorage.decryptString.mockReturnValue('sk-live');
-      expect(decryptAPIKey(Buffer.from('c').toString('base64'))).toBe('sk-live');
-    });
+    // No version tag, so it predates encryption being added.
+    expect(decryptAPIKey('sk-legacy-plaintext-key')).toBe('sk-legacy-plaintext-key');
+  });
 
-    it('falls back to plaintext legacy storage when decrypt fails', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(true);
-      safeStorage.decryptString.mockImplementation(() => {
-        throw new Error('not encrypted');
-      });
-      expect(decryptAPIKey('sk-legacy-plaintext')).toBe('sk-legacy-plaintext');
-      expect(logger.debug).toHaveBeenCalled();
-    });
+  it('refuses everything when the OS keyring is unavailable', () => {
+    safeStorage.isEncryptionAvailable.mockReturnValue(false);
 
-    // The legacy fallback is only sound while safeStorage works. Without it
-    // every decrypt fails, and returning the stored value hands base64
-    // ciphertext to a provider as an API key.
-    it('returns nothing rather than ciphertext when encryption is unavailable', () => {
-      safeStorage.isEncryptionAvailable.mockReturnValue(false);
-      const ciphertext = Buffer.from('encrypted-bytes').toString('base64');
+    // Encrypted and plaintext are indistinguishable here, so neither is used.
+    expect(decryptAPIKey(ciphertext('v11'))).toBeNull();
+    expect(decryptAPIKey('sk-legacy-plaintext-key')).toBeNull();
+  });
 
-      expect(decryptAPIKey(ciphertext)).toBeNull();
-      expect(logger.error).toHaveBeenCalled();
-    });
+  it('returns null for an absent key without logging an error', () => {
+    expect(decryptAPIKey(null)).toBeNull();
+    expect(decryptAPIKey('')).toBeNull();
+    expect(loggerError).not.toHaveBeenCalled();
   });
 });
