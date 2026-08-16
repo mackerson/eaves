@@ -31,6 +31,13 @@ the name changed.
 - **The `enclave_guide` tool is now `eaves_guide`**, and agents that had it
   keep it.
 
+- **You may need to re-enter your API keys.** Keys are sealed by the OS keyring
+  under the application's name, and some backends will not unseal a key saved
+  under the old one. Measured: GNOME/libsecret does not, KDE/kwallet does;
+  macOS behaves like GNOME, and Windows is unaffected. Where it happens Eaves
+  now says so and asks you to re-enter the key, rather than sending an
+  unreadable one to the provider.
+
 ### Note for existing installs
 
 The rename changes the packaging identity, so on Windows and Linux the new
