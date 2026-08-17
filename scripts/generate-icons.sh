@@ -1,7 +1,14 @@
 #!/bin/bash
 #
 # Generate Icons from SVG
-# Converts assets/icon.svg into all required icon formats and sizes
+#
+# Two stages:
+#   1. scripts/generate-logo.mjs derives the vector assets from the single
+#      source of truth, assets/eaves.svg (see that file for why the stroke has
+#      to be baked rather than dropped).
+#   2. This script rasterizes them into every platform format and size.
+#
+# Edit assets/eaves.svg and re-run this; everything else is generated.
 #
 # Requirements:
 #   - Inkscape (for SVG → PNG conversion)
@@ -15,16 +22,20 @@ set -e  # Exit on error
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SOURCE_SVG="$PROJECT_ROOT/assets/eaves.svg"
+# All derived by generate-logo.mjs below -- do not hand-edit.
 LOGO_SVG="$PROJECT_ROOT/assets/icon.svg"
+TRAY_SVG="$PROJECT_ROOT/assets/tray-icon.svg"
+GLYPH_SVG="$PROJECT_ROOT/assets/glyph.svg"
 ICONS_DIR="$PROJECT_ROOT/assets/icons"
 
 echo "🎨 Eaves Icon Generator"
 echo "========================"
 echo ""
 
-# Check if logo.svg exists
-if [ ! -f "$LOGO_SVG" ]; then
-  echo "❌ Error: icon.svg not found at $LOGO_SVG"
+# Only the hand-authored source needs to pre-exist; the rest is generated.
+if [ ! -f "$SOURCE_SVG" ]; then
+  echo "❌ Error: eaves.svg not found at $SOURCE_SVG"
   exit 1
 fi
 
@@ -45,7 +56,13 @@ if ! check_command inkscape "sudo apt install inkscape (Linux) or brew install i
   has_inkscape=false
 fi
 
-if ! check_command convert "sudo apt install imagemagick (Linux) or brew install imagemagick (macOS)"; then
+# ImageMagick 7 renamed the entrypoint to `magick` and warns on every `convert`.
+if command -v magick &> /dev/null; then
+  IM=magick
+elif command -v convert &> /dev/null; then
+  IM=convert
+else
+  check_command convert "sudo apt install imagemagick (Linux) or brew install imagemagick (macOS)" || true
   has_imagemagick=false
 fi
 
@@ -58,6 +75,10 @@ fi
 echo ""
 echo "✅ All required tools found"
 echo ""
+
+# Stage 1: derive the vector assets from assets/eaves.svg. Regenerates
+# icon.svg / tray-icon.svg / glyph.svg, so it has to run before rasterizing.
+node "$PROJECT_ROOT/scripts/generate-logo.mjs"
 
 # Create icons directory if it doesn't exist
 mkdir -p "$ICONS_DIR"
@@ -91,7 +112,7 @@ if [ "$has_imagemagick" = true ]; then
   echo "🪟 Generating Windows .ico..."
 
   # .ico needs multiple sizes embedded
-  convert \
+  "$IM" \
     "$ICONS_DIR/icon-16.png" \
     "$ICONS_DIR/icon-32.png" \
     "$ICONS_DIR/icon-48.png" \
@@ -143,12 +164,10 @@ fi
 # Generate tray icons
 echo "🔔 Generating tray icons..."
 
-# Tray icons should be simple, monochrome icons
-# For now, we'll use scaled versions of the main icon
-# You may want to create a separate tray-icon.svg with a simpler design
-
+# The tray renders at 16px, where icon.svg's halo and margin turn to mush.
+# tray-icon.svg is the same mark cropped tight with no halo.
 echo "   Creating tray icons (16x16 and 32x32)"
-inkscape "$LOGO_SVG" \
+inkscape "$TRAY_SVG" \
   --export-type=png \
   --export-filename="$ICONS_DIR/tray-icon.png" \
   --export-width=16 \
@@ -156,7 +175,7 @@ inkscape "$LOGO_SVG" \
   --export-background-opacity=0 \
   > /dev/null 2>&1
 
-inkscape "$LOGO_SVG" \
+inkscape "$TRAY_SVG" \
   --export-type=png \
   --export-filename="$ICONS_DIR/tray-icon@2x.png" \
   --export-width=32 \
@@ -164,10 +183,44 @@ inkscape "$LOGO_SVG" \
   --export-background-opacity=0 \
   > /dev/null 2>&1
 
-# Template icon for macOS (should be monochrome)
-cp "$ICONS_DIR/tray-icon.png" "$ICONS_DIR/tray-iconTemplate.png"
+# macOS template images are recolored from alpha alone, so the RGB must be
+# black -- a copy of the white tray icon renders as a blob in the menu bar.
+if [ "$has_imagemagick" = true ]; then
+  "$IM" "$ICONS_DIR/tray-icon@2x.png" \
+    -channel RGB -evaluate set 0 +channel \
+    "$ICONS_DIR/tray-iconTemplate.png"
+else
+  echo "⚠️  ImageMagick not found; tray-iconTemplate.png left as a white copy"
+  cp "$ICONS_DIR/tray-icon.png" "$ICONS_DIR/tray-iconTemplate.png"
+fi
 
 echo "✅ Tray icons generated"
+echo ""
+
+# Generate README logos
+echo "📖 Generating README logos..."
+
+# The README renders on whatever theme the reader picked, so it needs both inks
+# and a <picture> element to choose between them. glyph.svg is currentColor,
+# which rasterizes to black -- the right ink for a light page; tray-icon.svg is
+# already white for a dark one.
+inkscape "$GLYPH_SVG" \
+  --export-type=png \
+  --export-filename="$ICONS_DIR/logo-light-bg.png" \
+  --export-width=256 \
+  --export-height=256 \
+  --export-background-opacity=0 \
+  > /dev/null 2>&1
+
+inkscape "$TRAY_SVG" \
+  --export-type=png \
+  --export-filename="$ICONS_DIR/logo-dark-bg.png" \
+  --export-width=256 \
+  --export-height=256 \
+  --export-background-opacity=0 \
+  > /dev/null 2>&1
+
+echo "✅ README logos generated"
 echo ""
 
 # Summary
@@ -187,7 +240,5 @@ if command -v iconutil &> /dev/null; then
 fi
 
 echo "  • tray-icon.png, tray-icon@2x.png, tray-iconTemplate.png"
-echo ""
-echo "📝 Note: For best tray icon results on macOS, create a separate"
-echo "   monochrome SVG at assets/tray-icon.svg and update this script."
+echo "  • logo-light-bg.png, logo-dark-bg.png (README)"
 echo ""

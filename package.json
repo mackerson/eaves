@@ -30,6 +30,7 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:mcp": "tsc -p tsconfig.mcp.json && node -e \"require('fs').writeFileSync('dist/main/mcp-servers/package.json', JSON.stringify({ type: 'module' }) + '\\n')\"",
     "build:plugins": "node scripts/build-plugins.js",
+    "generate:logo": "node scripts/generate-logo.mjs",
     "generate:icons": "bash scripts/generate-icons.sh",
     "copy-assets": "mkdir -p dist/assets && cp -r assets/* dist/assets/",
     "copy-plugins": "node scripts/copy-plugins.js",
