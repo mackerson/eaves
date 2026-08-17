@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="assets/icons/icon-256.png" alt="Eaves" width="128" height="128">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/icons/logo-dark-bg.png">
+  <img src="assets/icons/logo-light-bg.png" alt="Eaves" width="128" height="128">
+</picture>
 
 # Eaves
 
