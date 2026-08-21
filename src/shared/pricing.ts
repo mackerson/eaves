@@ -9,6 +9,56 @@ interface ModelPricing {
   completionCostPer1M: number;
 }
 
+/**
+ * Prompt-cache billing, which is not a multiplier on one rate but two
+ * different *shapes* of accounting, and getting the shape wrong is a
+ * double-count rather than a rounding error.
+ *
+ *   'additive'    Anthropic. `input_tokens` excludes both cache reads and
+ *                 cache creations; they are reported separately (see the
+ *                 anthropic providerMetadata block in ai.ts). So each tier is
+ *                 charged on top of the uncached input.
+ *   'inclusive'   OpenAI-shaped, which includes OpenRouter when it falls back
+ *                 to an estimate. `prompt_tokens` already *contains* the
+ *                 cached tokens, so the cached portion is discounted out of
+ *                 the input total rather than added to it. Treating this as
+ *                 additive bills the same tokens twice.
+ *
+ * Multipliers are against `promptCostPer1M`. Anthropic: reads 0.1x, 5-minute
+ * writes 1.25x. OpenAI: cached input 0.5x, no write premium.
+ */
+type CacheAccounting = 'additive' | 'inclusive';
+
+interface CachePricing {
+  accounting: CacheAccounting;
+  readMultiplier: number;
+  writeMultiplier: number;
+}
+
+const cachePricingByProvider: Record<string, CachePricing> = {
+  anthropic: { accounting: 'additive', readMultiplier: 0.1, writeMultiplier: 1.25 },
+  openai: { accounting: 'inclusive', readMultiplier: 0.5, writeMultiplier: 1 },
+  // Routed upstream, so the true shape depends on the backend that served the
+  // turn. This only applies when OpenRouter reported no cost of its own — the
+  // usual path prefers its real figure and never reaches here. Inclusive is
+  // the safer of the two guesses: it cannot double-charge.
+  openrouter: { accounting: 'inclusive', readMultiplier: 0.5, writeMultiplier: 1 },
+  google: { accounting: 'inclusive', readMultiplier: 0.25, writeMultiplier: 1 },
+};
+
+/**
+ * Providers that run on the user's own hardware. Their monetary cost is zero
+ * — genuinely zero, not unknown — and that distinction matters downstream: a
+ * view that cannot tell "free" from "no pricing data" either hides real local
+ * usage or invents a gap in the totals. Their real cost is electrical, which
+ * is the energy model's job, not this one's.
+ */
+const LOCAL_PROVIDERS = new Set(['ollama', 'lmstudio']);
+
+export function isLocalProvider(provider: string): boolean {
+  return LOCAL_PROVIDERS.has(provider);
+}
+
 const anthropicPricing: Record<string, ModelPricing> = {
   // Claude 5 family
   'claude-fable-5': { promptCostPer1M: 10, completionCostPer1M: 50 },
@@ -105,10 +155,25 @@ export function getModelPricing(provider: string, model: string): ModelPricing |
   return null;
 }
 
+/** Prompt-cache token counts for a single turn, as recorded on MessageMetrics. */
+export interface CacheUsage {
+  /** Tokens served from the prompt cache (Anthropic: cache_read_input_tokens). */
+  cachedTokens?: number;
+  /** Tokens written into the prompt cache, billed at a premium once. */
+  cacheWriteTokens?: number;
+}
+
 /**
  * Calculate cost in USD from token counts and model info.
+ *
  * Agent-level pricing overrides take precedence over the built-in table.
- * Returns null if pricing is unavailable (local models, unknown models without overrides).
+ * Returns 0 for local providers (free, not unknown) and null when pricing is
+ * genuinely unavailable — an unknown cloud model with no override.
+ *
+ * `cacheUsage` is optional and additive-or-inclusive depending on the
+ * provider (see CacheAccounting). Omitting it reproduces the old flat-rate
+ * behaviour, which overstated a warm-cache Anthropic turn by up to 10x on the
+ * cached portion and understated every cache write by 25%.
  */
 export function calculateCost(
   provider: string,
@@ -116,20 +181,61 @@ export function calculateCost(
   promptTokens: number,
   completionTokens: number,
   agentPricing?: { promptCostPer1M?: number; completionCostPer1M?: number },
+  cacheUsage?: CacheUsage,
 ): number | null {
-  // Agent-level overrides take precedence
-  const pricing = (agentPricing?.promptCostPer1M != null || agentPricing?.completionCostPer1M != null)
+  const hasOverride = agentPricing?.promptCostPer1M != null || agentPricing?.completionCostPer1M != null;
+
+  // Local models are free to run and the override path is the only way a user
+  // says otherwise (someone metering their own GPU time in dollars). Checked
+  // before the table lookup, which has no entry for them and would return null
+  // — indistinguishable from "we don't know".
+  if (!hasOverride && isLocalProvider(provider)) return 0;
+
+  const pricing = hasOverride
     ? {
-        promptCostPer1M: agentPricing.promptCostPer1M ?? 0,
-        completionCostPer1M: agentPricing.completionCostPer1M ?? 0,
+        promptCostPer1M: agentPricing?.promptCostPer1M ?? 0,
+        completionCostPer1M: agentPricing?.completionCostPer1M ?? 0,
       }
     : getModelPricing(provider, model);
 
   if (!pricing) return null;
 
-  const promptCost = (promptTokens / 1_000_000) * pricing.promptCostPer1M;
   const completionCost = (completionTokens / 1_000_000) * pricing.completionCostPer1M;
-  return promptCost + completionCost;
+
+  const cached = cacheUsage?.cachedTokens ?? 0;
+  const written = cacheUsage?.cacheWriteTokens ?? 0;
+  if (cached <= 0 && written <= 0) {
+    return (promptTokens / 1_000_000) * pricing.promptCostPer1M + completionCost;
+  }
+
+  // An override replaces the *rates*, never the accounting shape: whether the
+  // provider reports cached tokens inside or alongside its input count is a
+  // fact about the provider, not about what the user typed into a price field.
+  const cache = cachePricingByProvider[provider];
+  const rate = pricing.promptCostPer1M / 1_000_000;
+
+  // Unknown provider — no shape to apply. Bill the tiers at the flat input
+  // rate and treat them as additive, which is the direction that cannot lose
+  // tokens from the total.
+  if (!cache) return (promptTokens + cached + written) * rate + completionCost;
+
+  if (cache.accounting === 'additive') {
+    return promptTokens * rate
+      + cached * rate * cache.readMultiplier
+      + written * rate * cache.writeMultiplier
+      + completionCost;
+  }
+
+  // Inclusive: `promptTokens` already contains `cached`. Clamp rather than
+  // trust the arithmetic — a provider reporting more cached tokens than input
+  // would otherwise produce a negative charge, and a negative line item in a
+  // spend total is worse than a slightly high one.
+  const uncached = Math.max(0, promptTokens - cached);
+  const billedCached = Math.min(cached, promptTokens);
+  return uncached * rate
+    + billedCached * rate * cache.readMultiplier
+    + written * rate * cache.writeMultiplier
+    + completionCost;
 }
 
 /** Known context window sizes by model prefix. */
