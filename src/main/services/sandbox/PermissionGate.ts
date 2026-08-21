@@ -39,7 +39,7 @@ export interface PluginPermissionSet {
  * plugin API catalog reports to an agent authoring one. Deriving that from
  * this map rather than restating it keeps the two from drifting.
  */
-export const PERMISSION_REQUIREMENTS: Record<string, PluginPermission[]> = {
+export const PERMISSION_REQUIREMENTS = {
   // Data namespace - read operations
   'data.agents.getAll': ['data:agents:read'],
   'data.agents.getById': ['data:agents:read'],
@@ -101,6 +101,97 @@ export const PERMISSION_REQUIREMENTS: Record<string, PluginPermission[]> = {
   'storage.delete': ['storage:write'],
   'storage.clear': ['storage:write'],
   'storage.keys': ['storage:read'],
+} satisfies Record<string, PluginPermission[]>;
+
+/** Every method the gate knows about. */
+export type GatedMethod = keyof typeof PERMISSION_REQUIREMENTS;
+
+/**
+ * Look up an arbitrary (untrusted) method path. The table's keys are a literal
+ * union so the signature table below can be checked exhaustively against it;
+ * this is the one place that widening back to `string` is allowed, and it
+ * returns undefined for anything unmapped — which callers treat as deny.
+ */
+function requirementsFor(methodPath: string): PluginPermission[] | undefined {
+  return (PERMISSION_REQUIREMENTS as Record<string, PluginPermission[]>)[methodPath];
+}
+
+/**
+ * How each of those methods is actually called.
+ *
+ * This lives beside the requirements rather than in the catalog that renders
+ * it, and it is typed `Record<GatedMethod, string>` on purpose: adding a gated
+ * method without documenting its signature is a compile error, and documenting
+ * a method that does not exist is too. That kills the drift mode where the two
+ * tables disagree about which methods exist.
+ *
+ * It does NOT prove the prose matches the implementation — only a generator
+ * reading the source could. It exists because an agent shown `showNotification()`
+ * and nothing else guessed the Web Notification shape, passed an object where a
+ * string was expected, and took the renderer down with it.
+ */
+export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
+  'data.agents.getAll': '(): Promise<Agent[]>',
+  'data.agents.getById': '(id: string): Promise<Agent | null>',
+  'data.projects.getAll': '(): Promise<Project[]>',
+  'data.projects.getById': '(id: string): Promise<Project | null>',
+  'data.projects.getCurrent': '(): Promise<Project | null>',
+  'data.channels.getAll': '(): Promise<Channel[]>',
+  'data.channels.getById': '(id: string): Promise<Channel | null>',
+  'data.channels.getCurrent': '(): Promise<Channel | null>',
+  'data.chats.getAll': '(options?: { limit?: number }): Promise<Chat[]>',
+  'data.chats.getById': '(id: string): Promise<Chat | null>',
+  'data.chats.getByAgent': '(agentId: string, options?: { limit?: number }): Promise<Chat[]>',
+  'data.chats.getCurrent': '(): Promise<Chat | null>',
+  'data.settings.get': '(): Promise<Settings>',
+  'data.settings.getCurrent': '(): Promise<Settings>',
+
+  'actions.createTask': '(task: { title: string; description?: string; projectId?: string }): Promise<Task>',
+  'actions.createNote': '(note: { title: string; content: string; projectId?: string }): Promise<Note>',
+  'actions.createChat': '(chat: { agentId: string; title?: string }): Promise<Chat>',
+  'actions.createAgent': '(agent: { name: string; systemPrompt?: string; model?: string }): Promise<Agent>',
+  'actions.bulkImportMessages': '(chatId: string, messages: unknown[]): Promise<{ imported: number }>',
+  'actions.bulkImportAttachments': '(attachments: unknown[]): Promise<{ imported: number }>',
+
+  'ui.showNotification':
+    "(notification: string | { title: string; body?: string; icon?: string }): Promise<void> " +
+    "— a desktop notification. Pass a bare string for body-only. For transient in-app text use showToast.",
+  'ui.showToast': "(message: string, duration?: number): Promise<void> — transient in-app text, string only",
+  'ui.registerView':
+    "(view: { id: string; title: string; icon?: string; component: string }): Promise<void> " +
+    "— `component` must name an export in the manifest's `ui.components`",
+  'ui.registerTerminalView': '(view: { id: string; title: string; icon?: string; component: string }): Promise<void>',
+  'ui.registerSidebarItem': '(item: { id: string; title: string; icon?: string; view?: string }): Promise<void>',
+  'ui.registerCommand': '(command: { id: string; title: string; handler: () => void | Promise<void> }): Promise<void>',
+  'ui.showModal': '(modal: { title: string; content: string }): Promise<void>',
+  'ui.showConfirm': '(options: { title: string; message: string }): Promise<boolean>',
+
+  'events.on': '(eventType: string, handler: (data: unknown) => void): string — returns a callback id for off()',
+  'events.off': '(eventType: string, callbackId: string): void',
+  'events.once': '(eventType: string, handler: (data: unknown) => void): string',
+  'events.emit': '(eventType: string, data?: unknown): Promise<void>',
+
+  'tools.register':
+    "(name: string, tool: { description: string; inputSchema: object; " +
+    "execute: (args: Record<string, unknown>) => Promise<unknown>; needsApproval?: boolean }): Promise<void> " +
+    "— inputSchema is JSON Schema; `needsApproval` is a static boolean, not a function",
+  'tools.unregister': '(name: string): Promise<void>',
+
+  'services.register': '(service: { type: string; id: string; implementation: unknown }): Promise<void>',
+  'services.unregister': '(id: string): Promise<void>',
+  'services.discover': '(serviceType: string): Promise<unknown[]>',
+  'services.get': '(id: string): Promise<unknown | null>',
+  'services.getDefault': '(serviceType: string): Promise<unknown | null>',
+  'services.call': '(id: string, method: string, args?: unknown[]): Promise<unknown>',
+  'services.hasProviders': '(serviceType: string): Promise<boolean>',
+  'services.onRegistered': '(serviceType: string, handler: (service: unknown) => void): Promise<string>',
+  'services.onUnregistered': '(serviceType: string, handler: (service: unknown) => void): Promise<string>',
+
+  'storage.get': '(key: string): Promise<unknown>',
+  'storage.set': '(key: string, value: unknown): Promise<void>',
+  'storage.delete': '(key: string): Promise<void>',
+  'storage.clear': '(): Promise<void>',
+  'storage.keys': '(): Promise<string[]>',
 };
 
 // ============================================================================
@@ -146,7 +237,7 @@ export class PermissionGate {
     method: string
   ): PermissionCheckResult {
     const methodPath = createMethodPath(namespace, method);
-    const requiredPermissions = PERMISSION_REQUIREMENTS[methodPath];
+    const requiredPermissions = requirementsFor(methodPath);
 
     // If no requirements defined, deny by default — unmapped methods must be explicitly registered
     if (!requiredPermissions || requiredPermissions.length === 0) {
@@ -283,7 +374,7 @@ export class PermissionGate {
     method: string
   ): PluginPermission[] {
     const methodPath = createMethodPath(namespace, method);
-    return PERMISSION_REQUIREMENTS[methodPath] || [];
+    return requirementsFor(methodPath) || [];
   }
 
   /**

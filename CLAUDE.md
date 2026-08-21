@@ -98,6 +98,18 @@ Architecture diagrams and invariants live in `docs/architecture/README.md` — t
 - All plugins run sandboxed in Worker Threads via `SandboxedPluginManager`
 - Plugins require `"sandboxVersion": 1` in manifest (non-sandboxed plugins are skipped)
 - Permission-gated API access (`data:agents:read`, `storage:write`, `tools:register`, etc.)
+- `PERMISSION_REQUIREMENTS` and `METHOD_SIGNATURES` in `PermissionGate.ts` are one
+  table in two halves, and the second is typed `Record<GatedMethod, string>` on
+  purpose: a gated method with no documented signature is a **compile error**.
+  The signatures are what `plugin_inspect` shows an agent — a method rendered
+  with empty parens gets its arguments guessed, and a wrong guess reached
+  `Toast.tsx` and took the whole renderer down (only the app-level
+  `ErrorBoundary` is above it)
+- **Plugin arguments crossing into the renderer are untrusted.** `toDisplayText`
+  / `toNotification` in `SandboxedPluginManager.ts` coerce them at the bridge;
+  `useToastStore` coerces again. `ui.showNotification` is a real OS
+  `Notification` and accepts `{title, body}` (or `message`, or a bare string);
+  `ui.showToast` is transient in-app text
 - `PluginWorker`: Worker thread wrapper with health monitoring
 - `PermissionGate`: Runtime permission enforcement (21 permission grants; union in `src/shared/types.ts`)
 - `ResourceMonitor`: Memory tracking, auto-termination of runaway plugins

@@ -8,7 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { app } from 'electron';
+import { app, Notification } from 'electron';
 import { PluginManifest } from '../../types';
 import { PluginManifestSchema, validateWithSchema, isValidationFailure } from '../../../shared/validation';
 import { eventBus } from '../EventBus';
@@ -86,6 +86,57 @@ interface RegisteredTool {
 /**
  * SandboxedPluginManager handles sandboxed plugin lifecycle
  */
+/**
+ * Flatten an arbitrary plugin argument into something a React child can hold.
+ *
+ * The renderer renders toast text directly, so a non-string here is not a
+ * cosmetic problem: it throws inside render, and the app-level ErrorBoundary is
+ * the only one in the tree, so the whole window is replaced by "Something went
+ * wrong". A plugin must not be able to do that with one mistyped call.
+ */
+export function toDisplayText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    // The shapes plugins actually reach for, in the order they mean things.
+    const record = value as Record<string, unknown>;
+    for (const key of ['message', 'body', 'text', 'title']) {
+      if (typeof record[key] === 'string') return record[key] as string;
+    }
+    try {
+      return JSON.stringify(value) ?? String(value);
+    } catch {
+      return '[unserializable]';
+    }
+  }
+  return String(value);
+}
+
+/**
+ * Read a notification out of whatever the plugin passed: a bare string, or the
+ * Web-Notification-shaped object (`{ title, body }`) that anyone familiar with
+ * the browser API reaches for first. `message` is accepted as an alias for
+ * `body` because the bundled event-inspector plugin already uses it.
+ */
+export function toNotification(value: unknown): { title: string; body: string } {
+  if (typeof value === 'string') return { title: '', body: value };
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const title = typeof record.title === 'string' ? record.title : '';
+    const body =
+      typeof record.body === 'string' ? record.body
+      : typeof record.message === 'string' ? record.message
+      : '';
+    // A title with no body reads better as the body of a bare notification
+    // than as a notification with an empty one.
+    if (title && !body) return { title: '', body: title };
+    if (title || body) return { title, body };
+  }
+  return { title: '', body: toDisplayText(value) };
+}
+
+
 export class SandboxedPluginManager {
   private plugins = new Map<string, LoadedPlugin>();
   private bundledPluginsDir: string;
@@ -719,18 +770,33 @@ export class SandboxedPluginManager {
     args: unknown[]
   ): Promise<unknown> {
     switch (method) {
-      case 'showNotification':
-        eventBus.emitEvent('plugin:ui:notification', {
-          pluginId,
-          message: args[0],
-          type: args[1],
-        });
+      case 'showNotification': {
+        // A desktop notification, not a toast — they were previously the same
+        // thing, which is why an agent reasonably reached for the Web
+        // Notification shape and passed an object where a string was expected.
+        const notice = toNotification(args[0]);
+        if (Notification.isSupported()) {
+          new Notification({ title: notice.title, body: notice.body }).show();
+        } else {
+          // No notification service (headless, some Linux setups). Say it
+          // in-app rather than dropping it silently.
+          eventBus.emitEvent('plugin:ui:toast', {
+            pluginId,
+            message: notice.title ? `${notice.title}: ${notice.body}` : notice.body,
+          });
+        }
         return { success: true };
+      }
       case 'showToast':
         eventBus.emitEvent('plugin:ui:toast', {
           pluginId,
-          message: args[0],
-          duration: args[1],
+          // Plugin arguments are untrusted at this boundary. The renderer puts
+          // this straight into a React child, so anything that is not already
+          // a string has to become one here — an object reaching Toast.tsx
+          // throws, and the only error boundary is the app-level one, so a
+          // wrong-shaped call from any plugin took the whole window down.
+          message: toDisplayText(args[0]),
+          duration: typeof args[1] === 'number' ? args[1] : undefined,
         });
         return { success: true };
       case 'registerView':

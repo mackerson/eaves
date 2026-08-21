@@ -74,10 +74,19 @@ describe('plugin draft tools', () => {
       const result = await tools().plugin_inspect.execute({ what: 'api' });
 
       expect(result.success).toBe(true);
+      // The signature is the point: an agent shown a bare `showNotification()`
+      // guessed the Web Notification shape and crashed the renderer with it.
       expect(result.api.methods).toContainEqual({
-        call: 'context.tools.register()',
+        call: 'context.tools.register',
+        signature: expect.stringContaining('inputSchema'),
         requires: ['tools:register'],
       });
+      const notify = result.api.methods.find(
+        (m: { call: string }) => m.call === 'context.ui.showNotification',
+      );
+      expect(notify.signature).toContain('title');
+      expect(notify.signature).toContain('body');
+      expect(result.api.alwaysAvailable.join(' ')).toContain('utils.log');
       expect(result.api.entryShape).toContain('module.exports');
       expect(result.api.uiShape).toContain('/node_modules/react');
       expect(result.drafts).toBeUndefined();

@@ -13,18 +13,22 @@
  * this module's contract. What is here is the part that pays for itself now.
  */
 
-import { PERMISSION_REQUIREMENTS } from './sandbox/PermissionGate';
+import { PERMISSION_REQUIREMENTS, METHOD_SIGNATURES, type GatedMethod } from './sandbox/PermissionGate';
 import type { PluginPermission } from '../../shared/types';
 
 export interface PluginApiMethod {
-  /** How the plugin calls it, e.g. `context.data.agents.getAll()`. */
+  /** How the plugin calls it, e.g. `context.data.agents.getAll`. */
   call: string;
+  /** Its parameters and return, and anything a caller would otherwise guess. */
+  signature: string;
   /** Grants the manifest must declare for the call to be allowed. */
   requires: PluginPermission[];
 }
 
 export interface PluginApiCatalog {
   methods: PluginApiMethod[];
+  /** Calls that need no permission at all. */
+  alwaysAvailable: string[];
   /** Every grant that appears on some method, with what it unlocks. */
   permissions: Array<{ permission: PluginPermission; unlocks: string[] }>;
   entryShape: string;
@@ -50,7 +54,7 @@ const CONTEXT_PATH: Record<string, string> = {
 function toCallPath(rpcKey: string): string {
   const [namespace, ...rest] = rpcKey.split('.');
   const base = CONTEXT_PATH[namespace] ?? `context.${namespace}`;
-  return `${base}.${rest.join('.')}()`;
+  return `${base}.${rest.join('.')}`;
 }
 
 const ENTRY_SHAPE = `// plugin.json declares "entry": "index.cjs"
@@ -75,7 +79,19 @@ export function MyView() {
   return React.createElement('button', { onClick: () => setN(n + 1) }, \`count \${n}\`);
 }`;
 
+/**
+ * Ungated conveniences. They need no permission, so they are absent from the
+ * requirements table, but a plugin that does not know about them logs nothing
+ * and stores nothing.
+ */
+const ALWAYS_AVAILABLE = [
+  'context.plugin.id — this plugin\'s id',
+  'context.plugin.config — the config the user set for it',
+  'context.utils.log.debug|info|warn|error(message: string, data?: unknown)',
+];
+
 const NOTES = [
+  'Call things exactly as the signature says. A wrong argument shape is not caught for you — it can reach the UI and break it.',
   'Declare only the permissions you actually call. A grant you do not use is a grant the user has to read and approve for nothing.',
   'A tool registered with context.tools.register becomes available to agents on the NEXT turn — the toolset is assembled once per turn.',
   'deactivate() must undo what activate() did. A draft is unloaded and reloaded every time it is re-activated, so a leaked listener accumulates.',
@@ -87,7 +103,11 @@ const NOTES = [
 /** The full catalog. Pure — it reads module-level tables, nothing live. */
 export function describePluginApi(): PluginApiCatalog {
   const methods: PluginApiMethod[] = Object.entries(PERMISSION_REQUIREMENTS)
-    .map(([rpcKey, requires]) => ({ call: toCallPath(rpcKey), requires }))
+    .map(([rpcKey, requires]) => ({
+      call: toCallPath(rpcKey),
+      signature: METHOD_SIGNATURES[rpcKey as GatedMethod],
+      requires: requires as PluginPermission[],
+    }))
     .sort((a, b) => a.call.localeCompare(b.call));
 
   const unlockedBy = new Map<PluginPermission, string[]>();
@@ -103,5 +123,12 @@ export function describePluginApi(): PluginApiCatalog {
     .map(([permission, unlocks]) => ({ permission, unlocks }))
     .sort((a, b) => a.permission.localeCompare(b.permission));
 
-  return { methods, permissions, entryShape: ENTRY_SHAPE, uiShape: UI_SHAPE, notes: NOTES };
+  return {
+    methods,
+    alwaysAvailable: ALWAYS_AVAILABLE,
+    permissions,
+    entryShape: ENTRY_SHAPE,
+    uiShape: UI_SHAPE,
+    notes: NOTES,
+  };
 }
