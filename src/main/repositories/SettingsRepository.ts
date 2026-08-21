@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { app } from 'electron';
-import { Settings, BackgroundSettings, BackgroundType, UpdateMode, FontPreference } from '../types';
+import { Settings, BackgroundSettings, BackgroundType, UpdateMode, FontPreference, UsageSettings } from '../types';
 import { getDatabase } from '../services/database';
 import { encryptAPIKey, decryptAPIKey } from '../services/encryption';
 import { logger } from '../services/logger';
@@ -103,6 +103,52 @@ function parseMemoryEmbedding(raw: string | null | undefined): Settings['memoryE
   return undefined;
 }
 
+/**
+ * Cost/energy settings, stored as JSON.
+ *
+ * Every field is validated on the way out, not just parsed: this column feeds
+ * the pricing and carbon arithmetic, and a string where a number belongs would
+ * propagate NaN through a total rather than failing anywhere visible. A
+ * malformed entry is dropped, which falls back to the built-in table — the
+ * same outcome as never having set one.
+ */
+function parseUsageSettings(raw: string | null | undefined): UsageSettings | undefined {
+  if (!raw) return undefined;
+  try {
+    const p = JSON.parse(raw);
+    if (!p || typeof p !== 'object') return undefined;
+
+    const out: UsageSettings = {};
+
+    if (p.pricingOverrides && typeof p.pricingOverrides === 'object') {
+      const overrides: NonNullable<UsageSettings['pricingOverrides']> = {};
+      for (const [key, value] of Object.entries(p.pricingOverrides as Record<string, unknown>)) {
+        const v = value as { promptCostPer1M?: unknown; completionCostPer1M?: unknown };
+        if (typeof v?.promptCostPer1M === 'number' && Number.isFinite(v.promptCostPer1M)
+          && typeof v?.completionCostPer1M === 'number' && Number.isFinite(v.completionCostPer1M)) {
+          overrides[key] = {
+            promptCostPer1M: v.promptCostPer1M,
+            completionCostPer1M: v.completionCostPer1M,
+          };
+        }
+      }
+      if (Object.keys(overrides).length > 0) out.pricingOverrides = overrides;
+    }
+
+    if (typeof p.gridIntensityGPerKwh === 'number' && Number.isFinite(p.gridIntensityGPerKwh)) {
+      out.gridIntensityGPerKwh = p.gridIntensityGPerKwh;
+    }
+    if (typeof p.measureLocalPower === 'boolean') out.measureLocalPower = p.measureLocalPower;
+    if (typeof p.energyScale === 'number' && Number.isFinite(p.energyScale) && p.energyScale > 0) {
+      out.energyScale = p.energyScale;
+    }
+
+    return Object.keys(out).length > 0 ? out : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class SettingsRepository {
   private db: Database.Database;
 
@@ -123,7 +169,8 @@ export class SettingsRepository {
              theme, light_theme, dark_theme, current_chat_id, default_agent_id, system_agent_id,
              background_type, background_value, background_opacity, background_blur,
              oobe_completed, workflow_review_required, routines_paused, update_mode, openrouter_sticky_provider,
-             font_family, custom_font_family, font_scale, line_spacing, memory_embedding
+             font_family, custom_font_family, font_scale, line_spacing, memory_embedding,
+             usage_settings
       FROM settings WHERE id = 1
     `).get() as SettingsRow;
 
@@ -157,6 +204,7 @@ export class SettingsRepository {
       // column existed).
       openrouterStickyProvider: row.openrouter_sticky_provider === null ? true : !!row.openrouter_sticky_provider,
       memoryEmbedding: parseMemoryEmbedding(row.memory_embedding),
+      usage: parseUsageSettings(row.usage_settings),
       // NULL = defaults (rows written before these columns existed, and users
       // who never touched the controls).
       fontFamily: (row.font_family as FontPreference) || 'default',
@@ -277,6 +325,23 @@ export class SettingsRepository {
     if (settings.fontScale !== undefined) {
       this.db.prepare('UPDATE settings SET font_scale = ?, updated_at = ? WHERE id = 1')
         .run(settings.fontScale === 1 ? null : settings.fontScale, Date.now());
+    }
+
+    if (settings.usage !== undefined) {
+      // Merged, not replaced: the settings UI edits one field at a time (a
+      // price override here, the grid figure there) and a whole-object write
+      // would silently drop whichever half the caller did not send.
+      const current = parseUsageSettings(
+        (this.db.prepare('SELECT usage_settings FROM settings WHERE id = 1').get() as { usage_settings: string | null })
+          .usage_settings,
+      ) ?? {};
+      const merged = {
+        ...current,
+        ...settings.usage,
+        pricingOverrides: settings.usage.pricingOverrides ?? current.pricingOverrides,
+      };
+      this.db.prepare('UPDATE settings SET usage_settings = ?, updated_at = ? WHERE id = 1')
+        .run(JSON.stringify(merged), Date.now());
     }
 
     if (settings.lineSpacing !== undefined) {

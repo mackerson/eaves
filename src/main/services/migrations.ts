@@ -1025,6 +1025,86 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 78,
+    description: 'Durable usage ledger (per-inference cost + energy accounting)',
+    migrate: (db) => {
+      // Deliberately NOT the `activities` table, which is where agent:spend
+      // has been landing. Activity rows are display-only telemetry by their
+      // own documentation, they are pruned after 30 days, and their payload is
+      // an untyped JSON blob subject to a 32KB truncation marker. None of
+      // those are acceptable properties for the record of what the user has
+      // actually been billed.
+      //
+      // No foreign keys on agent_id or project_id, and agent_name is
+      // denormalized alongside the id. A ledger row records something that
+      // happened and must outlive the entities it names: deleting an agent
+      // deletes the agent, not the history of what it spent. A CASCADE here
+      // would silently shrink last quarter's total the moment somebody tidied
+      // up their agent list.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS usage_events (
+          id TEXT PRIMARY KEY,
+          timestamp INTEGER NOT NULL,
+
+          agent_id TEXT,
+          agent_name TEXT,
+          project_id TEXT,
+          container_id TEXT,
+          -- What kind of work spent this: 'chat', 'channel', 'workflow',
+          -- 'compaction', 'note-metadata', 'shadow', 'chat-title', ...
+          kind TEXT NOT NULL,
+
+          provider TEXT NOT NULL,
+          model TEXT NOT NULL,
+          -- OpenRouter only: the upstream backend that actually served it.
+          served_provider TEXT,
+
+          input_tokens INTEGER NOT NULL DEFAULT 0,
+          output_tokens INTEGER NOT NULL DEFAULT 0,
+          cached_tokens INTEGER NOT NULL DEFAULT 0,
+          cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+
+          -- Null means genuinely unknown (unpriced cloud model), which is not
+          -- the same as zero. A local model is zero with basis 'local'.
+          cost_usd REAL,
+          -- 'reported' (the provider told us), 'estimated' (tokens x table),
+          -- 'local' (free), 'unknown' (no pricing available).
+          cost_basis TEXT NOT NULL DEFAULT 'unknown',
+
+          energy_wh REAL,
+          energy_low_wh REAL,
+          energy_high_wh REAL,
+          -- 'measured' or 'estimated'. Never mix the two into one total
+          -- without degrading to 'estimated' -- see sumEnergy in shared/energy.
+          energy_basis TEXT,
+
+          duration_ms INTEGER,
+          -- 0 when the turn ended before the SDK's summed usage arrived, i.e.
+          -- the token counts are a floor rather than a total.
+          usage_is_total INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_usage_events_timestamp ON usage_events(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_usage_events_agent ON usage_events(agent_id, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_usage_events_project ON usage_events(project_id, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_usage_events_provider ON usage_events(provider, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_usage_events_kind ON usage_events(kind, timestamp DESC);
+      `);
+
+      // User-owned inputs to the cost/energy model: per-model price overrides,
+      // grid carbon intensity, whether to sample real local power. JSON in one
+      // column rather than a column per field — pricingOverrides is an open
+      // map keyed by provider:model, which no fixed schema can hold.
+      const hasUsage = (db.pragma('table_info(settings)') as Array<{ name: string }>)
+        .some(column => column.name === 'usage_settings');
+      if (!hasUsage) {
+        db.prepare('ALTER TABLE settings ADD COLUMN usage_settings TEXT').run();
+      }
+    },
+  },
 ];
 
 /**

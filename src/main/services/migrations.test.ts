@@ -13,7 +13,7 @@ import { legacyMigrations } from './__fixtures__/legacyChain';
 // The newest migration's version. The v75 baseline is still where a fresh
 // database's schema comes from; anything after it is an incremental migration
 // on top, so HEAD moves and the baseline does not.
-const HEAD = 77;
+const HEAD = 78;
 
 /** The squashed baseline every fresh database starts from. */
 const BASELINE = 75;
@@ -30,7 +30,8 @@ const EXPECTED_TABLES = [
   'message_attachments', 'messages', 'messages_fts', 'messages_fts_config', 'messages_fts_data', 'messages_fts_docsize', 'messages_fts_idx', 'note_labels', 'notes',
   'plugin_grants', 'plugin_state', 'plugin_storage', 'projects', 'routines', 'settings',
   'shadow_nudges', 'sync_changes', 'sync_meta', 'sync_peers',
-  'sync_row_state', 'tasks', 'tool_approval_grants', 'tool_session_states', 'users', 'workflows',
+  'sync_row_state', 'tasks', 'tool_approval_grants', 'tool_session_states', 'usage_events', 'users',
+  'workflows',
 ];
 
 // Tables retired by the fold-chats-into-channels + calendar-unify squash. A
@@ -222,13 +223,29 @@ describe('v75 baseline parity with the v52..v74 chain', () => {
     // The baseline itself is a no-op on a v74 database; only the migrations
     // added after it may change the schema, and only additively. Anything
     // dropped or rebuilt here would be data loss on a live database.
+    //
+    // Additive means two distinct things, and the assertion has to allow the
+    // second without loosening the first:
+    //   - no existing object may disappear or change definition, except where
+    //     a migration deliberately added a column (listed below)
+    //   - new objects may appear (v78 adds the usage_events ledger)
     const after = schemaOf(db);
-    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+    const dropped = [...before.keys()].filter(name => !after.has(name));
+    expect(dropped, 'migrations must never drop a schema object').toEqual([]);
+
+    // Objects a post-baseline migration legitimately altered, each with the
+    // migration that did it. Anything not on this list must be byte-identical.
+    const altered = new Set([
+      'table routines',  // gained `output` in v76
+      'table settings',  // gained `usage_settings` in v78
+    ]);
     for (const [name, sql] of before) {
-      if (name === 'table routines') continue; // gained `output` in v76
+      if (altered.has(name)) continue;
       expect(`${name}: ${after.get(name)}`).toBe(`${name}: ${sql}`);
     }
     expect(columnNames(db, 'routines')).toContain('output');
+    expect(columnNames(db, 'settings')).toContain('usage_settings');
+    expect(columnNames(db, 'usage_events')).toContain('cost_usd');
     expect(db.prepare('SELECT content FROM messages WHERE id = ?').get('m-1')).toEqual({ content: 'still here' });
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);

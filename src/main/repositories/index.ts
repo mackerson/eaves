@@ -21,6 +21,7 @@ import { MemoryEntryRepository } from './MemoryEntryRepository';
 import { MemoryBlockRepository } from './MemoryBlockRepository';
 import { ToolStateRepository } from './ToolStateRepository';
 import { TranscriptSearchRepository } from './TranscriptSearchRepository';
+import { UsageEventRepository } from './UsageEventRepository';
 
 export { AgentRepository, ProjectRepository, ChannelRepository, SettingsRepository, PluginStorageRepository, PluginStateRepository, PluginGrantsRepository, UserRepository, EventRepository, MilestoneRepository, DeadlineRepository, WorkflowRepository, RoutineRepository, MessageAttachmentRepository, ActivityRepository, FileRepository, AgentMemoryRepository, MemoryEntryRepository, MemoryBlockRepository, ToolStateRepository };
 
@@ -57,6 +58,9 @@ export const getWorkflowRepository = createSingleton(() => new WorkflowRepositor
 export const getRoutineRepository = createSingleton(() => new RoutineRepository());
 export const getMessageAttachmentRepository = createSingleton(() => new MessageAttachmentRepository());
 export const getActivityRepository = createSingleton(() => new ActivityRepository());
+// The durable cost/energy ledger. Separate from ActivityRepository on
+// purpose — see the v78 migration and UsageLedgerService.
+export const getUsageEventRepository = createSingleton(() => new UsageEventRepository());
 export const getFileRepository = createSingleton(() => new FileRepository());
 export const getAgentMemoryRepository = createSingleton(() => new AgentMemoryRepository());
 export const getMemoryEntryRepository = createSingleton(() => new MemoryEntryRepository());

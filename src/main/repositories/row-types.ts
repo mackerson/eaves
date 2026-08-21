@@ -324,6 +324,7 @@ export interface SettingsRow {
   api_keys_json: string | null;
   openrouter_sticky_provider: number | null;
   memory_embedding: string | null;
+  usage_settings: string | null;
   font_family: string | null;
   custom_font_family: string | null;
   font_scale: number | null;
