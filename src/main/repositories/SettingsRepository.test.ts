@@ -108,6 +108,19 @@ describe('SettingsRepository', () => {
       });
     });
 
+    // get() names its columns explicitly, so a new column that is written but
+    // not SELECTed reads back as its falsy default forever. Asserting the
+    // default alone cannot catch that; round-tripping can.
+    it('round-trips the plugin-authoring opt-in', () => {
+      expect(repository.get().pluginAuthoringEnabled).toBe(false);
+
+      repository.update({ pluginAuthoringEnabled: true });
+      expect(repository.get().pluginAuthoringEnabled).toBe(true);
+
+      repository.update({ pluginAuthoringEnabled: false });
+      expect(repository.get().pluginAuthoringEnabled).toBe(false);
+    });
+
     it('should decrypt API keys', () => {
       // Seed the encrypted value into the JSON blob.
       testDb.prepare('UPDATE settings SET api_keys_json = ? WHERE id = 1')
