@@ -13,7 +13,7 @@ import { legacyMigrations } from './__fixtures__/legacyChain';
 // The newest migration's version. The v75 baseline is still where a fresh
 // database's schema comes from; anything after it is an incremental migration
 // on top, so HEAD moves and the baseline does not.
-const HEAD = 79;
+const HEAD = 80;
 
 /** The squashed baseline every fresh database starts from. */
 const BASELINE = 75;
@@ -238,6 +238,7 @@ describe('v75 baseline parity with the v52..v74 chain', () => {
     const altered = new Set([
       'table routines',  // gained `output` in v76
       'table settings',  // gained `usage_settings` in v78, `plugin_authoring_enabled` in v79
+      'table channels',  // gained `workshop` in v80
     ]);
     for (const [name, sql] of before) {
       if (altered.has(name)) continue;
@@ -247,6 +248,7 @@ describe('v75 baseline parity with the v52..v74 chain', () => {
     expect(columnNames(db, 'settings')).toContain('usage_settings');
     expect(columnNames(db, 'usage_events')).toContain('cost_usd');
     expect(columnNames(db, 'settings')).toContain('plugin_authoring_enabled');
+    expect(columnNames(db, 'channels')).toContain('workshop');
     expect(db.prepare('SELECT content FROM messages WHERE id = ?').get('m-1')).toEqual({ content: 'still here' });
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
     expect(db.pragma('foreign_key_check')).toEqual([]);

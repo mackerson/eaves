@@ -656,4 +656,75 @@ describe('ChannelRepository direct-channel (chat) projection', () => {
       expect(repository.getDirectChatById(chat.id)!.participants[0].displayName).toBe('Updated');
     });
   });
+
+  /**
+   * A workshop session is a direct chat, so every listing that projects direct
+   * chats would show it unless told otherwise. It must not: it belongs to the
+   * Workshop. The one query that deliberately still finds it is by-id, which is
+   * how the Workshop loads its own session.
+   *
+   * The `workshop` flag is also what grants a conversation the plugin-authoring
+   * tools, which is why it is a column rather than a tag — the last test here
+   * pins that a user-settable field cannot stand in for it.
+   */
+  describe('workshop sessions stay off the chat surface', () => {
+    const seedWorkshop = () =>
+      repository.createWorkshopSession({ name: 'Build: a dice roller', agentId: 'agent-1' });
+
+    it('excludes them from the chat list', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+      seedWorkshop();
+
+      expect(repository.getDirectChats().map(c => c.name)).toEqual(['Ordinary']);
+    });
+
+    it('excludes them from the per-agent list', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+      seedWorkshop();
+
+      expect(repository.getDirectChatsByAgentId('agent-1').map(c => c.name)).toEqual(['Ordinary']);
+    });
+
+    it('excludes them from search', () => {
+      repository.createDirectChat({ name: 'a dice roller', agentId: 'agent-1' });
+      seedWorkshop();
+
+      expect(repository.searchDirectChats('dice roller').map(c => c.name)).toEqual(['a dice roller']);
+    });
+
+    it('excludes them from tag filtering', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1', tags: 'build' });
+      seedWorkshop();
+
+      expect(repository.getDirectChatsByTags(['build']).map(c => c.name)).toEqual(['Ordinary']);
+    });
+
+    it('still loads one by id, which is how the Workshop opens it', () => {
+      const session = seedWorkshop();
+      expect(repository.getDirectChatById(session.id)?.name).toBe('Build: a dice roller');
+    });
+
+    it('lists them on their own surface, newest first', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+      const session = seedWorkshop();
+
+      expect(repository.listWorkshopSessions().map(c => c.id)).toEqual([session.id]);
+    });
+
+    it('answers isWorkshopSession only for a real session', () => {
+      const session = seedWorkshop();
+      const ordinary = repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+
+      expect(repository.isWorkshopSession(session.id)).toBe(true);
+      expect(repository.isWorkshopSession(ordinary.id)).toBe(false);
+      expect(repository.isWorkshopSession('nope')).toBe(false);
+    });
+
+    it('cannot be faked with a tag, which a user can set', () => {
+      const ordinary = repository.createDirectChat({
+        name: 'Ordinary', agentId: 'agent-1', tags: 'workshop',
+      });
+      expect(repository.isWorkshopSession(ordinary.id)).toBe(false);
+    });
+  });
 });

@@ -20,7 +20,7 @@ const {
   grantRepo: { listToolNames: vi.fn() },
   fileRepo: { getByProjectId: vi.fn() },
   projectRepo: { getById: vi.fn() },
-  channelRepo: { isWorkSession: vi.fn() },
+  channelRepo: { isWorkSession: vi.fn(), isWorkshopSession: vi.fn() },
   settingsRepo: { get: vi.fn() },
   connectMCPServers: vi.fn(),
   getSandboxedPluginManager: vi.fn(),
@@ -308,6 +308,7 @@ describe('buildToolset', () => {
     connectMCPServers.mockResolvedValue({ clients: [], tools: {} });
     getSandboxedPluginManager.mockReturnValue({ getRegisteredTools: () => ({}) });
     channelRepo.isWorkSession.mockReturnValue(false);
+    channelRepo.isWorkshopSession.mockReturnValue(false);
     toolStateRepo.get.mockReturnValue(null);
     grantRepo.listToolNames.mockReturnValue(new Set());
     settingsRepo.get.mockReturnValue({ userName: 'Robin' });
@@ -357,18 +358,28 @@ describe('buildToolset', () => {
     expect(toolset.enabledTools.complete_work_session).toBeDefined();
   });
 
-  // The plugin-authoring tools let an agent write code and then run it. Absent
-  // is not the same as present-and-refusing: the model must not see them at
-  // all until the user has opted in.
+  // The plugin-authoring tools let an agent write code and then run it, so they
+  // need BOTH the trust decision and a surface that shows the human what is
+  // happening. Absent is not the same as present-and-refusing: the model must
+  // not see them at all outside those conditions.
   it('omits the plugin-authoring tools unless the setting is on', async () => {
-    const toolset = await buildToolset(agent(), project(), 'ch-1', new Map());
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const toolset = await buildToolset(agent(), project(), 'ws-1', new Map());
     expect(toolset.enabledTools.plugin_define).toBeUndefined();
     expect(toolset.getActiveToolNames()).not.toContain('plugin_inspect');
   });
 
-  it('includes the plugin-authoring tools when the setting is on', async () => {
+  it('omits them in an ordinary chat even with the setting on', async () => {
     settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    channelRepo.isWorkshopSession.mockReturnValue(false);
     const toolset = await buildToolset(agent(), project(), 'ch-1', new Map());
+    expect(toolset.enabledTools.plugin_define).toBeUndefined();
+  });
+
+  it('includes them in a workshop session when the setting is on', async () => {
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const toolset = await buildToolset(agent(), project(), 'ws-1', new Map());
     expect(Object.keys(toolset.enabledTools)).toEqual(
       expect.arrayContaining(['plugin_inspect', 'plugin_define', 'plugin_activate', 'plugin_retract']),
     );

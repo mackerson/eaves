@@ -124,12 +124,17 @@ export async function buildToolset(
   const workSessionTools = getChannelRepository().isWorkSession(channelId)
     ? createWorkSessionTools(channelId, options?.getMainWindow ?? (() => null))
     : {};
-  // Opt-in only. Activating a draft runs agent-written code in a sandbox
-  // worker under real permission grants, so the toolset is absent — not
-  // merely disabled — until the user turns it on.
-  const pluginDraftTools = getSettingsRepository().get().pluginAuthoringEnabled
-    ? createPluginDraftTools()
-    : {};
+  // Two conditions, and the second is the interesting one. The setting is the
+  // trust decision — activating a draft runs agent-written code in a sandbox
+  // worker under real permission grants. The session check is the blast radius:
+  // plugin authoring happens only in the Workshop, where the bench is showing
+  // the human what is being built. An ordinary chat never gets these tools, so
+  // there is nowhere an agent can write and run code unobserved.
+  const pluginDraftTools =
+    getSettingsRepository().get().pluginAuthoringEnabled &&
+    getChannelRepository().isWorkshopSession(channelId)
+      ? createPluginDraftTools()
+      : {};
 
   // Merge in priority order: builtin → agent-scoped → plugin → MCP
   const toolMetadata = new Map<string, { category: string; origin: string }>();

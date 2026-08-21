@@ -4,6 +4,7 @@ import { getPluginConfigManager } from '../services/PluginConfigManager';
 import { getServiceRegistry } from '../services/ServiceRegistry';
 import { getMarketplaceListing, installPlugin, uninstallPlugin } from '../services/MarketplaceService';
 import { listDrafts, readDraft, promoteDraft } from '../services/pluginDraftService';
+import { getChannelRepository, getAgentRepository, getUserRepository, getSettingsRepository } from '../repositories';
 import { showPluginPreview, closePluginPreview } from '../windows/pluginPreviewWindow';
 import { eventBus } from '../services/EventBus';
 import { logger } from '../services/logger';
@@ -218,6 +219,39 @@ export function registerPluginHandlers(getMainWindow?: () => BrowserWindow | nul
     if (manifest) await manager.unloadPlugin(validation.data);
     event.sender.send('plugin-views-changed');
     return { success: true };
+  }));
+
+  // ── Workshop sessions ───────────────────────────────────────────────────────
+  // A session is an ordinary direct chat with `workshop = 1`, so the entire
+  // chat turn path runs it unchanged. The flag keeps it out of the chat list
+  // and is what buildToolset checks before handing over the plugin tools.
+
+  ipcMain.handle('workshop:start-session', ipcResult('workshop:start-session', async (_event, agentId?: string) => {
+    const settings = getSettingsRepository().get();
+    if (!settings.pluginAuthoringEnabled) {
+      return { success: false, error: 'Plugin authoring is turned off. Enable it before starting a build.' };
+    }
+
+    const agentRepo = getAgentRepository();
+    const resolvedId = agentId || settings.defaultAgentId || agentRepo.getAll()[0]?.id;
+    const agent = resolvedId ? agentRepo.getById(resolvedId) : null;
+    if (!agent) return { success: false, error: 'No agent available to run the build.' };
+
+    const currentUser = getUserRepository().getCurrent();
+    if (!currentUser) return { success: false, error: 'No current user' };
+
+    const session = getChannelRepository().createWorkshopSession(
+      { name: 'New build', agentId: agent.id },
+      [
+        { id: currentUser.id, type: 'human', displayName: currentUser.name, color: currentUser.color, joinedAt: Date.now() },
+        { id: agent.id, type: 'agent', displayName: agent.name, color: agent.color, joinedAt: Date.now() },
+      ],
+    );
+    return { success: true, session };
+  }));
+
+  ipcMain.handle('workshop:list-sessions', ipcResult('workshop:list-sessions', async () => {
+    return { success: true, sessions: getChannelRepository().listWorkshopSessions() };
   }));
 
   // The preview renders in a window of its own, with no IPC bridge — see

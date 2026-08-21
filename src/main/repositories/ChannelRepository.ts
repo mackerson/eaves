@@ -601,7 +601,9 @@ export class ChannelRepository {
     const includeParticipants = options.includeParticipants ?? false;
     const messageLimit = options.messageLimit ?? 50;
 
-    let query = "SELECT * FROM channels WHERE type = 'direct'";
+    // WORKSHOP_EXCLUDED: a workshop session is a direct chat, but it belongs to
+    // the Workshop, not the chat list. getChatById deliberately does not filter.
+    let query = "SELECT * FROM channels WHERE type = 'direct' AND workshop = 0";
     if (!includeArchived) {
       query += ' AND archived_at IS NULL';
     }
@@ -643,7 +645,7 @@ export class ChannelRepository {
     const includeArchived = options.includeArchived ?? false;
     const includeParticipants = options.includeParticipants ?? false;
 
-    let query = "SELECT * FROM channels WHERE type = 'direct' AND agent_id = ?";
+    let query = "SELECT * FROM channels WHERE type = 'direct' AND workshop = 0 AND agent_id = ?";
     if (!includeArchived) {
       query += ' AND archived_at IS NULL';
     }
@@ -662,7 +664,8 @@ export class ChannelRepository {
       SELECT DISTINCT c.*
       FROM channels c
       LEFT JOIN messages m ON c.id = m.channel_id
-      WHERE c.type = 'direct' AND (c.name LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')
+      WHERE c.type = 'direct' AND c.workshop = 0
+        AND (c.name LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')
     `;
 
     if (!includeArchived) {
@@ -683,7 +686,7 @@ export class ChannelRepository {
     const tagPatterns = tags.map(tag => `%${this.escapeLikePattern(tag)}%`);
     const tagConditions = tagPatterns.map(() => "tags LIKE ? ESCAPE '\\'").join(' OR ');
 
-    let query = `SELECT * FROM channels WHERE type = 'direct' AND (${tagConditions})`;
+    let query = `SELECT * FROM channels WHERE type = 'direct' AND workshop = 0 AND (${tagConditions})`;
     if (!includeArchived) {
       query += ' AND archived_at IS NULL';
     }
@@ -759,6 +762,66 @@ export class ChannelRepository {
   /** True when the id names a work session, so callers can scope session-only behaviour. */
   isWorkSession(channelId: string): boolean {
     return this.channelType(channelId) === 'work';
+  }
+
+  /**
+   * A Workshop session: an ordinary direct chat that happens to be the place a
+   * plugin is being built.
+   *
+   * It is a `direct` row rather than a type of its own so every chat path —
+   * messages, streaming, approval cards, regeneration — works on it with no
+   * changes at all. The `workshop` flag does exactly two things: it keeps the
+   * session out of the chat list, and it is what `buildToolset` checks before
+   * handing an agent the plugin-authoring tools.
+   */
+  createWorkshopSession(
+    session: { name: string; agentId: string; projectId?: string },
+    initialParticipants: Participant[] = [],
+  ): Chat {
+    const id = `chat-${randomUUID()}`;
+    const createdAt = Date.now();
+
+    this.db.prepare(`
+      INSERT INTO channels (id, name, type, agent_id, project_id, workshop, created_at)
+      VALUES (?, ?, 'direct', ?, ?, 1, ?)
+    `).run(id, session.name, session.agentId, session.projectId ?? null, createdAt);
+
+    for (const participant of initialParticipants) {
+      this.addParticipant(id, participant);
+    }
+
+    return {
+      id,
+      name: session.name,
+      agentId: session.agentId,
+      participants: this.getParticipants(id),
+      messages: [],
+      createdAt,
+    };
+  }
+
+  /**
+   * True when this conversation is a Workshop session.
+   *
+   * `buildToolset` gates the plugin-authoring tools on this, so it must read
+   * the column and nothing else — anything a user can edit by hand (tags, the
+   * name) would be a way to grant an ordinary chat the ability to write and
+   * run code.
+   */
+  isWorkshopSession(channelId: string): boolean {
+    const row = this.db.prepare(
+      'SELECT workshop FROM channels WHERE id = ?',
+    ).get(channelId) as { workshop: number } | undefined;
+    return row?.workshop === 1;
+  }
+
+  /** Workshop sessions, newest first. The Workshop's own list. */
+  listWorkshopSessions(): Chat[] {
+    const rows = this.db.prepare(
+      `SELECT * FROM channels WHERE workshop = 1
+        ORDER BY COALESCE(last_message_at, created_at) DESC`,
+    ).all() as ChatRow[];
+    return rows.map(row => this.mapRowToChat(row));
   }
 
   /** Where a work session reports back to, or null if it was started standalone. */

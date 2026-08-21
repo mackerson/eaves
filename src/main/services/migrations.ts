@@ -1122,6 +1122,28 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 80,
+    description: 'Channels can be workshop sessions (agent-built plugins)',
+    migrate: (db) => {
+      // A workshop session is an ordinary direct chat with this flag set, so
+      // every chat path — messages, streaming, approval cards — works on it
+      // unchanged. A new `type` would have meant rebuilding `channels` and
+      // recreating every trigger on it, which the sync oplog rides on.
+      //
+      // Not the `tags` column, which would have needed no migration at all:
+      // tags are user-editable, and this flag decides whether a conversation
+      // gets the plugin-authoring tools. That must not be settable by hand.
+      const hasColumn = (db.pragma('table_info(channels)') as Array<{ name: string }>)
+        .some(column => column.name === 'workshop');
+
+      if (!hasColumn) {
+        db.prepare(
+          'ALTER TABLE channels ADD COLUMN workshop INTEGER NOT NULL DEFAULT 0'
+        ).run();
+      }
+    },
+  },
 ];
 
 /**

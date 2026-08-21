@@ -367,6 +367,10 @@ contextBridge.exposeInMainWorld('electron', {
   activatePluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:activate-draft', pluginId),
   deactivatePluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:deactivate-draft', pluginId),
   previewPluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:preview-draft', pluginId),
+  // A workshop session is a direct chat with the workshop flag; every other
+  // chat call (sendChatMessage, getChat, …) works on it unchanged.
+  startWorkshopSession: (agentId?: string): Promise<{ success: boolean; session?: Chat; error?: string }> => ipcRenderer.invoke('workshop:start-session', agentId),
+  listWorkshopSessions: (): Promise<{ success: boolean; sessions?: Chat[]; error?: string }> => ipcRenderer.invoke('workshop:list-sessions'),
   executePluginTool: (pluginId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> => ipcRenderer.invoke('execute-plugin-tool', { pluginId, toolName, args }),
   getPluginConfig: (pluginId: string): Promise<{ schema: Record<string, unknown>; values: Record<string, unknown>; pluginId: string; pluginName: string }> => ipcRenderer.invoke('get-plugin-config', pluginId),
   setPluginConfig: (pluginId: string, config: Record<string, unknown>): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('set-plugin-config', { pluginId, config }),
