@@ -98,6 +98,7 @@ describe('SettingsRepository', () => {
         oobeCompleted: false,
         workflowReviewRequired: true,
         routinesPaused: false,
+        pluginAuthoringEnabled: false,
         updateMode: 'auto',
         openrouterStickyProvider: true,
         fontFamily: 'default',

@@ -8,6 +8,7 @@ import { createChannelTools } from '../services/channelTools';
 import { createTranscriptTools } from '../services/transcriptTools';
 import { createAgentSelfTools } from '../services/agentSelfTools';
 import { createWorkSessionTools } from '../services/workSessionTools';
+import { createPluginDraftTools } from '../services/pluginDraftTools';
 import { createCoreMemoryTools } from '../services/coreMemoryTools';
 import { buildMemoryContext } from '../services/memoryContext';
 import { createDiscoveryTools, ToolSessionState } from '../services/discoveryTools';
@@ -123,6 +124,12 @@ export async function buildToolset(
   const workSessionTools = getChannelRepository().isWorkSession(channelId)
     ? createWorkSessionTools(channelId, options?.getMainWindow ?? (() => null))
     : {};
+  // Opt-in only. Activating a draft runs agent-written code in a sandbox
+  // worker under real permission grants, so the toolset is absent — not
+  // merely disabled — until the user turns it on.
+  const pluginDraftTools = getSettingsRepository().get().pluginAuthoringEnabled
+    ? createPluginDraftTools()
+    : {};
 
   // Merge in priority order: builtin → agent-scoped → plugin → MCP
   const toolMetadata = new Map<string, { category: string; origin: string }>();
@@ -133,7 +140,10 @@ export async function buildToolset(
   // project's roots.
   const allAvailableTools: Record<string, unknown> = applyApprovalGrants(
     bindProjectScope(
-      { ...builtinTools, ...channelTools, ...transcriptTools, ...selfTools, ...coreMemoryTools, ...workSessionTools },
+      {
+        ...builtinTools, ...channelTools, ...transcriptTools, ...selfTools,
+        ...coreMemoryTools, ...workSessionTools, ...pluginDraftTools,
+      },
       currentProject.id,
     ),
     channelId,
@@ -156,6 +166,9 @@ export async function buildToolset(
     toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
   for (const toolName of Object.keys(workSessionTools)) {
+    toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
+  }
+  for (const toolName of Object.keys(pluginDraftTools)) {
     toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
 

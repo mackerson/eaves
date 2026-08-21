@@ -310,6 +310,7 @@ describe('buildToolset', () => {
     channelRepo.isWorkSession.mockReturnValue(false);
     toolStateRepo.get.mockReturnValue(null);
     grantRepo.listToolNames.mockReturnValue(new Set());
+    settingsRepo.get.mockReturnValue({ userName: 'Robin' });
   });
 
   it('applies approval grants by clearing needsApproval on a copy (not shared builtins)', async () => {
@@ -354,6 +355,23 @@ describe('buildToolset', () => {
     channelRepo.isWorkSession.mockReturnValue(true);
     const toolset = await buildToolset(agent(), project(), 'ws-1', new Map());
     expect(toolset.enabledTools.complete_work_session).toBeDefined();
+  });
+
+  // The plugin-authoring tools let an agent write code and then run it. Absent
+  // is not the same as present-and-refusing: the model must not see them at
+  // all until the user has opted in.
+  it('omits the plugin-authoring tools unless the setting is on', async () => {
+    const toolset = await buildToolset(agent(), project(), 'ch-1', new Map());
+    expect(toolset.enabledTools.plugin_define).toBeUndefined();
+    expect(toolset.getActiveToolNames()).not.toContain('plugin_inspect');
+  });
+
+  it('includes the plugin-authoring tools when the setting is on', async () => {
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    const toolset = await buildToolset(agent(), project(), 'ch-1', new Map());
+    expect(Object.keys(toolset.enabledTools)).toEqual(
+      expect.arrayContaining(['plugin_inspect', 'plugin_define', 'plugin_activate', 'plugin_retract']),
+    );
   });
 });
 
