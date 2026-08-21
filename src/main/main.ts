@@ -31,6 +31,7 @@ import { registerRoutineHandlers } from './ipc/routines';
 import { registerFileHandlers } from './ipc/files';
 import { registerTerminalHandlers, unregisterTerminalHandlers } from './ipc/terminal';
 import { registerActivityHandlers } from './ipc/activities';
+import { registerUsageHandlers } from './ipc/usage';
 import { registerOOBEHandlers } from './ipc/oobe';
 import { registerMessagingHandlers, autoStartBridges } from './ipc/messaging';
 import { registerMemoryHandlers } from './ipc/memories';
@@ -41,6 +42,9 @@ import { getSyncService } from './services/sync/SyncService';
 import { getAutoUpdater } from './services/AutoUpdater';
 import { registerUpdateHandlers } from './ipc/updates';
 import { ActivityPersistenceService } from './services/ActivityPersistenceService';
+import { getUsageLedgerService } from './services/UsageLedgerService';
+import { getSettingsRepository } from './repositories';
+import { getPowerSampler } from './services/PowerSampler';
 import { getActiveWorkRegistry } from './services/ActiveWorkRegistry';
 import { getTerminalManager } from './services/TerminalManager';
 import { getSandboxedPluginManager } from './services/sandbox';
@@ -529,6 +533,7 @@ app.whenReady().then(async () => {
   registerFileHandlers();
   registerTerminalHandlers();
   registerActivityHandlers();
+  registerUsageHandlers();
   registerOOBEHandlers(() => mainWindow);
   registerMessagingHandlers(() => mainWindow);
   registerMemoryHandlers();
@@ -564,6 +569,22 @@ app.whenReady().then(async () => {
   // Initialize activity persistence service
   activityPersistenceService = new ActivityPersistenceService(() => mainWindow);
   activityPersistenceService.start();
+
+  // Record every inference into the durable usage ledger. Started before the
+  // plugin system so a plugin-triggered turn during startup is not the one
+  // that goes unrecorded.
+  getUsageLedgerService().start();
+
+  // Real power sampling for local models, opt-in and Linux-only. Failure to
+  // start is normal (wrong platform, RAPL not readable) and simply leaves
+  // local energy estimated rather than measured.
+  try {
+    if (getSettingsRepository().get().usage?.measureLocalPower) {
+      await getPowerSampler().start();
+    }
+  } catch (error) {
+    logger.warn('Could not start power sampler:', error);
+  }
 
   // Initialize plugin system
   try {
@@ -760,6 +781,20 @@ async function runShutdown(): Promise<void> {
     activityPersistenceService?.stop();
   } catch (error) {
     logger.error('Error stopping activity persistence:', error);
+  }
+
+  // Stop the usage ledger (drops its agent:spend subscription).
+  try {
+    getUsageLedgerService().stop();
+  } catch (error) {
+    logger.error('Error stopping usage ledger:', error);
+  }
+
+  // Stop power sampling (kills the long-lived nvidia-smi child and the timer).
+  try {
+    getPowerSampler().stop();
+  } catch (error) {
+    logger.error('Error stopping power sampler:', error);
   }
 
   // Stop theme watcher (chokidar handle on the themes directory).

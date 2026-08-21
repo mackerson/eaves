@@ -62,6 +62,9 @@ import {
   MessageMetrics,
   PluginManifest,
   Activity,
+  UsageEvent,
+  UsageFilter,
+  UsageSummary,
   ThemeDefinition,
   BackupSnapshot,
   ConversationFolder,
@@ -446,6 +449,32 @@ contextBridge.exposeInMainWorld('electron', {
   clearActivities: (): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('activities:clear'),
   clearActivitiesBefore: (timestamp: number): Promise<{ success: boolean; deleted?: number; error?: string }> => ipcRenderer.invoke('activities:clear-before', timestamp),
   getActivityCount: (): Promise<{ success: boolean; count?: number; error?: string }> => ipcRenderer.invoke('activities:count'),
+
+  // Usage ledger (cost + energy accounting)
+  getUsageSummary: (
+    request?: UsageFilter & { bucket?: 'hour' | 'day' | 'week' },
+  ): Promise<{ success: boolean; summary?: UsageSummary; earliest?: number | null; error?: string }> =>
+    ipcRenderer.invoke('usage:summary', request),
+  getUsageEvents: (
+    filter?: UsageFilter,
+  ): Promise<{ success: boolean; events?: UsageEvent[]; error?: string }> =>
+    ipcRenderer.invoke('usage:list', filter),
+  getUsagePricing: (): Promise<{
+    success: boolean;
+    pricing?: Array<{
+      key: string; provider: string; model: string; turns: number;
+      promptCostPer1M: number | null; completionCostPer1M: number | null;
+      source: 'user' | 'builtin' | 'local' | 'none';
+    }>;
+    error?: string;
+  }> => ipcRenderer.invoke('usage:pricing'),
+  getPowerStatus: (): Promise<{
+    success: boolean;
+    status?: { available: boolean; sources: Array<'rapl' | 'nvidia'>; platformSupported: boolean };
+    error?: string;
+  }> => ipcRenderer.invoke('usage:power-status'),
+  clearUsageBefore: (timestamp: number): Promise<{ success: boolean; deleted?: number; error?: string }> =>
+    ipcRenderer.invoke('usage:clear-before', timestamp),
   onActivityNew: (callback: (activity: Activity) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: Activity) => callback(data);
     ipcRenderer.on('activity:new', listener);

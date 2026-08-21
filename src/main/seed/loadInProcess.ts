@@ -7,6 +7,9 @@ import { ChannelRepository } from '../repositories/ChannelRepository';
 import { WorkflowRepository } from '../repositories/WorkflowRepository';
 import { RoutineRepository } from '../repositories/RoutineRepository';
 import { MemoryBlockRepository } from '../repositories/MemoryBlockRepository';
+import { UsageEventRepository } from '../repositories/UsageEventRepository';
+import { calculateCost } from '../../shared/pricing';
+import { estimateTurnEnergy } from '../../shared/energy';
 import { datasets, type Dataset, type ScenarioName } from './dataset';
 
 /**
@@ -72,9 +75,68 @@ export function seedDatabase(
   const workflows = new WorkflowRepository(db);
   const routines = new RoutineRepository(db);
   const memory = new MemoryBlockRepository(db);
+  const usage = new UsageEventRepository(db);
 
   const ids: SeededDatabase['ids'] = {
     agents: {}, projects: {}, chats: {}, channels: {}, workflows: {},
+  };
+
+  /**
+   * Ledger rows are *derived* from the seeded turns rather than listed
+   * separately in the dataset.
+   *
+   * The alternative — a `usage:` array alongside `chats:` and `channels:` —
+   * would be a second, independent account of the same events, free to drift
+   * from the conversations it claims to describe. A demo whose cost view
+   * disagrees with its own transcripts is worse than one with no cost view.
+   *
+   * Token counts come from content length, which is crude but has the two
+   * properties that matter here: it is deterministic (rule 2 of this file —
+   * an unreviewable screenshot is a useless screenshot) and it is
+   * monotonic in the thing a reader can see, so the long answer really is
+   * the expensive one.
+   */
+  const recordSeedTurn = (
+    agentKey: string,
+    containerId: string,
+    projectId: string | null,
+    kind: string,
+    content: string,
+    promptChars: number,
+    timestamp: number,
+  ) => {
+    const agent = data.agents.find(a => a.key === agentKey);
+    if (!agent) return;
+
+    const inputTokens = Math.max(1, Math.round(promptChars / 4));
+    const outputTokens = Math.max(1, Math.round(content.length / 4));
+    const cost = calculateCost(agent.provider, agent.model, inputTokens, outputTokens);
+    const energy = estimateTurnEnergy(agent.provider, agent.model, inputTokens, outputTokens);
+
+    usage.create({
+      timestamp,
+      agentId: ids.agents[agentKey],
+      agentName: agent.name,
+      projectId,
+      containerId,
+      kind,
+      provider: agent.provider,
+      model: agent.model,
+      inputTokens,
+      outputTokens,
+      cachedTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: cost,
+      costBasis: cost === null ? 'unknown' : 'estimated',
+      energyWh: energy.wh,
+      energyLowWh: energy.whLow,
+      energyHighWh: energy.whHigh,
+      energyBasis: energy.provenance,
+      // Plausible rather than invented from nothing: roughly the time it takes
+      // to generate this many tokens at a typical streaming rate.
+      durationMs: outputTokens * 25,
+      usageIsTotal: true,
+    });
   };
 
   // A user row has to exist before anything can be attributed to one; the app
@@ -133,6 +195,9 @@ export function seedDatabase(
     });
     ids.chats[c.key] = chat.id;
 
+    // Grows as the conversation does, so each turn's input cost reflects the
+    // history it actually had to re-send — the effect the view exists to show.
+    let promptChars = 0;
     for (const m of c.messages) {
       const isUser = m.from === 'user';
       channels.createDirectMessage({
@@ -143,6 +208,8 @@ export function seedDatabase(
         content: m.content,
         timestamp: at(m.at),
       });
+      if (!isUser) recordSeedTurn(m.from, chat.id, null, 'chat', m.content, promptChars, at(m.at));
+      promptChars += m.content.length;
     }
   }
 
@@ -161,6 +228,7 @@ export function seedDatabase(
 
     // No dispatcher exists in process, so unlike the IPC loader the ordering
     // here carries no risk — nothing can respond to a mention.
+    let channelPromptChars = 0;
     for (const m of ch.messages) {
       const isUser = m.from === 'user';
       channels.createMessage({
@@ -171,6 +239,13 @@ export function seedDatabase(
         content: m.content,
         timestamp: at(m.at),
       });
+      if (!isUser) {
+        recordSeedTurn(
+          m.from, channel.id, ids.projects[ch.project ?? ''] ?? null,
+          'channel', m.content, channelPromptChars, at(m.at),
+        );
+      }
+      channelPromptChars += m.content.length;
     }
   }
 

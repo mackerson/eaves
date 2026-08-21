@@ -34,6 +34,7 @@ const SEEDED = new Set([
   'routines',
   'memory_blocks',
   'activities',            // written as a side effect of everything above
+  'usage_events',          // derived from the seeded agent turns by the loader
 ]);
 
 /**

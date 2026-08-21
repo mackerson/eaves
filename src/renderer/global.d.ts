@@ -1,4 +1,4 @@
-import { Agent, AgentMemory, AgentMemoryStatus, User, Message, MCPServer, Project, Task, Note, NoteLabel, NoteAIMetadata, Settings, Channel, Chat, ChatMessage, MessageMetrics, ContentBlock, ScheduleEvent, Milestone, Deadline, Routine, Workflow, File as ProjectFile, PluginManifest, Activity, ThemeDefinition, BackupSnapshot, ConversationFolder, MemoryListResult, MemorySearchResponse, MemoryRetrieveResult, MemoryStoreResult, MemoryDeleteResult } from '../shared/types';
+import { Agent, AgentMemory, AgentMemoryStatus, User, Message, MCPServer, Project, Task, Note, NoteLabel, NoteAIMetadata, Settings, Channel, Chat, ChatMessage, MessageMetrics, ContentBlock, ScheduleEvent, Milestone, Deadline, Routine, Workflow, File as ProjectFile, PluginManifest, Activity, UsageEvent, UsageFilter, UsageSummary, ThemeDefinition, BackupSnapshot, ConversationFolder, MemoryListResult, MemorySearchResponse, MemoryRetrieveResult, MemoryStoreResult, MemoryDeleteResult } from '../shared/types';
 import {
   ChatStreamEvent,
   CreateAgentRequest,
@@ -364,6 +364,27 @@ declare global {
       clearActivitiesBefore: (timestamp: number) => Promise<{ success: boolean; deleted?: number; error?: string }>;
       getActivityCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
       onActivityNew: (callback: (activity: Activity) => void) => () => void;
+
+      // Usage ledger (cost + energy accounting)
+      getUsageSummary: (
+        request?: UsageFilter & { bucket?: 'hour' | 'day' | 'week' },
+      ) => Promise<{ success: boolean; summary?: UsageSummary; earliest?: number | null; error?: string }>;
+      getUsageEvents: (filter?: UsageFilter) => Promise<{ success: boolean; events?: UsageEvent[]; error?: string }>;
+      getUsagePricing: () => Promise<{
+        success: boolean;
+        pricing?: Array<{
+          key: string; provider: string; model: string; turns: number;
+          promptCostPer1M: number | null; completionCostPer1M: number | null;
+          source: 'user' | 'builtin' | 'local' | 'none';
+        }>;
+        error?: string;
+      }>;
+      getPowerStatus: () => Promise<{
+        success: boolean;
+        status?: { available: boolean; sources: Array<'rapl' | 'nvidia'>; platformSupported: boolean };
+        error?: string;
+      }>;
+      clearUsageBefore: (timestamp: number) => Promise<{ success: boolean; deleted?: number; error?: string }>;
 
       // Agent Memories
       getCandidateMemories: (agentId: string) => Promise<{ success: boolean; data?: AgentMemory[]; error?: string }>;
