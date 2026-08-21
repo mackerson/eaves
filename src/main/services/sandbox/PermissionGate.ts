@@ -33,8 +33,13 @@ export interface PluginPermissionSet {
 /**
  * Maps API methods to required permissions
  * Format: "namespace.method" -> [required permissions]
+ *
+ * Exported because it is also the authoritative answer to "what can a plugin
+ * call, and what does it have to declare to call it" — which is what the
+ * plugin API catalog reports to an agent authoring one. Deriving that from
+ * this map rather than restating it keeps the two from drifting.
  */
-const PERMISSION_REQUIREMENTS: Record<string, PluginPermission[]> = {
+export const PERMISSION_REQUIREMENTS: Record<string, PluginPermission[]> = {
   // Data namespace - read operations
   'data.agents.getAll': ['data:agents:read'],
   'data.agents.getById': ['data:agents:read'],
