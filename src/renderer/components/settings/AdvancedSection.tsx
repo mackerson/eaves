@@ -9,11 +9,16 @@ export function AdvancedSection() {
   const openrouterStickyProvider = useSettingsStore(
     (s) => s.settings.openrouterStickyProvider,
   );
+  const pluginAuthoringEnabled = useSettingsStore(
+    (s) => s.settings.pluginAuthoringEnabled,
+  );
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const showToast = useToastStore((s) => s.showToast);
 
   const reviewOn = workflowReviewRequired !== false;
   const stickyOn = openrouterStickyProvider !== false;
+  // Opposite default to the two above: this one is off until asked for.
+  const authoringOn = pluginAuthoringEnabled === true;
 
   const handleReviewToggle = (checked: boolean) => {
     updateSettings({ workflowReviewRequired: checked }).catch((err: unknown) => {
@@ -24,6 +29,13 @@ export function AdvancedSection() {
 
   const handleStickyToggle = (checked: boolean) => {
     updateSettings({ openrouterStickyProvider: checked }).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      showToast(`Failed to save: ${message}`, 'error');
+    });
+  };
+
+  const handleAuthoringToggle = (checked: boolean) => {
+    updateSettings({ pluginAuthoringEnabled: checked }).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : 'Save failed';
       showToast(`Failed to save: ${message}`, 'error');
     });
@@ -72,6 +84,43 @@ export function AdvancedSection() {
             </p>
             <p className="text-sm mt-1 text-muted-foreground">
               Agents can now create workflows that execute arbitrary code (read/write files, call the network, run shell commands) without your approval. A prompt injection in any agent interaction could silently compromise your system. Re-enable this unless you have very good reason.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3 pt-6 border-t border-border">
+        <div>
+          <Label>Let agents build plugins</Label>
+          <p className="text-sm text-muted-foreground">
+            When ON, agents can stage a plugin and run it: they get four tools to inspect the plugin API, write a plugin to disk, activate it, and retract it. Staged plugins are not installed — they never appear in the sidebar, and they disappear when you retract them or restart Eaves. Writing and activating each ask for your approval.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            id="plugin-authoring-enabled"
+            type="checkbox"
+            checked={authoringOn}
+            onChange={(e) => handleAuthoringToggle(e.target.checked)}
+            className="h-4 w-4"
+          />
+          <Label htmlFor="plugin-authoring-enabled" className="cursor-pointer">
+            Allow agents to write and run plugins
+          </Label>
+        </div>
+        {authoringOn && (
+          <div
+            className="p-3 rounded-md border"
+            style={{
+              background: 'rgba(220, 38, 38, 0.08)',
+              borderColor: 'rgb(220, 38, 38)',
+            }}
+          >
+            <p className="text-sm font-semibold" style={{ color: 'rgb(220, 38, 38)' }}>
+              ⚠️ Agents can run code they wrote
+            </p>
+            <p className="text-sm mt-1 text-muted-foreground">
+              An activated plugin runs in a sandbox worker with the permissions its own manifest asks for — the same trust you would extend to a shell. Read what you are approving: the permission list is the whole of what it can reach. A prompt injection in any agent interaction could try to walk you through approving one.
             </p>
           </div>
         )}
