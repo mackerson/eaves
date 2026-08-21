@@ -21,8 +21,11 @@ import * as path from 'path';
 import { getSandboxedPluginManager } from './sandbox';
 import { isInsideDirectory, readInstalledPluginId, sanitizeFolderName } from './sandbox/pathContainment';
 import { PluginManifestSchema, validateWithSchema, isValidationFailure } from '../../shared/validation';
+import { assertDestOwnership } from './MarketplaceService';
+import { getPluginGrantsRepository } from '../repositories';
+import { legacyEnv } from '../utils/legacyEnv';
 import { logger } from './logger';
-import type { PluginManifest, PluginPermission } from '../../shared/types';
+import type { PluginDraft, PluginManifest } from '../../shared/types';
 
 /**
  * Caps. These are not tuned — they are the point at which "a plugin" has
@@ -54,20 +57,8 @@ export interface DraftSpec {
   files: DraftFile[];
 }
 
-export interface DraftRecord {
-  id: string;
-  name: string;
-  version: string;
-  type: string;
-  description?: string;
-  folderName: string;
-  permissions: PluginPermission[];
-  files: string[];
-  /** True when this draft is currently loaded in a worker. */
-  running: boolean;
-  /** Where the renderer would fetch the UI bundle, when the draft declares one. */
-  bundleUrl?: string;
-}
+/** The renderer lists drafts too, so the shape is shared. */
+export type DraftRecord = PluginDraft;
 
 export class PluginDraftError extends Error {}
 
@@ -302,4 +293,95 @@ export function readDraft(id: string): { record: DraftRecord; files: DraftFile[]
     content: fs.readFileSync(path.join(pluginDir, relative), 'utf-8'),
   }));
   return { record, files };
+}
+
+/**
+ * Promotion: a draft stops being an experiment and becomes an installed plugin.
+ *
+ * This is the one place a draft crosses out of quarantine, so it is the one
+ * place that asks. Consent is the same main-owned modal the marketplace uses —
+ * not renderer UI — because after this the plugin's bundle is import()ed into
+ * the main window's realm, where renderer-drawn dialogs can be spoofed. The
+ * copy differs (`kind: 'promote'`): there was no download and no checksum, and
+ * saying otherwise would be a lie at the exact moment it matters.
+ *
+ * There is deliberately no agent tool for this. An agent can write a plugin and
+ * run it; only a person can install one. That keeps a prompt-injected agent
+ * from even being able to ask, which is a stronger property than any dialog.
+ *
+ * One-way per id: `writeDraft` refuses an id an installed plugin holds, so
+ * shipping a v2 means uninstalling first. Installed code is not agent-rewritable.
+ */
+export async function promoteDraft(id: string): Promise<{ id: string; folderName: string }> {
+  const staged = readDraft(id);
+  if (!staged) throw new PluginDraftError(`No draft with id "${id}".`);
+
+  const manager = getSandboxedPluginManager();
+  const existing = manager.getPluginManifest(id);
+  if (existing && existing.source !== 'draft') {
+    throw new PluginDraftError(
+      `"${id}" is already the id of a loaded ${existing.source} plugin.`
+    );
+  }
+
+  const permissions = staged.record.permissions;
+  const approved = await promptPromotionConsent(staged.record);
+  if (!approved) throw new PluginDraftError('Keeping this plugin was cancelled.');
+
+  const userRoot = manager.getUserPluginsDir();
+  const dest = path.join(userRoot, staged.record.folderName);
+  if (!isInsideDirectory(dest, userRoot)) {
+    throw new PluginDraftError(`Refusing to install outside the plugins directory: ${dest}`);
+  }
+  // Ownership, not just containment: dest may already hold a different plugin.
+  assertDestOwnership(dest, id);
+
+  const draftDir = path.join(draftsRoot(), staged.record.folderName);
+  if (manager.isPluginLoaded(id)) await manager.unloadPlugin(id); // free the files
+
+  // Copy, load, and only then drop the draft. A rename would be atomic but
+  // cannot cross a filesystem boundary, and more importantly it would destroy
+  // the draft before we know the install loads. If the load fails, the copy is
+  // rolled back and the draft is still there to fix.
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.cpSync(draftDir, dest, { recursive: true });
+
+  try {
+    await manager.loadUserPlugin(staged.record.folderName);
+  } catch (error) {
+    fs.rmSync(dest, { recursive: true, force: true });
+    throw new PluginDraftError(
+      `"${id}" failed to load as an installed plugin, so nothing was kept and the draft is untouched: ` +
+      `${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  fs.rmSync(draftDir, { recursive: true, force: true });
+  getPluginGrantsRepository().set(id, permissions, staged.record.version, Date.now());
+  logger.info('[PluginDraft] Promoted a draft to an installed plugin', { id, permissions });
+
+  return { id, folderName: staged.record.folderName };
+}
+
+/**
+ * Ask, unless a headless test has pre-answered. Mirrors the marketplace's
+ * `EAVES_PLUGIN_AUTO_CONSENT` escape hatch (1 = approve, 0 = decline) — the
+ * same flag, because a second one would be a second thing to get wrong.
+ */
+async function promptPromotionConsent(draft: DraftRecord): Promise<boolean> {
+  const flag = legacyEnv('EAVES_PLUGIN_AUTO_CONSENT');
+  if (flag === '1') return true;
+  if (flag === '0') return false;
+
+  const { showPluginConsent } = await import('../windows/pluginConsentWindow');
+  return showPluginConsent({
+    kind: 'promote',
+    name: draft.name,
+    author: 'an agent in this app',
+    version: draft.version,
+    tier: 'draft',
+    homepage: '',
+    permissions: draft.permissions,
+  });
 }

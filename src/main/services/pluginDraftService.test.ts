@@ -15,12 +15,21 @@ vi.mock('./logger', () => ({
 
 const managerMock = {
   getDraftPluginsDir: vi.fn<() => string>(),
+  getUserPluginsDir: vi.fn<() => string>(),
   getPluginManifest: vi.fn<(id: string) => PluginManifest | null>(() => null),
   isPluginLoaded: vi.fn<(id: string) => boolean>(() => false),
+  unloadPlugin: vi.fn(async () => {}),
+  loadUserPlugin: vi.fn(async () => ({})),
 };
 vi.mock('./sandbox', () => ({ getSandboxedPluginManager: () => managerMock }));
 
-import { writeDraft, listDrafts, readDraft, PluginDraftError } from './pluginDraftService';
+const grantsMock = { set: vi.fn(), get: vi.fn(() => null), delete: vi.fn() };
+vi.mock('../repositories', () => ({ getPluginGrantsRepository: () => grantsMock }));
+
+const showPluginConsent = vi.fn(async () => true);
+vi.mock('../windows/pluginConsentWindow', () => ({ showPluginConsent }));
+
+import { writeDraft, listDrafts, readDraft, promoteDraft, PluginDraftError } from './pluginDraftService';
 
 const manifest = (overrides: Record<string, unknown> = {}) => ({
   id: 'com.alice.sketch',
@@ -36,16 +45,26 @@ const entryFile = { path: 'index.cjs', content: 'module.exports = { activate() {
 
 describe('pluginDraftService', () => {
   let root: string;
+  let installRoot: string;
 
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-drafts-'));
+    installRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'eaves-installed-'));
+    vi.clearAllMocks();
     managerMock.getDraftPluginsDir.mockReturnValue(root);
+    managerMock.getUserPluginsDir.mockReturnValue(installRoot);
     managerMock.getPluginManifest.mockReturnValue(null);
     managerMock.isPluginLoaded.mockReturnValue(false);
+    managerMock.loadUserPlugin.mockResolvedValue({});
+    showPluginConsent.mockResolvedValue(true);
+    // The env escape hatch is for headless runs; these tests exercise the
+    // consent call itself, so it must not be short-circuited.
+    delete process.env.EAVES_PLUGIN_AUTO_CONSENT;
   });
 
   afterEach(() => {
     fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(installRoot, { recursive: true, force: true });
   });
 
   describe('writing', () => {
@@ -202,6 +221,94 @@ describe('pluginDraftService', () => {
     it('reports nothing when the draft root does not exist yet', () => {
       managerMock.getDraftPluginsDir.mockReturnValue(path.join(root, 'absent'));
       expect(listDrafts()).toEqual([]);
+    });
+  });
+
+  describe('promotion', () => {
+    const stage = () => writeDraft({ manifest: manifest(), files: [entryFile] });
+    const destDir = () => path.join(installRoot, 'com-alice-sketch');
+    const draftDir = () => path.join(root, 'com-alice-sketch');
+
+    it('asks before installing, and says what is actually being decided', async () => {
+      stage();
+      await promoteDraft('com.alice.sketch');
+
+      expect(showPluginConsent).toHaveBeenCalledTimes(1);
+      const req = showPluginConsent.mock.calls[0][0];
+      // Not an install-from-registry: there was no download and no checksum,
+      // so the dialog must not claim otherwise.
+      expect(req.kind).toBe('promote');
+      expect(req.permissions).toEqual(['ui:views:register']);
+      expect(req.homepage).toBe('');
+    });
+
+    it('moves the draft into the install directory and loads it', async () => {
+      stage();
+      const result = await promoteDraft('com.alice.sketch');
+
+      expect(result).toEqual({ id: 'com.alice.sketch', folderName: 'com-alice-sketch' });
+      expect(fs.existsSync(path.join(destDir(), 'index.cjs'))).toBe(true);
+      expect(fs.existsSync(draftDir())).toBe(false);
+      expect(managerMock.loadUserPlugin).toHaveBeenCalledWith('com-alice-sketch');
+    });
+
+    it('records the consented permissions so a later update can diff them', async () => {
+      stage();
+      await promoteDraft('com.alice.sketch');
+
+      expect(grantsMock.set).toHaveBeenCalledWith(
+        'com.alice.sketch', ['ui:views:register'], '1.0.0', expect.any(Number),
+      );
+    });
+
+    it('changes nothing when consent is declined', async () => {
+      stage();
+      showPluginConsent.mockResolvedValue(false);
+
+      await expect(promoteDraft('com.alice.sketch')).rejects.toThrow(/cancelled/i);
+      expect(fs.existsSync(draftDir())).toBe(true);
+      expect(fs.existsSync(destDir())).toBe(false);
+      expect(managerMock.loadUserPlugin).not.toHaveBeenCalled();
+      expect(grantsMock.set).not.toHaveBeenCalled();
+    });
+
+    it('stops a running draft before moving its files', async () => {
+      stage();
+      managerMock.isPluginLoaded.mockReturnValue(true);
+
+      await promoteDraft('com.alice.sketch');
+      expect(managerMock.unloadPlugin).toHaveBeenCalledWith('com.alice.sketch');
+    });
+
+    it('rolls back and keeps the draft when the install fails to load', async () => {
+      stage();
+      managerMock.loadUserPlugin.mockRejectedValue(new Error('worker died'));
+
+      await expect(promoteDraft('com.alice.sketch')).rejects.toThrow(/nothing was kept/);
+      expect(fs.existsSync(destDir())).toBe(false);
+      expect(fs.existsSync(path.join(draftDir(), 'index.cjs'))).toBe(true);
+      expect(grantsMock.set).not.toHaveBeenCalled();
+    });
+
+    it('refuses when the install directory is occupied by a different plugin', async () => {
+      stage();
+      fs.mkdirSync(destDir(), { recursive: true });
+      fs.writeFileSync(path.join(destDir(), 'plugin.json'), JSON.stringify({ id: 'org.bob.notes' }));
+
+      await expect(promoteDraft('com.alice.sketch')).rejects.toThrow(/occupied by a different plugin/);
+      expect(fs.existsSync(draftDir())).toBe(true);
+    });
+
+    it('refuses an id an installed plugin already holds, before asking', async () => {
+      stage();
+      managerMock.getPluginManifest.mockReturnValue({ source: 'user' } as PluginManifest);
+
+      await expect(promoteDraft('com.alice.sketch')).rejects.toThrow(/already the id of a loaded user/);
+      expect(showPluginConsent).not.toHaveBeenCalled();
+    });
+
+    it('refuses an unknown draft', async () => {
+      await expect(promoteDraft('com.nobody.nothing')).rejects.toThrow(/No draft with id/);
     });
   });
 });

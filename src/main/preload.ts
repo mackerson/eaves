@@ -357,6 +357,11 @@ contextBridge.exposeInMainWorld('electron', {
   getPluginRegistry: (): Promise<{ plugins: Array<{ id: string; name: string; description: string; author: string; homepage: string; tier: string; latest: string; minAppVersion?: string; permissions: string[]; release: { tag: string; asset: string; url: string; sha256: string } | null }>; installed: Record<string, string> }> => ipcRenderer.invoke('marketplace:registry'),
   installPlugin: (pluginId: string): Promise<{ success: boolean; id?: string; folderName?: string; version?: string; error?: string }> => ipcRenderer.invoke('plugin:install', pluginId),
   uninstallPlugin: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:uninstall', pluginId),
+  // Agent-authored drafts. Promotion is human-only — there is deliberately no
+  // agent tool for it, so this bridge is the only way a draft gets installed.
+  listPluginDrafts: (): Promise<{ success: boolean; drafts?: PluginDraft[]; error?: string }> => ipcRenderer.invoke('plugin:list-drafts'),
+  promotePluginDraft: (pluginId: string): Promise<{ success: boolean; id?: string; folderName?: string; error?: string }> => ipcRenderer.invoke('plugin:promote-draft', pluginId),
+  discardPluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:discard-draft', pluginId),
   executePluginTool: (pluginId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> => ipcRenderer.invoke('execute-plugin-tool', { pluginId, toolName, args }),
   getPluginConfig: (pluginId: string): Promise<{ schema: Record<string, unknown>; values: Record<string, unknown>; pluginId: string; pluginName: string }> => ipcRenderer.invoke('get-plugin-config', pluginId),
   setPluginConfig: (pluginId: string, config: Record<string, unknown>): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('set-plugin-config', { pluginId, config }),

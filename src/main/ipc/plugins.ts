@@ -3,6 +3,7 @@ import { getSandboxedPluginManager, isHostOwnedEventType } from '../services/san
 import { getPluginConfigManager } from '../services/PluginConfigManager';
 import { getServiceRegistry } from '../services/ServiceRegistry';
 import { getMarketplaceListing, installPlugin, uninstallPlugin } from '../services/MarketplaceService';
+import { listDrafts, promoteDraft } from '../services/pluginDraftService';
 import { eventBus } from '../services/EventBus';
 import { logger } from '../services/logger';
 import {
@@ -153,6 +154,31 @@ export function registerPluginHandlers(getMainWindow?: () => BrowserWindow | nul
     const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:uninstall');
     if (!validation.success) return validation;
     await uninstallPlugin(validation.data);
+    event.sender.send('plugin-views-changed');
+    return { success: true };
+  }));
+
+  // ── Plugin drafts: agent-authored, staged, not installed ────────────────────
+  // Promotion is human-only on purpose. Agents can write a plugin and run it;
+  // only a person can install one, so a prompt-injected agent cannot even ask.
+  // See services/pluginDraftService.ts.
+
+  ipcMain.handle('plugin:list-drafts', ipcResult('plugin:list-drafts', async () => {
+    return { success: true, drafts: listDrafts() };
+  }));
+
+  ipcMain.handle('plugin:promote-draft', ipcResult('plugin:promote-draft', async (event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:promote-draft');
+    if (!validation.success) return validation;
+    const result = await promoteDraft(validation.data);
+    event.sender.send('plugin-views-changed');
+    return { success: true, ...result };
+  }));
+
+  ipcMain.handle('plugin:discard-draft', ipcResult('plugin:discard-draft', async (event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:discard-draft');
+    if (!validation.success) return validation;
+    await getSandboxedPluginManager().removeDraftPlugin(validation.data);
     event.sender.send('plugin-views-changed');
     return { success: true };
   }));

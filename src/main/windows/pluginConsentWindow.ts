@@ -32,6 +32,13 @@ export interface ConsentRequest {
   tier?: string;
   homepage: string;
   permissions: string[];
+  /**
+   * What the user is actually deciding. 'install' is a registry plugin that was
+   * downloaded and checksum-verified; 'promote' is an agent-authored draft
+   * being kept permanently, which had no download, no checksum and no registry
+   * entry. The assurances differ, so the copy has to.
+   */
+  kind?: 'install' | 'promote';
   /** Permissions already consented to, when this is an update rather than a
    *  first install. Anything outside this set is badged as newly requested. */
   priorPermissions?: string[];
@@ -124,13 +131,14 @@ function renderHtml(req: ConsentRequest): string {
     : '';
 
   const initial = esc((req.name.trim()[0] || '?').toUpperCase());
+  const isPromote = req.kind === 'promote';
 
   return `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
-<title>Install plugin</title>
+<title>${isPromote ? 'Keep this plugin' : 'Install plugin'}</title>
 <style>
   :root {
     --bg: #ffffff; --fg: #0f172a; --muted: #64748b; --border: #e2e8f0;
@@ -207,17 +215,28 @@ function renderHtml(req: ConsentRequest): string {
     </div>
   </div>
   <div class="body">
-    <p class="lead">${isUpdate ? 'After updating, this plugin will be able to:' : 'This plugin will be able to:'}</p>
+    <p class="lead">${
+      isPromote
+        ? 'Keeping it installs it permanently. It will be able to:'
+        : isUpdate
+          ? 'After updating, this plugin will be able to:'
+          : 'This plugin will be able to:'
+    }</p>
     ${permList}
     ${inertList}
     <div class="source">
-      Source: ${esc(req.homepage || 'unknown')}
-      <span class="assure">Downloaded over HTTPS and checksum-verified. Runs sandboxed.</span>
+      ${
+        isPromote
+          ? `Written by an agent in this app.
+             <span class="assure">Not downloaded, not from the plugin registry, and reviewed by nobody but you. Runs sandboxed.</span>`
+          : `Source: ${esc(req.homepage || 'unknown')}
+             <span class="assure">Downloaded over HTTPS and checksum-verified. Runs sandboxed.</span>`
+      }
     </div>
   </div>
   <div class="foot">
     <button id="cancel" autofocus>Cancel</button>
-    <button id="install" class="primary">${isUpdate ? 'Update' : 'Install'}</button>
+    <button id="install" class="primary">${isPromote ? 'Keep' : isUpdate ? 'Update' : 'Install'}</button>
   </div>
 <script>
   (function () {
@@ -275,7 +294,7 @@ export function showPluginConsent(req: ConsentRequest): Promise<boolean> {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    title: 'Install plugin',
+    title: req.kind === 'promote' ? 'Keep this plugin' : 'Install plugin',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

@@ -919,6 +919,26 @@ export interface PluginManifest {
 }
 
 /**
+ * A staged, agent-authored plugin: on disk under userData/plugins-draft, not
+ * installed. Shared because the renderer lists drafts and offers the two
+ * actions only a person may take on one — keep it, or bin it.
+ */
+export interface PluginDraft {
+  id: string;
+  name: string;
+  version: string;
+  type: string;
+  description?: string;
+  folderName: string;
+  permissions: PluginPermission[];
+  files: string[];
+  /** True when this draft is currently loaded in a worker. */
+  running: boolean;
+  /** Where the renderer would fetch the UI bundle, when the draft declares one. */
+  bundleUrl?: string;
+}
+
+/**
  * Plugin UI bundle metadata
  * Describes the frontend components for dynamic loading
  */
