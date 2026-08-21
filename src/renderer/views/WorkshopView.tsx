@@ -86,6 +86,17 @@ export function WorkshopView() {
     void refreshSessions();
   }, [enabled, refreshDrafts, refreshSessions]);
 
+  // A preview's verdict lands in main a moment after the window opens, and
+  // nothing pushes it here. Poll briefly rather than adding an event for one
+  // fact that a person is already watching for.
+  const [watchingPreview, setWatchingPreview] = useState(false);
+  useEffect(() => {
+    if (!watchingPreview) return;
+    const timer = setInterval(() => void refreshDrafts(), 1500);
+    const stop = setTimeout(() => setWatchingPreview(false), 30_000);
+    return () => { clearInterval(timer); clearTimeout(stop); };
+  }, [watchingPreview, refreshDrafts]);
+
   // A turn ending is when the bench changes: a draft was written, or started.
   const wasLoading = useRef(isLoading);
   useEffect(() => {
@@ -416,11 +427,31 @@ export function WorkshopView() {
                         <span>Wants {elevated.join(' and ')} — read the code before you keep this.</span>
                       </p>
                     )}
+                    {/* Running is not rendering, so the preview's verdict is its
+                        own line. The agent reads the same fact through
+                        plugin_inspect, so telling it "it's broken" is no longer
+                        the only way it can find out. */}
+                    {draft.lastRender?.status === 'failed' && (
+                      <div className="text-xs mt-2 p-2 rounded border border-red-500/40 bg-red-500/10">
+                        <p className="font-medium text-red-400">Preview failed to render</p>
+                        <pre className="mt-1 whitespace-pre-wrap break-words text-[11px] text-muted-foreground max-h-24 overflow-y-auto">
+                          {draft.lastRender.message}
+                        </pre>
+                      </div>
+                    )}
+                    {draft.lastRender?.status === 'ok' && (
+                      <p className="text-xs mt-2 text-emerald-600 dark:text-emerald-400">
+                        Previewed and rendered cleanly.
+                      </p>
+                    )}
                     <div className="flex items-center flex-wrap gap-1.5 mt-3">
                       {draft.bundleUrl && (
                         <Button
                           variant="outline" size="sm" disabled={busy}
-                          onClick={() => act(draft, 'preview', () => window.electron.previewPluginDraft(draft.id), 'Preview opened')}
+                          onClick={() => {
+                            setWatchingPreview(true);
+                            void act(draft, 'preview', () => window.electron.previewPluginDraft(draft.id), 'Preview opened');
+                          }}
                         >
                           Preview
                         </Button>

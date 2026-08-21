@@ -209,6 +209,17 @@ minimal `EavesAPI` (React + presentational components; **no** `electron`, **no**
 stores), so it is a second Vite entry rather than a route. Popups and navigation
 are denied; `pluginPreviewWindow.test.ts` pins all of it.
 
+**Running is not rendering**, and the difference used to be invisible to the
+agent that wrote the plugin. `services/pluginRenderReports.ts` holds the last
+preview outcome per draft (`ok` / `failed` + message / absent = never
+previewed); `plugin_inspect` reports it and the bench shows it. Cleared on
+redefine, activate and retract, so a verdict never outlives the code it
+describes. The preview window has no preload to report *with*, so the outcome
+rides out on a console line that main reads via
+`webContents.on('console-message')` — no new bridge. Main rejects markers whose
+`sourceId` is `plugin://`, which is what stops a draft forging its own verdict
+(a hardening, not a proof: a successful forgery only lies about rendering).
+
 Note a draft plugin UI needs **no build step**: `moduleShim.ts` externalizes
 React, so a hand-written ES module using `React.createElement` loads as written.
 

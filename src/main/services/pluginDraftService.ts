@@ -24,6 +24,7 @@ import { PluginManifestSchema, validateWithSchema, isValidationFailure } from '.
 import { assertDestOwnership } from './MarketplaceService';
 import { getPluginGrantsRepository } from '../repositories';
 import { legacyEnv } from '../utils/legacyEnv';
+import { getRenderReport, clearRenderReport } from './pluginRenderReports';
 import { logger } from './logger';
 import type { PluginDraft, PluginManifest } from '../../shared/types';
 
@@ -204,6 +205,10 @@ export function writeDraft(spec: DraftSpec): DraftRecord {
     seen.add(file.target);
   }
 
+  // The old files are about to be replaced, so any recorded render outcome
+  // describes code that will not exist in a moment.
+  clearRenderReport(manifest.id);
+
   if (fs.existsSync(pluginDir)) {
     const occupant = readInstalledPluginId(pluginDir);
     if (occupant !== null && occupant !== manifest.id) {
@@ -247,6 +252,7 @@ function toRecord(manifest: PluginManifest, folderName: string, files: string[])
     running: getSandboxedPluginManager().isPluginLoaded(manifest.id),
     bundleUrl: manifest.ui?.entry ? `plugin://draft.${folderName}/${manifest.ui.entry}` : undefined,
     ui: manifest.ui,
+    lastRender: getRenderReport(manifest.id),
   };
 }
 

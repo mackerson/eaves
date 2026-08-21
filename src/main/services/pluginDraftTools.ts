@@ -35,6 +35,20 @@ const failure = (error: unknown) => {
   return { success: false as const, error: message };
 };
 
+/**
+ * Running is not rendering. A draft with a UI can be loaded and working from
+ * the host's point of view while its component throws on first paint, so the
+ * render outcome is reported as its own fact rather than folded into
+ * `running` — and "nobody has looked yet" is said out loud, because otherwise
+ * a model reads silence as success.
+ */
+function describeRender(draft: DraftRecord): string | undefined {
+  if (!draft.ui) return undefined;
+  if (!draft.lastRender) return 'Not previewed yet — nobody has seen this render.';
+  if (draft.lastRender.status === 'ok') return 'Previewed and rendered without error.';
+  return `Preview FAILED: ${draft.lastRender.message ?? 'no detail reported'}`;
+}
+
 const describeDraft = (draft: DraftRecord) => ({
   id: draft.id,
   name: draft.name,
@@ -44,6 +58,7 @@ const describeDraft = (draft: DraftRecord) => ({
   files: draft.files,
   running: draft.running,
   bundleUrl: draft.bundleUrl,
+  render: describeRender(draft),
 });
 
 export function createPluginDraftTools() {
@@ -52,7 +67,9 @@ export function createPluginDraftTools() {
       description:
         'Read the plugin system: the API a plugin can call and what each call requires, ' +
         'the plugins currently loaded, and the drafts you have staged. ' +
-        'Call this before writing a plugin — it is cheaper than guessing at method names and permissions.',
+        'Call this before writing a plugin — it is cheaper than guessing at method names and permissions. ' +
+        'Call it again after someone previews a UI draft: each draft reports whether it actually ' +
+        'rendered, and carries the error if it did not.',
       inputSchema: z.object({
         what: z
           .enum(['api', 'plugins', 'drafts', 'all'])
@@ -159,7 +176,9 @@ export function createPluginDraftTools() {
               ? `Running. ${registered.join(', ')} become callable on your next turn.`
               : 'Running. It registered no tools.',
             viewNote: manifest.ui
-              ? 'Its view is not shown in the sidebar: a draft UI does not share a window with the dialog that would approve it.'
+              ? 'Its view is not shown in the sidebar: a draft UI does not share a window with the dialog ' +
+                'that would approve it. Running does NOT mean it rendered — ask for a preview, then read ' +
+                'the result back with plugin_inspect what:"drafts".'
               : undefined,
           };
         } catch (error) {

@@ -938,6 +938,13 @@ export interface PluginDraft {
   bundleUrl?: string;
   /** The manifest's UI block, when it declares one — what the preview mounts. */
   ui?: PluginUIMetadata;
+  /**
+   * What happened the last time someone previewed this draft's UI, or absent
+   * if nobody has. Running is not rendering: the bundle can fail to load and
+   * the component can throw on first paint, and neither is visible from the
+   * activation that reported success.
+   */
+  lastRender?: { status: 'ok' | 'failed'; message?: string; at: number };
 }
 
 /**

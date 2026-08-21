@@ -53,7 +53,7 @@ vi.mock('electron', () => ({
   ),
 }));
 
-import { showPluginPreview, closePluginPreview } from './pluginPreviewWindow';
+import { showPluginPreview, closePluginPreview, parseRenderMarker } from './pluginPreviewWindow';
 
 const request = {
   bundleUrl: 'plugin://draft.com-alice-sketch/ui/index.js',
@@ -132,5 +132,41 @@ describe('showPluginPreview', () => {
     showPluginPreview('com.alice.sketch', request);
 
     expect(FakeWindow.created).toHaveLength(2);
+  });
+});
+
+/**
+ * The preview window has no preload, so its verdict rides out on a console
+ * line. `sourceId` is what stops the draft's own bundle forging one: the
+ * preview page logs from the app origin, plugin code logs from `plugin://`.
+ */
+describe('parseRenderMarker', () => {
+  const APP = 'http://localhost:5173/assets/preview-abc.js';
+  const PLUGIN = 'plugin://draft.com-alice-dice/ui/index.js';
+  const line = (payload: unknown) => `[eaves:render] ${JSON.stringify(payload)}`;
+
+  it('reads a success', () => {
+    expect(parseRenderMarker(line({ status: 'ok' }), APP)).toEqual({ status: 'ok', message: undefined });
+  });
+
+  it('reads a failure and its detail', () => {
+    expect(parseRenderMarker(line({ status: 'failed', message: 'boom' }), APP))
+      .toEqual({ status: 'failed', message: 'boom' });
+  });
+
+  it('ignores the same marker logged by the plugin bundle', () => {
+    expect(parseRenderMarker(line({ status: 'ok' }), PLUGIN)).toBeNull();
+  });
+
+  it('ignores ordinary console output', () => {
+    expect(parseRenderMarker('Warning: each child needs a key', APP)).toBeNull();
+  });
+
+  it('ignores a marker with nothing parseable after it', () => {
+    expect(parseRenderMarker('[eaves:render] not json', APP)).toBeNull();
+  });
+
+  it('ignores a status it does not recognise', () => {
+    expect(parseRenderMarker(line({ status: 'maybe' }), APP)).toBeNull();
   });
 });

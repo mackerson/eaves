@@ -12,6 +12,7 @@ import { app, Notification } from 'electron';
 import { PluginManifest } from '../../types';
 import { PluginManifestSchema, validateWithSchema, isValidationFailure } from '../../../shared/validation';
 import { eventBus } from '../EventBus';
+import { clearRenderReport } from '../pluginRenderReports';
 import { logger } from '../logger';
 import { getPluginConfigManager } from '../PluginConfigManager';
 
@@ -1171,6 +1172,8 @@ export class SandboxedPluginManager {
     if (existing) {
       await this.unloadPlugin(manifest.id); // re-activating a draft replaces it
     }
+    // A fresh dispatch: whatever a previous preview saw was a different run.
+    clearRenderReport(manifest.id);
     await this.loadPlugin(manifest);
     return manifest;
   }
@@ -1210,6 +1213,7 @@ export class SandboxedPluginManager {
       }
       fs.rmSync(dir, { recursive: true, force: true });
     }
+    clearRenderReport(pluginId);
     getPluginStateRepository().delete(pluginId);
     getPluginConfigManager().deleteConfig(pluginId);
   }

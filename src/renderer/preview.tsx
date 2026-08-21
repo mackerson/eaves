@@ -47,11 +47,38 @@ import './index.css';
   utils: { cn },
 };
 
+/**
+ * How this window tells main what happened, without gaining a bridge to do it.
+ *
+ * The whole point of the preview is that this realm has no preload and no IPC,
+ * so there is nothing here to send an outcome with. But main owns the
+ * BrowserWindow, and a window's console is something main can listen to
+ * (`webContents.on('console-message')`). So the report rides out on a console
+ * line and costs no new surface at all.
+ *
+ * Main additionally checks that the line came from *this* bundle rather than
+ * from the plugin's — draft code shares this realm and could log the same
+ * marker. That is a hardening, not a guarantee: the worst a draft can do is
+ * lie about its own render status, which reaches no data and approves nothing.
+ */
+const RENDER_MARKER = '[eaves:render]';
+
+let failed = false;
+
+function report(status: 'ok' | 'failed', message?: string): void {
+  if (status === 'failed') failed = true;
+  else if (failed) return; // never overwrite a failure with a late all-clear
+  const line = `${RENDER_MARKER} ${JSON.stringify({ draftId, status, message })}`;
+  if (status === 'failed') console.error(line);
+  else console.info(line);
+}
+
 const params = new URLSearchParams(window.location.search);
 const bundleUrl = params.get('bundle') ?? '';
 const componentName = params.get('component') ?? '';
 const exportType = params.get('exportType') === 'default' ? 'default' : 'named';
 const draftName = params.get('name') ?? 'Draft';
+const draftId = params.get('draftId') ?? '';
 
 function Banner() {
   return (
@@ -92,6 +119,9 @@ class Boundary extends React.Component<
 > {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) {
+    report('failed', error.stack || error.message);
+  }
   render() {
     if (this.state.error) {
       return <Failure title="The component threw while rendering." detail={this.state.error.stack || this.state.error.message} />;
@@ -110,6 +140,7 @@ async function mount() {
   );
 
   if (!bundleUrl || !componentName) {
+    report('failed', 'This draft declares no UI bundle.');
     root.render(frame(<Failure title="Nothing to preview." detail="This draft declares no UI bundle." />));
     return;
   }
@@ -119,6 +150,7 @@ async function mount() {
     const module_ = await import(/* @vite-ignore */ bundleUrl);
     const candidate = exportType === 'default' ? module_.default : module_[componentName];
     if (typeof candidate !== 'function') {
+      report('failed', `The bundle has no ${exportType} export "${componentName}". It exports: ${Object.keys(module_).join(', ') || '(nothing)'}`);
       root.render(frame(
         <Failure
           title={`The bundle has no ${exportType} export "${componentName}".`}
@@ -129,6 +161,7 @@ async function mount() {
     }
     Component = candidate;
   } catch (error) {
+    report('failed', error instanceof Error ? (error.stack || error.message) : String(error));
     root.render(frame(
       <Failure
         title="The bundle failed to load."
@@ -139,6 +172,21 @@ async function mount() {
   }
 
   root.render(frame(<Boundary><Component /></Boundary>));
+  // React renders synchronously enough that a throw has already reached the
+  // boundary by the next frame; anything still standing then has rendered.
+  requestAnimationFrame(() => {
+    if (!failed) report('ok');
+  });
 }
+
+// Anything React never sees — an async throw inside an effect, a rejected
+// promise the component did not handle. Without these a preview can look fine
+// and be quietly broken.
+window.addEventListener('error', (event) =>
+  report('failed', event.error?.stack || event.message),
+);
+window.addEventListener('unhandledrejection', (event) =>
+  report('failed', String((event.reason as Error)?.stack || event.reason)),
+);
 
 void mount();

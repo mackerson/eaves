@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import * as path from 'path';
 import { logger } from '../services/logger';
+import { recordRenderReport } from '../services/pluginRenderReports';
 
 /**
  * A draft's UI, rendered in a window of its own.
@@ -25,6 +26,42 @@ export interface PreviewRequest {
   exportType: 'default' | 'named';
   /** Shown in the preview's banner so the window says what it is. */
   name: string;
+}
+
+/**
+ * Read a render outcome out of a console line, if that is what it is.
+ *
+ * `sourceId` is the script the line came from, and it is the reason this is
+ * worth doing at all: the draft's own bundle shares this realm and could log
+ * the same marker, but it logs from `plugin://`, while the preview page logs
+ * from the app origin. Rejecting the former makes a draft unable to forge its
+ * own verdict without first tricking the preview page into logging for it.
+ *
+ * A hardening, not a proof. The worst a successful forgery achieves is lying
+ * about whether it rendered — it reaches no data and approves nothing.
+ */
+export function parseRenderMarker(
+  message: string,
+  sourceId: string,
+): { status: 'ok' | 'failed'; message?: string } | null {
+  const marker = '[eaves:render]';
+  const at = message.indexOf(marker);
+  if (at === -1) return null;
+  if (sourceId.startsWith('plugin://')) return null;
+
+  try {
+    const parsed = JSON.parse(message.slice(at + marker.length)) as {
+      status?: unknown;
+      message?: unknown;
+    };
+    if (parsed.status !== 'ok' && parsed.status !== 'failed') return null;
+    return {
+      status: parsed.status,
+      message: typeof parsed.message === 'string' ? parsed.message : undefined,
+    };
+  } catch {
+    return null; // a line that looks like a marker but is not one
+  }
 }
 
 /** One window per draft id, so previewing twice focuses rather than piles up. */
@@ -59,11 +96,20 @@ export function showPluginPreview(draftId: string, req: PreviewRequest): void {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event) => event.preventDefault());
 
+  // The window has no preload and therefore no way to send anything back. It
+  // does not need one: main owns this webContents, so the outcome rides out on
+  // a console line. See the report() helper in renderer/preview.tsx.
+  win.webContents.on('console-message', (_event, _level, message, _line, sourceId) => {
+    const report = parseRenderMarker(message, sourceId);
+    if (report) recordRenderReport(draftId, report);
+  });
+
   const params = new URLSearchParams({
     bundle: req.bundleUrl,
     component: req.componentName,
     exportType: req.exportType,
     name: req.name,
+    draftId,
   });
 
   // Resolve against whatever the app itself loaded from, rather than probing
