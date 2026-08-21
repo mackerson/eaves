@@ -149,8 +149,12 @@ properties define it, and each is load-bearing:
   `sanitizeFolderName` folds `.` to `-`. `plugin_define` and `loadDraftPlugin`
   both refuse an id a non-draft plugin already holds
 
-Gated on `Settings.pluginAuthoringEnabled` (default off): activating a draft is
-bash-equivalent trust. Agents reach it through four tools —
+Gated on **two** conditions: `Settings.pluginAuthoringEnabled` (default off) is
+the trust decision, and `isWorkshopSession(channelId)` is the blast radius. The
+tools do not appear in ordinary chats at all, so there is nowhere an agent can
+write and run code unobserved. The setting is offered inline from the Workshop
+(shared copy in `lib/pluginAuthoringCopy.ts`) rather than only in Settings.
+Agents reach it through four tools —
 `plugin_inspect` / `plugin_define` / `plugin_activate` / `plugin_retract`
 (`services/pluginDraftTools.ts`), absent from the toolset entirely when the
 setting is off. **Four rather than one-per-capability is deliberate**: a tool
@@ -174,11 +178,25 @@ the system will ever have.
   shipping a v2 means uninstalling first. Installed code is never
   agent-rewritable
 
-**Workshop** (`views/WorkshopView.tsx`, sidebar section, `view: 'workshop'`) is the
-review surface: every staged draft with its manifest, permissions and **file
-contents verbatim**, plus Run / Stop / Preview / Keep / Discard. Reading the code
-before approving it is the point — the agent still works in chat, this is not a
-second conversation.
+**Workshop** (`views/WorkshopView.tsx`, sidebar section, `view: 'workshop'`) is
+where a plugin gets built *and* judged. Two panes: the conversation you ask in,
+and a bench rail showing what has been made — file contents verbatim,
+permissions, elevated grants called out, and Run / Stop / Preview / Keep /
+Discard. It stacks below Tailwind's `lg` so a narrow window does not crush the
+conversation.
+
+A **workshop session** is a `direct` chat with `channels.workshop = 1` (v80).
+Being an ordinary chat is the point: messages, streaming, approval cards and
+regeneration all work on it unchanged. The flag keeps it out of the chat list,
+per-agent list, search and tag filtering — but *not* `getChatById`, which is how
+the Workshop opens it. Deliberately a column, not a tag: tags are user-editable
+and this flag decides whether a conversation may write and run code.
+
+The transcript composes `ChatMessageRow` + `ChatInput` directly rather than
+reusing `ChatsView` (721 lines of queueing, attachments, editing and branch
+swiping a bench has no use for). The load-bearing prop is `approvalContext` —
+it is what lets the inline tool-approval cards resume the right stream, and
+those cards are the tactile moment: define and activate both stop and ask.
 
 **Draft preview** (`windows/pluginPreviewWindow.ts` + `renderer/preview.html`) is
 a separate `BrowserWindow` with **no preload at all**, and that is the entire

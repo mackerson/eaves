@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useUIStore } from '@/stores';
 import { CollapsibleSection } from './CollapsibleSection';
-import type { PluginDraft } from '@/../shared/types';
+import type { Chat, PluginDraft } from '@/../shared/types';
 
 /**
  * Staged drafts at a glance, and the way into the Workshop.
@@ -16,10 +16,15 @@ const POLL_MS = 15_000;
 export function WorkshopSection() {
   const { setView } = useUIStore();
   const [drafts, setDrafts] = useState<PluginDraft[]>([]);
+  const [sessions, setSessions] = useState<Chat[]>([]);
 
   const refresh = useCallback(async () => {
-    const result = await window.electron.listPluginDrafts();
-    setDrafts(result?.drafts ?? []);
+    const [draftResult, sessionResult] = await Promise.all([
+      window.electron.listPluginDrafts(),
+      window.electron.listWorkshopSessions(),
+    ]);
+    setDrafts(draftResult?.drafts ?? []);
+    setSessions(sessionResult?.sessions ?? []);
   }, []);
 
   useEffect(() => {
@@ -32,12 +37,21 @@ export function WorkshopSection() {
     <CollapsibleSection
       title="Workshop"
       onTitleClick={() => setView('workshop')}
-      isExpandedByDefault={drafts.length > 0}
+      isExpandedByDefault={drafts.length > 0 || sessions.length > 0}
     >
-      {drafts.length === 0 ? (
-        <div className="section-empty">No drafts</div>
+      {drafts.length === 0 && sessions.length === 0 ? (
+        <div className="section-empty">Nothing being built</div>
       ) : (
         <div className="section-list">
+          {/* Builds first — a session is the thing you come back to; a draft is
+              what one of them produced. Selecting a specific build happens in
+              the Workshop itself, so these all just open it. */}
+          {sessions.map((session) => (
+            <button key={session.id} className="section-item" onClick={() => setView('workshop')}>
+              <span className="item-icon">🛠</span>
+              <span className="item-label">{session.name}</span>
+            </button>
+          ))}
           {drafts.map((draft) => (
             <button key={draft.id} className="section-item" onClick={() => setView('workshop')}>
               <span className="item-icon">{draft.running ? '●' : '○'}</span>

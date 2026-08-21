@@ -1,6 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useSettingsStore, useToastStore } from '@/stores';
+import {
+  PLUGIN_AUTHORING_TITLE,
+  PLUGIN_AUTHORING_EXPLAINER,
+  PLUGIN_AUTHORING_WARNING_TITLE,
+  PLUGIN_AUTHORING_WARNING,
+} from '@/lib/pluginAuthoringCopy';
 
 export function AdvancedSection() {
   const workflowReviewRequired = useSettingsStore(
@@ -91,10 +97,8 @@ export function AdvancedSection() {
 
       <section className="space-y-3 pt-6 border-t border-border">
         <div>
-          <Label>Let agents build plugins</Label>
-          <p className="text-sm text-muted-foreground">
-            When ON, agents can stage a plugin and run it: they get four tools to inspect the plugin API, write a plugin to disk, activate it, and retract it. Staged plugins are not installed — they never appear in the sidebar, and they disappear when you retract them or restart Eaves. Writing and activating each ask for your approval.
-          </p>
+          <Label>{PLUGIN_AUTHORING_TITLE}</Label>
+          <p className="text-sm text-muted-foreground">{PLUGIN_AUTHORING_EXPLAINER}</p>
         </div>
         <div className="flex items-center gap-3">
           <input
@@ -117,11 +121,9 @@ export function AdvancedSection() {
             }}
           >
             <p className="text-sm font-semibold" style={{ color: 'rgb(220, 38, 38)' }}>
-              ⚠️ Agents can run code they wrote
+              {PLUGIN_AUTHORING_WARNING_TITLE}
             </p>
-            <p className="text-sm mt-1 text-muted-foreground">
-              An activated plugin runs in a sandbox worker with the permissions its own manifest asks for — the same trust you would extend to a shell. Read what you are approving: the permission list is the whole of what it can reach. A prompt injection in any agent interaction could try to walk you through approving one.
-            </p>
+            <p className="text-sm mt-1 text-muted-foreground">{PLUGIN_AUTHORING_WARNING}</p>
           </div>
         )}
       </section>
