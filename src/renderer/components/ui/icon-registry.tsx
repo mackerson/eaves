@@ -20,6 +20,7 @@ import {
   Activity,
   Gauge,
   Plug,
+  Hammer,
   Settings,
   LayoutDashboard,
   Import,
@@ -65,6 +66,7 @@ export type IconName =
   | 'activity'
   | 'system'
   | 'plugins'
+  | 'workshop'
   | 'settings'
   | 'dashboard'
   | 'imports'
@@ -136,6 +138,7 @@ export const iconRegistry: Record<IconName, IconConfig> = {
   activity: { emoji: '📊', pixelart: 'chart', lucide: Activity },
   system: { emoji: '⚡', pixelart: 'chart', lucide: Gauge },
   plugins: { emoji: '🔌', pixelart: 'power', lucide: Plug },
+  workshop: { emoji: '🛠️', pixelart: 'power', lucide: Hammer },
   settings: { emoji: '⚙️', pixelart: 'sliders', lucide: Settings },
   dashboard: { emoji: '📊', pixelart: 'calendar', lucide: LayoutDashboard }, // placeholder
   imports: { emoji: '📥', pixelart: 'folder', lucide: Import }, // placeholder

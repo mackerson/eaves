@@ -246,6 +246,7 @@ function toRecord(manifest: PluginManifest, folderName: string, files: string[])
     files: [...files].sort(),
     running: getSandboxedPluginManager().isPluginLoaded(manifest.id),
     bundleUrl: manifest.ui?.entry ? `plugin://draft.${folderName}/${manifest.ui.entry}` : undefined,
+    ui: manifest.ui,
   };
 }
 

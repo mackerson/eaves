@@ -259,6 +259,10 @@ declare global {
       listPluginDrafts: () => Promise<{ success: boolean; drafts?: PluginDraft[]; error?: string }>;
       promotePluginDraft: (pluginId: string) => Promise<{ success: boolean; id?: string; folderName?: string; error?: string }>;
       discardPluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+      readPluginDraft: (pluginId: string) => Promise<{ success: boolean; draft?: PluginDraft; files?: Array<{ path: string; content: string }>; error?: string }>;
+      activatePluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+      deactivatePluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+      previewPluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
       executePluginTool: (pluginId: string, toolName: string, args: Record<string, unknown>) => Promise<unknown>;
       getPluginConfig: (pluginId: string) => Promise<{ schema: Record<string, { type: string; default?: unknown; description?: string }>; values: Record<string, unknown>; pluginId: string; pluginName: string }>;
       setPluginConfig: (pluginId: string, config: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;

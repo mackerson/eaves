@@ -3,7 +3,8 @@ import { getSandboxedPluginManager, isHostOwnedEventType } from '../services/san
 import { getPluginConfigManager } from '../services/PluginConfigManager';
 import { getServiceRegistry } from '../services/ServiceRegistry';
 import { getMarketplaceListing, installPlugin, uninstallPlugin } from '../services/MarketplaceService';
-import { listDrafts, promoteDraft } from '../services/pluginDraftService';
+import { listDrafts, readDraft, promoteDraft } from '../services/pluginDraftService';
+import { showPluginPreview, closePluginPreview } from '../windows/pluginPreviewWindow';
 import { eventBus } from '../services/EventBus';
 import { logger } from '../services/logger';
 import {
@@ -178,8 +179,67 @@ export function registerPluginHandlers(getMainWindow?: () => BrowserWindow | nul
   ipcMain.handle('plugin:discard-draft', ipcResult('plugin:discard-draft', async (event, pluginId: string) => {
     const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:discard-draft');
     if (!validation.success) return validation;
+    closePluginPreview(validation.data); // a preview of something deleted is a lie
     await getSandboxedPluginManager().removeDraftPlugin(validation.data);
     event.sender.send('plugin-views-changed');
+    return { success: true };
+  }));
+
+  // Read back what the agent wrote. Approving code you have not read is the
+  // gap this closes, so the Workshop shows every file verbatim.
+  ipcMain.handle('plugin:read-draft', ipcResult('plugin:read-draft', async (_event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:read-draft');
+    if (!validation.success) return validation;
+    const staged = readDraft(validation.data);
+    if (!staged) return { success: false, error: `No draft with id "${validation.data}".` };
+    return { success: true, draft: staged.record, files: staged.files };
+  }));
+
+  ipcMain.handle('plugin:activate-draft', ipcResult('plugin:activate-draft', async (event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:activate-draft');
+    if (!validation.success) return validation;
+    const staged = readDraft(validation.data);
+    if (!staged) return { success: false, error: `No draft with id "${validation.data}".` };
+    await getSandboxedPluginManager().loadDraftPlugin(staged.record.folderName);
+    event.sender.send('plugin-views-changed');
+    return { success: true };
+  }));
+
+  ipcMain.handle('plugin:deactivate-draft', ipcResult('plugin:deactivate-draft', async (event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:deactivate-draft');
+    if (!validation.success) return validation;
+    const manager = getSandboxedPluginManager();
+    const manifest = manager.getPluginManifest(validation.data);
+    // Stops a draft without deleting it. Guarded so this can never be used to
+    // stop an installed plugin, which has its own disable path and its own UI.
+    if (manifest && manifest.source !== 'draft') {
+      return { success: false, error: `${validation.data} is not a draft.` };
+    }
+    if (manifest) await manager.unloadPlugin(validation.data);
+    event.sender.send('plugin-views-changed');
+    return { success: true };
+  }));
+
+  // The preview renders in a window of its own, with no IPC bridge — see
+  // windows/pluginPreviewWindow.ts for why that isolation is the whole point.
+  ipcMain.handle('plugin:preview-draft', ipcResult('plugin:preview-draft', async (_event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:preview-draft');
+    if (!validation.success) return validation;
+    const draft = listDrafts().find(d => d.id === validation.data);
+    if (!draft) return { success: false, error: `No draft with id "${validation.data}".` };
+    if (!draft.bundleUrl || !draft.ui) {
+      return { success: false, error: `${draft.name} declares no UI bundle, so there is nothing to preview.` };
+    }
+    const [componentName, exportType] = Object.entries(draft.ui.components)[0] ?? [];
+    if (!componentName) {
+      return { success: false, error: `${draft.name} declares a UI bundle but no components.` };
+    }
+    showPluginPreview(draft.id, {
+      bundleUrl: draft.bundleUrl,
+      componentName,
+      exportType: exportType === 'default' ? 'default' : 'named',
+      name: draft.name,
+    });
     return { success: true };
   }));
 

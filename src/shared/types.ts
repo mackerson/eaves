@@ -936,6 +936,8 @@ export interface PluginDraft {
   running: boolean;
   /** Where the renderer would fetch the UI bundle, when the draft declares one. */
   bundleUrl?: string;
+  /** The manifest's UI block, when it declares one — what the preview mounts. */
+  ui?: PluginUIMetadata;
 }
 
 /**
