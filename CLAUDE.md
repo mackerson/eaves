@@ -108,12 +108,38 @@ Architecture diagrams and invariants live in `docs/architecture/README.md` — t
   at 3s and best-effort — plugin code cannot block an uninstall
 - Plugins live in separate repos (`mackerson/eaves-plugin-*`), symlinked for dev
 - `bundled-plugins.json` defines which plugins ship with packaged builds
-- Three load paths, first match wins (deduped by id):
+- Three **discovered** load paths, first match wins (deduped by id):
   `plugins/` (dev symlinks, `source: 'dev'`, dev builds only) >
   `~/.config/eaves/plugins/` (`'user'`) > `dist/plugins/` (`'bundled'`)
 - `source` is not cosmetic — it decides where the renderer fetches the UI bundle
   (`'user'` → `plugin://` in userData; `'dev'`/`'bundled'` → the served `plugins/`
   tree) and only `'user'` plugins can be uninstalled
+
+**Draft tier** (`~/.config/eaves/plugins-draft/`, `source: 'draft'`):
+Agent-authored plugins, staged by `services/pluginDraftService.ts` and run by
+`loadDraftPlugin`. A fourth tier, but **not a fourth discovery path** — three
+properties define it, and each is load-bearing:
+- **Never discovered.** `discoverPlugins()` does not scan it, so a draft only
+  runs because someone activated it this session and a restart is a clean slate
+- **Never surfaces a view.** `getRegisteredViews()` filters drafts out. Plugin
+  UI bundles are `import()`ed into the main window's JS realm — which is *why*
+  install consent is a separate main-owned window (`pluginConsentWindow.ts`) —
+  so unconsented agent-written UI there could script the gate approving it.
+  A draft preview therefore needs its own out-of-realm surface
+- **Cannot be confused with an installed plugin.** Addressed as
+  `plugin://draft.<folder>/…`; the namespaces cannot collide because
+  `sanitizeFolderName` folds `.` to `-`. `plugin_define` and `loadDraftPlugin`
+  both refuse an id a non-draft plugin already holds
+
+Gated on `Settings.pluginAuthoringEnabled` (default off): activating a draft is
+bash-equivalent trust. Agents reach it through four tools —
+`plugin_inspect` / `plugin_define` / `plugin_activate` / `plugin_retract`
+(`services/pluginDraftTools.ts`), absent from the toolset entirely when the
+setting is off. **Four rather than one-per-capability is deliberate**: a tool
+per extension point grows without bound and needs the same validation anyway,
+whereas one primitive whose vocabulary is "a plugin" covers every capability
+the system will ever have. Not built yet: promotion to `userData/plugins/`, and
+the Workshop UI with its out-of-realm preview.
 
 **Marketplace** (`src/main/services/MarketplaceService.ts`, live):
 - Installs by **registry id, never a URL** — confined to entries in the curated
