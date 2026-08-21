@@ -51,6 +51,12 @@ yarn rebuild-sqlite3      # Rebuild SQLite for Electron
 yarn reset:dev            # Reset dev environment to defaults
 ```
 
+**Type-checking covers two projects, and the root one is not the main process.**
+`tsc -p tsconfig.json` includes only `src/renderer/**` and `src/shared/**`; main
+and preload are compiled by `tsconfig.main.json`. Checking only the root passes
+clean while `src/main` is broken — run **both** (`npx tsc --noEmit -p tsconfig.json`
+and `yarn build:main`) before calling a change type-clean.
+
 Note: Native module rebuilds are automatic. `predev` rebuilds better-sqlite3 for Electron, `pretest` rebuilds for system Node. No manual `rebuild-sqlite3` needed when switching between dev and test.
 
 ## Architecture Overview
@@ -138,8 +144,25 @@ bash-equivalent trust. Agents reach it through four tools —
 setting is off. **Four rather than one-per-capability is deliberate**: a tool
 per extension point grows without bound and needs the same validation anyway,
 whereas one primitive whose vocabulary is "a plugin" covers every capability
-the system will ever have. Not built yet: promotion to `userData/plugins/`, and
-the Workshop UI with its out-of-realm preview.
+the system will ever have.
+
+**Promotion** (`promoteDraft`, `plugin:promote-draft`) moves a draft into
+`userData/plugins/` as a normal `'user'` install:
+- **Human-only.** There is deliberately *no* agent tool. An agent can write a
+  plugin and run it; only a person can install one, so a prompt-injected agent
+  cannot even ask. `PluginsView` owns the Keep/Discard actions
+- Consent is the same main-owned modal as the marketplace, with
+  `kind: 'promote'` copy — the install wording promises "downloaded over HTTPS
+  and checksum-verified", which for an agent-authored draft is false in every
+  clause
+- Copy → load → *then* delete the draft. A rename cannot cross a filesystem
+  boundary and would destroy the draft before the install is known to load; on
+  failure the copy is rolled back and the draft survives
+- **One-way per id.** `writeDraft` refuses an id an installed plugin holds, so
+  shipping a v2 means uninstalling first. Installed code is never
+  agent-rewritable
+
+Not built yet: the Workshop UI and its out-of-realm draft preview.
 
 **Marketplace** (`src/main/services/MarketplaceService.ts`, live):
 - Installs by **registry id, never a URL** — confined to entries in the curated

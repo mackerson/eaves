@@ -61,6 +61,7 @@ import {
   ContentBlock,
   MessageMetrics,
   PluginManifest,
+  PluginDraft,
   Activity,
   UsageEvent,
   UsageFilter,
