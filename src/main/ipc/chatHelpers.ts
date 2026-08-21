@@ -892,6 +892,7 @@ export async function runStream(options: RunStreamOptions): Promise<StreamResult
 
   streamMetrics.timeToComplete = Date.now() - startTime;
   streamMetrics.model = agent.model;
+  streamMetrics.provider = agent.provider;
 
   // Attach context budget info for UI transparency
   if (options.requestInfo) {
@@ -902,13 +903,18 @@ export async function runStream(options: RunStreamOptions): Promise<StreamResult
   // from token counts × agent pricing; fall back to the estimate otherwise.
   if (typeof orReportedCost === 'number') {
     streamMetrics.cost = orReportedCost;
+    streamMetrics.costBasis = 'reported';
   } else {
     const cost = calculateCost(
       agent.provider, agent.model, streamMetrics.inputTokens, streamMetrics.outputTokens,
       { promptCostPer1M: agent.promptCostPer1M, completionCostPer1M: agent.completionCostPer1M },
+      // Cache tiers, so a warm turn is not billed as if every cached token
+      // were fresh input.
+      { cachedTokens: streamMetrics.cachedTokens, cacheWriteTokens: streamMetrics.cacheWriteTokens },
     );
     if (cost !== null) {
       streamMetrics.cost = cost;
+      streamMetrics.costBasis = 'estimated';
     }
   }
 

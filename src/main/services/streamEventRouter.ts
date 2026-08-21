@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import { eventBus } from './EventBus';
 import { calculateCost } from '../../shared/pricing';
+import { resolvePricing } from './pricingResolver';
 import type { MessageMetrics } from '../../shared/types';
 
 /**
@@ -102,14 +103,27 @@ export function trackUsage(event: unknown, metrics: StreamMetrics): void {
 export function emitAgentSpend(
   agent: { id: string; name: string; provider: string; model: string; promptCostPer1M?: number | null; completionCostPer1M?: number | null },
   metrics: StreamMetrics,
-  context: { kind: string; containerId?: string },
+  context: { kind: string; containerId?: string; projectId?: string },
 ): void {
-  const cost = typeof metrics.cost === 'number'
+  // Cache tiers are passed through: without them a warm Anthropic turn is
+  // billed as though every cached token were fresh input, which overstates the
+  // cached portion tenfold.
+  const cacheUsage = { cachedTokens: metrics.cachedTokens, cacheWriteTokens: metrics.cacheWriteTokens };
+  // Agent override > user settings override > built-in table. Resolved here
+  // rather than passing the agent's fields straight through, so a rate the
+  // user corrected in settings reaches the ledger instead of being quietly
+  // outvoted by a shipped table that has since gone stale.
+  const resolved = resolvePricing(agent.provider, agent.model, agent);
+  const computed = typeof metrics.cost === 'number'
     ? metrics.cost
-    : calculateCost(agent.provider, agent.model, metrics.inputTokens, metrics.outputTokens, {
-      promptCostPer1M: agent.promptCostPer1M ?? undefined,
-      completionCostPer1M: agent.completionCostPer1M ?? undefined,
-    }) ?? undefined;
+    : calculateCost(agent.provider, agent.model, metrics.inputTokens, metrics.outputTokens,
+      resolved ? { promptCostPer1M: resolved.promptCostPer1M, completionCostPer1M: resolved.completionCostPer1M } : undefined,
+      cacheUsage) ?? undefined;
+
+  // The caller sets costBasis when it knows the figure came from the provider
+  // itself. Absent that, anything we derived here is an estimate, and saying
+  // otherwise would lend the pricing table an authority it does not have.
+  const costBasis = metrics.costBasis ?? (computed != null ? 'estimated' : 'unknown');
 
   eventBus.emitEvent('agent:spend', {
     agentId: agent.id,
@@ -119,12 +133,16 @@ export function emitAgentSpend(
     servedProvider: metrics.servedProvider,
     kind: context.kind,
     containerId: context.containerId,
+    // Resolved by the caller where it knows directly; UsageLedgerService falls
+    // back to the container's channel when this is absent.
+    projectId: context.projectId,
     inputTokens: metrics.inputTokens,
     outputTokens: metrics.outputTokens,
     totalTokens: metrics.totalTokens,
     cachedTokens: metrics.cachedTokens,
     cacheWriteTokens: metrics.cacheWriteTokens,
-    cost,
+    cost: computed,
+    costBasis,
     // False means the figure is a floor, not a total — the turn ended before
     // the SDK's summed usage arrived. Aggregations must not silently treat
     // the two as equivalent.

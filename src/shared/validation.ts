@@ -115,6 +115,26 @@ export const BackgroundSettingsSchema = z.object({
   fromTheme: z.boolean().optional(),
 });
 
+/**
+ * Cost/energy accounting inputs. Bounds are sanity rails, not opinions: the
+ * price caps sit far above any real published rate so a fat-fingered extra
+ * zero is caught, and the grid-intensity range spans from a fully nuclear grid
+ * to a coal-only one.
+ */
+const UsageSettingsSchema = z.object({
+  pricingOverrides: z.record(
+    // "<provider>:<model>"
+    z.string().min(1).max(200),
+    z.object({
+      promptCostPer1M: z.number().nonnegative().max(10_000),
+      completionCostPer1M: z.number().nonnegative().max(10_000),
+    }),
+  ).optional(),
+  gridIntensityGPerKwh: z.number().nonnegative().max(1500).optional(),
+  measureLocalPower: z.boolean().optional(),
+  energyScale: z.number().positive().max(100).optional(),
+});
+
 export const UpdateSettingsSchema = z.object({
   userName: UserNameSchema.optional(),
   // Bare avatar filename; empty string clears it.
@@ -148,6 +168,7 @@ export const UpdateSettingsSchema = z.object({
     .optional(),
   fontScale: z.number().min(0.8).max(1.5).optional(),
   lineSpacing: z.number().min(1).max(1.5).optional(),
+  usage: UsageSettingsSchema.optional(),
 });
 
 // MCP Server validation schemas
@@ -744,7 +765,11 @@ export const MessageMetricsObjectSchema = z.object({
   timeToComplete: z.number().nonnegative().optional(),
   finishReason: z.string().optional(),
   model: z.string().optional(),
+  // Pricing is keyed on (provider, model); the agent's current provider is not
+  // a safe stand-in for the one that served a past turn.
+  provider: z.string().optional(),
   cost: z.number().optional(),
+  costBasis: z.enum(['reported', 'estimated', 'local', 'unknown']).optional(),
   // Context budget and request composition — what the UI shows as "what this
   // request cost". Omitting it here is what made a resumed or renderer-saved
   // turn lose its telemetry.
@@ -1188,6 +1213,26 @@ export const ActivityFilterSchema = z.object({
   endTime: z.number().int().positive().optional(),
   limit: z.number().int().positive().max(1000).optional(),
   offset: z.number().int().nonnegative().optional(),
+});
+
+/**
+ * Usage ledger filters. `limit` is capped well below the activity feed's
+ * because these rows are wider and the drill-down list is paginated anyway.
+ */
+export const UsageFilterSchema = z.object({
+  startTime: z.number().int().positive().optional(),
+  endTime: z.number().int().positive().optional(),
+  projectId: EntityIdSchema.optional(),
+  agentId: EntityIdSchema.optional(),
+  provider: z.string().min(1).max(50).optional(),
+  kinds: z.array(z.string().min(1).max(50)).max(20).optional(),
+  limit: z.number().int().positive().max(500).optional(),
+  offset: z.number().int().nonnegative().optional(),
+});
+
+/** A filter plus the time-series bucket width the view wants. */
+export const UsageSummaryRequestSchema = UsageFilterSchema.extend({
+  bucket: z.enum(['hour', 'day', 'week']).optional(),
 });
 
 // Timestamp schema for IPC handlers that accept a timestamp parameter

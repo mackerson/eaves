@@ -6,6 +6,7 @@ import { getLogger } from './logger';
 import { summarizeProviderError } from '../utils/aiErrors';
 import { MEMORY_EXTRACTOR_PROMPT } from '../../shared/shadowDefaults';
 import { parseDreamOutput, consolidateDream } from './shadowConsolidate';
+import { createStreamMetrics, emitAgentSpend, trackUsage } from './streamEventRouter';
 
 const logger = getLogger();
 
@@ -158,6 +159,12 @@ class ShadowAgentInstance {
       ];
 
       let fullResponse = '';
+      // A shadow flush is a real billed inference that no human asked for and
+      // no conversation shows. Unmetered, it was the single most invisible
+      // spend in the app: it fires on a timer, against whatever model the
+      // shadow agent is configured with, for as long as the app is open.
+      const metrics = createStreamMetrics();
+      const startedAt = Date.now();
       for await (const event of streamAIResponse(
         this.shadowAgent, memory, messages, systemPrompt,
         undefined, undefined, undefined, undefined,
@@ -166,7 +173,12 @@ class ShadowAgentInstance {
         if (typeof event === 'string') {
           fullResponse += event;
         }
+        trackUsage(event, metrics);
       }
+      metrics.timeToComplete = Date.now() - startedAt;
+      metrics.model = this.shadowAgent.model;
+      metrics.provider = this.shadowAgent.provider;
+      emitAgentSpend(this.shadowAgent, metrics, { kind: 'shadow' });
 
       // "Dreaming": consolidate the segment into the target agent's memory —
       // the current_focus core block + durable archival facts. Shadows that

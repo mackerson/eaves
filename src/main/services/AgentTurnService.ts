@@ -805,6 +805,7 @@ async function runChatAssistantTurn(
     const timeToComplete = Date.now() - startTime;
     streamMetrics.timeToComplete = timeToComplete;
     streamMetrics.model = agent.model;
+    streamMetrics.provider = agent.provider;
 
     // Surface a hard output-limit truncation so a cut-off reply isn't silently
     // presented as complete (field data: recurring mid-sentence cut-offs).
@@ -828,6 +829,7 @@ async function runChatAssistantTurn(
     // estimate from token usage (agent-level pricing overrides built-in table).
     if (typeof orReportedCost === 'number') {
       streamMetrics.cost = orReportedCost;
+      streamMetrics.costBasis = 'reported';
     } else {
       const cost = calculateCost(
         agent.provider,
@@ -835,9 +837,13 @@ async function runChatAssistantTurn(
         streamMetrics.inputTokens,
         streamMetrics.outputTokens,
         { promptCostPer1M: agent.promptCostPer1M, completionCostPer1M: agent.completionCostPer1M },
+        // Cache tiers, so a warm turn is not billed as if every cached token
+        // were fresh input.
+        { cachedTokens: streamMetrics.cachedTokens, cacheWriteTokens: streamMetrics.cacheWriteTokens },
       );
       if (cost !== null) {
         streamMetrics.cost = cost;
+        streamMetrics.costBasis = 'estimated';
       }
     }
 

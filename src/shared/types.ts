@@ -67,7 +67,22 @@ export interface MessageMetrics {
   timeToComplete?: number;  // milliseconds
   finishReason?: string;  // 'stop' | 'length' | 'error' | 'tool_use' etc
   model?: string;
+  /**
+   * The provider that served this turn. Recorded alongside `model` because
+   * pricing is keyed on the pair, and an agent's provider is mutable: without
+   * it, re-pricing history means asking the agent what it is *now*, which
+   * silently reprices every past turn the moment someone switches a model
+   * from Anthropic to OpenRouter.
+   */
+  provider?: string;
   cost?: number;  // USD cost for this message (null for local models)
+  /**
+   * Where `cost` came from. 'reported' is the provider's own figure (only
+   * OpenRouter supplies one today); 'estimated' is token counts times the
+   * pricing table. The UI must not present the second with the confidence of
+   * the first, and a ledger cannot reconstruct the difference after the fact.
+   */
+  costBasis?: CostBasis;
   requestInfo?: RequestInfo;  // context budget and request composition details
   // OpenRouter only: the upstream backend that actually served this turn
   // (e.g. 'GMICloud'), read from providerMetadata.openrouter. Drives
@@ -769,6 +784,42 @@ export interface Settings {
   fontScale?: number;
   /** Multiplier on the --line-height-* tokens. 1 = default. */
   lineSpacing?: number;
+  /** Cost, energy and carbon accounting. See UsageSettings. */
+  usage?: UsageSettings;
+}
+
+/**
+ * User-owned inputs to the cost and energy model.
+ *
+ * These exist because the built-in tables are all wrong in ways only the user
+ * can fix. Provider prices change without notice and this app ships on its own
+ * release cadence; a grid's carbon intensity varies by more than an order of
+ * magnitude between regions; and a self-hosted or proxied endpoint has rates
+ * nobody but its operator knows. Rather than let those become silent
+ * inaccuracies, each is an explicit, editable input.
+ */
+export interface UsageSettings {
+  /**
+   * Per-model price overrides, keyed `"<provider>:<model>"`. Takes precedence
+   * over the built-in table but not over an agent's own override, which is
+   * narrower and therefore wins.
+   */
+  pricingOverrides?: Record<string, { promptCostPer1M: number; completionCostPer1M: number }>;
+  /**
+   * Grams of CO2e per kWh for the grid the user's electricity comes from.
+   * Defaults to a world average, which is the right default and the wrong
+   * number for almost everybody — see DEFAULT_GRID_INTENSITY_G_PER_KWH.
+   */
+  gridIntensityGPerKwh?: number;
+  /**
+   * Whether to sample real power draw for local models (Linux only, RAPL +
+   * nvidia-smi). Off by default: it spawns a long-lived nvidia-smi and polls
+   * sysfs once a second, which is a small but real cost the user should opt
+   * into rather than discover.
+   */
+  measureLocalPower?: boolean;
+  /** Multiplier on estimated cloud energy, for users with a better figure. */
+  energyScale?: number;
 }
 
 export type FontPreference = 'default' | 'open-dyslexic' | 'custom';
@@ -1160,6 +1211,110 @@ export interface ActivityFilter {
   endTime?: number;
   limit?: number;
   offset?: number;
+}
+
+// =================================================================
+// Usage Ledger Types
+// =================================================================
+
+/**
+ * Where a cost figure came from. The distinction is load-bearing: 'unknown'
+ * carries a null cost and must be shown as a gap, never folded into a total as
+ * zero, or the total quietly understates every unpriced model in the workspace.
+ */
+export type CostBasis = 'reported' | 'estimated' | 'local' | 'unknown';
+
+/** One inference. The durable unit of the ledger. */
+export interface UsageEvent {
+  id: string;
+  timestamp: number;
+
+  agentId?: string;
+  /** Snapshotted, so the row still reads correctly after the agent is deleted. */
+  agentName?: string;
+  projectId?: string;
+  containerId?: string;
+  /** 'chat' | 'channel' | 'workflow' | 'compaction' | 'shadow' | ... */
+  kind: string;
+
+  provider: string;
+  model: string;
+  servedProvider?: string;
+
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  cacheWriteTokens: number;
+
+  /** Null when pricing is genuinely unavailable. Zero is a real, different answer. */
+  costUsd: number | null;
+  costBasis: CostBasis;
+
+  energyWh: number | null;
+  energyLowWh: number | null;
+  energyHighWh: number | null;
+  energyBasis: 'measured' | 'estimated' | null;
+
+  durationMs?: number;
+  /** False means the token counts are a floor, not a settled total. */
+  usageIsTotal: boolean;
+}
+
+export interface UsageFilter {
+  startTime?: number;
+  endTime?: number;
+  projectId?: string;
+  agentId?: string;
+  provider?: string;
+  kinds?: string[];
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * An aggregate over some slice of the ledger.
+ *
+ * `unpricedTurns` and `partialTurns` are not decoration. A total built from
+ * rows where pricing was missing, or where usage never settled, is a floor —
+ * and the only way a UI can say so honestly is if the aggregate carries the
+ * count of terms it could not fully account for.
+ */
+export interface UsageRollup {
+  /** Identifies the bucket: an agent id, provider name, day, etc. */
+  key: string;
+  /** Human-readable label for the bucket. */
+  label: string;
+  turns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+  energyWh: number;
+  energyLowWh: number;
+  energyHighWh: number;
+  /** Turns whose cost was unknown and therefore contributed nothing. */
+  unpricedTurns: number;
+  /** Turns whose token counts were a floor rather than a total. */
+  partialTurns: number;
+  /** True only when every energy figure in this bucket was measured. */
+  energyMeasured: boolean;
+}
+
+/** How the master view slices the ledger. */
+export type UsageDimension = 'agent' | 'provider' | 'model' | 'project' | 'kind';
+
+/** Bucket width for the time series. */
+export type UsageBucket = 'hour' | 'day' | 'week';
+
+export interface UsageSummary {
+  totals: UsageRollup;
+  series: UsageRollup[];
+  byAgent: UsageRollup[];
+  byProvider: UsageRollup[];
+  byModel: UsageRollup[];
+  byProject: UsageRollup[];
+  byKind: UsageRollup[];
 }
 
 // =================================================================

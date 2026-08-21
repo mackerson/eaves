@@ -11,7 +11,7 @@ import { logger } from './logger';
 import { streamAIResponse } from './ai';
 import { ToolSessionState } from './discoveryTools';
 import { eventBus } from './EventBus';
-import { createStreamMetrics, emitStreamSentinel, type StreamEnvelope } from './streamEventRouter';
+import { createStreamMetrics, emitAgentSpend, emitStreamSentinel, trackUsage, type StreamEnvelope } from './streamEventRouter';
 import { ChatMessage } from '../../shared/types';
 import { loadSessionState, seedEnabledTools } from '../ipc/chatHelpers';
 import { friendlyAIErrorMessage, summarizeProviderError } from '../utils/aiErrors';
@@ -335,6 +335,11 @@ Respond ONLY with a JSON object in this exact format:
       let fullResponse = '';
 
       // Auto-title generation runs without a human watching this specific call.
+      // It is small but it fires once per new conversation, so over a busy week
+      // it is not nothing — and an unmetered call is exactly the kind that
+      // shows up as an unexplained gap between the app's totals and the bill.
+      const titleMetrics = createStreamMetrics();
+      const titleStartedAt = Date.now();
       for await (const event of streamAIResponse(
         agent, memory, aiMessages,
         undefined, undefined, undefined, undefined, undefined,
@@ -343,7 +348,12 @@ Respond ONLY with a JSON object in this exact format:
         if (typeof event === 'string') {
           fullResponse += event;
         }
+        trackUsage(event, titleMetrics);
       }
+      titleMetrics.timeToComplete = Date.now() - titleStartedAt;
+      titleMetrics.model = agent.model;
+      titleMetrics.provider = agent.provider;
+      emitAgentSpend(agent, titleMetrics, { kind: 'chat-title', containerId: chatId });
 
       try {
         const jsonMatch = fullResponse.match(/\{[\s\S]*\}/);
