@@ -23,6 +23,7 @@ import { AgentEditorView } from '@/views/AgentEditorView';
  *   calendar  — react-big-calendar, and with it lodash, moment, luxon, popper
  *   workflows — the reactflow packages
  *   notes/tasks — dnd-kit
+ *   system    — recharts, and with it a redux store and much of d3
  *
  * Together that's the bulk of the third-party weight that only ever renders on
  * one screen. Everything else stays static: the remaining views are mostly app
@@ -34,6 +35,7 @@ const CalendarView = lazy(() => import('@/views/CalendarView').then(m => ({ defa
 const WorkflowsView = lazy(() => import('@/views/WorkflowsView').then(m => ({ default: m.WorkflowsView })));
 const NotesView = lazy(() => import('@/views/NotesView').then(m => ({ default: m.NotesView })));
 const TasksView = lazy(() => import('@/views/TasksView').then(m => ({ default: m.TasksView })));
+const SystemView = lazy(() => import('@/views/SystemView').then(m => ({ default: m.SystemView })));
 
 const simpleViews: Record<string, React.ComponentType> = {
   chats: ChatsView,
@@ -47,6 +49,7 @@ const simpleViews: Record<string, React.ComponentType> = {
   routines: RoutinesView,
   activity: ActivityView,
   memory: MemoryView,
+  system: SystemView,
   dashboard: ProjectDashboard,
 };
 

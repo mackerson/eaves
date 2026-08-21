@@ -13,6 +13,7 @@ export type SettingsTabId =
   | 'defaults'
   | 'providers'
   | 'memory'
+  | 'usage'
   | 'integrations'
   | 'sync'
   | 'advanced'

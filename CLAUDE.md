@@ -165,6 +165,45 @@ Scoped to the calling agent, available to all agents:
 - `get_my_channel_behavior` — read current settings
 - `update_my_channel_behavior` — change respondTo/verbosity
 
+### Usage & Cost Accounting
+
+Every inference emits `agent:spend` on the EventBus (`streamEventRouter.ts`).
+Two independent consumers persist it, and conflating them is the mistake to avoid:
+
+- **`ActivityPersistenceService`** → an `activities` row, `audience: 'system'`.
+  Display-only, **pruned after 30 days**. Feeds the activity feed.
+- **`UsageLedgerService`** → a `usage_events` row. The durable ledger: typed
+  columns, indexed rollups, **no automatic retention**. Feeds the System view.
+
+`usage_events` has **no foreign keys** on `agent_id`/`project_id`, and snapshots
+`agent_name` — a ledger row must outlive the entities it names, or deleting an
+agent would silently shrink last quarter's total.
+
+**Every inference path must call `emitAgentSpend`.** Missing one makes real
+money invisible: `ShadowService` and chat auto-titling were both unmetered
+until 2026-08-20. Current callers: `chatHelpers` (chat + approval resume),
+`AgentTurnService` (channels), `WorkflowExecutor`, `compaction`,
+`transcriptSummary`, `notes`, `ChatService` (titles), `ShadowService`.
+
+**Three distinctions the code enforces — do not collapse them:**
+- **free ≠ unknown.** A local model costs `0` with `cost_basis: 'local'`; an
+  unpriced cloud model stores `NULL` with `'unknown'`. `SUM` skips NULLs, so
+  every rollup also returns `unpricedTurns` and the UI says "this is a floor".
+- **reported ≠ estimated.** `cost_basis: 'reported'` is the provider's own
+  figure (OpenRouter only today); everything else is tokens × table.
+- **measured ≠ estimated** for energy. A rollup is `energyMeasured` only when
+  *every* row in it was measured — see `sumEnergy` in `src/shared/energy.ts`.
+
+Pricing precedence: **agent override > user setting > built-in table**
+(`services/pricingResolver.ts`). Cache tiers are provider-shaped — Anthropic
+reports cache reads/writes *alongside* input (additive); OpenAI-shaped usage
+reports them *inside* it (inclusive). Getting that backwards double-bills.
+
+Cloud energy is an **estimate with a stated range**, never a measurement — no
+API reports datacenter joules. Local energy can be genuinely measured via
+`PowerSampler` (Linux RAPL + `nvidia-smi`, opt-in, ring-buffered and queried by
+time window so the turn path stays untouched).
+
 ### Database
 
 SQLite via better-sqlite3 with auto-migrations on startup. `database.ts` opens the DB and runs migrations; the schema itself (`CREATE TABLE` statements + versioned migrations) lives in `src/main/services/migrations.ts`.

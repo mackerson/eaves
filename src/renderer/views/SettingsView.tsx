@@ -5,6 +5,7 @@ import { AppearanceSection } from '@/components/settings/AppearanceSection';
 import { DefaultsSection } from '@/components/settings/DefaultsSection';
 import { ProvidersSection } from '@/components/settings/ProvidersSection';
 import { MemorySettingsSection } from '@/components/settings/MemorySettingsSection';
+import { UsageSection } from '@/components/settings/UsageSection';
 import { MessagingIntegrationsSection } from '@/components/settings/MessagingIntegrationsSection';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { UpdatesSection } from '@/components/settings/UpdatesSection';
@@ -27,6 +28,7 @@ const TABS: TabMeta[] = [
   { id: 'defaults', label: 'Defaults', description: 'Default agent for new chats and the system model for background work.' },
   { id: 'providers', label: 'Providers', description: 'API keys and local endpoints.' },
   { id: 'memory', label: 'Memory', description: 'Semantic (vector) search embeddings for agent memory.' },
+  { id: 'usage', label: 'Usage', description: 'Model prices, grid carbon intensity, and hardware power measurement.' },
   { id: 'integrations', label: 'Integrations', description: 'Messaging bridges and external connections.' },
   { id: 'sync', label: 'Sync', description: 'Keep your devices in sync over your local network — private, serverless, end-to-end encrypted.' },
   { id: 'advanced', label: 'Advanced', description: 'Safety, setup wizard, logs.' },
@@ -70,6 +72,7 @@ export function SettingsView() {
       case 'defaults': return <DefaultsSection />;
       case 'providers': return <ProvidersSection />;
       case 'memory': return <MemorySettingsSection />;
+      case 'usage': return <UsageSection />;
       case 'integrations': return <MessagingIntegrationsSection />;
       case 'sync': return <SyncSection />;
       case 'advanced': return <AdvancedSection />;

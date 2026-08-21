@@ -18,6 +18,7 @@ import {
   Workflow,
   RefreshCw,
   Activity,
+  Gauge,
   Plug,
   Settings,
   LayoutDashboard,
@@ -62,6 +63,7 @@ export type IconName =
   | 'workflows'
   | 'routines'
   | 'activity'
+  | 'system'
   | 'plugins'
   | 'settings'
   | 'dashboard'
@@ -132,6 +134,7 @@ export const iconRegistry: Record<IconName, IconConfig> = {
   workflows: { emoji: '🔀', pixelart: 'git-branch', lucide: Workflow },
   routines: { emoji: '🔄', pixelart: 'reload', lucide: RefreshCw },
   activity: { emoji: '📊', pixelart: 'chart', lucide: Activity },
+  system: { emoji: '⚡', pixelart: 'chart', lucide: Gauge },
   plugins: { emoji: '🔌', pixelart: 'power', lucide: Plug },
   settings: { emoji: '⚙️', pixelart: 'sliders', lucide: Settings },
   dashboard: { emoji: '📊', pixelart: 'calendar', lucide: LayoutDashboard }, // placeholder

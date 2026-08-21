@@ -8,6 +8,7 @@ import { RoutinesSection } from './sidebar/RoutinesSection';
 import { CalendarSection } from './sidebar/CalendarSection';
 import { PluginsSection } from './sidebar/PluginsSection';
 import { ActivitySection } from './sidebar/ActivitySection';
+import { SystemSection } from './sidebar/SystemSection';
 import { MemorySection } from './sidebar/MemorySection';
 import { useResize } from '@/hooks/useResize';
 import { useProjectStore, useUIPreferencesStore, useUIStore } from '@/stores';
@@ -46,6 +47,7 @@ export function Sidebar() {
     { component: RoutinesSection, iconName: 'routines' as IconName, title: 'Routines', view: 'routines' as const },
     { component: CalendarSection, iconName: 'calendar' as IconName, title: 'Calendar', view: 'calendar' as const },
     { component: ActivitySection, iconName: 'activity' as IconName, title: 'Activity', view: 'activity' as const },
+    { component: SystemSection, iconName: 'system' as IconName, title: 'System', view: 'system' as const },
     { component: MemorySection, iconName: 'memory' as IconName, title: 'Memory', view: 'memory' as const },
     { component: PluginsSection, iconName: 'plugins' as IconName, title: 'Plugins', view: 'plugins' as const },
   ];
@@ -83,6 +85,7 @@ export function Sidebar() {
           <RoutinesSection />
           <CalendarSection />
           <ActivitySection />
+          <SystemSection />
           <MemorySection />
           <PluginsSection />
         </div>
