@@ -763,6 +763,14 @@ export interface Settings {
    */
   routinesPaused?: boolean;
   /**
+   * When true, agents get the plugin-authoring toolset: they can stage a plugin
+   * into userData/plugins-draft and activate it. An activated draft is
+   * agent-written code running in a real sandbox worker under real permission
+   * grants — the same trust you extend to a bash tool. Off by default, and both
+   * tools with effects still require per-call approval.
+   */
+  pluginAuthoringEnabled?: boolean;
+  /**
    * Controls how in-app updates are handled:
    * - 'auto' (default): periodic checks + banner + manual check.
    * - 'manual': no periodic check; manual "Check for Updates" still works.
@@ -902,7 +910,11 @@ export interface PluginManifest {
   // plugins/ (dev only) and is deliberately distinct from 'user': it decides
   // where the renderer fetches the UI bundle from, and only 'user' plugins live
   // in userData and can be uninstalled.
-  source?: 'bundled' | 'user' | 'dev';
+  //
+  // 'draft' is agent-authored code staged in userData/plugins-draft. It is never
+  // discovered at startup, never surfaces a view, and only runs when someone
+  // explicitly activates it — see services/pluginDraftService.ts.
+  source?: 'bundled' | 'user' | 'dev' | 'draft';
   folderName?: string; // Plugin folder name
 }
 

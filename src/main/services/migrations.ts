@@ -1105,6 +1105,23 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 79,
+    description: 'Settings carry the plugin-authoring opt-in',
+    migrate: (db) => {
+      // Off for every existing row and every new one. Activating a draft runs
+      // agent-written code in a sandbox worker with real permission grants, so
+      // this defaults closed and stays closed until someone turns it on.
+      const hasColumn = (db.pragma('table_info(settings)') as Array<{ name: string }>)
+        .some(column => column.name === 'plugin_authoring_enabled');
+
+      if (!hasColumn) {
+        db.prepare(
+          'ALTER TABLE settings ADD COLUMN plugin_authoring_enabled INTEGER NOT NULL DEFAULT 0'
+        ).run();
+      }
+    },
+  },
 ];
 
 /**

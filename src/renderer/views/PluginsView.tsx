@@ -14,7 +14,7 @@ interface Plugin {
   enabled: boolean;
   hasView?: boolean;
   viewId?: string;
-  source?: 'bundled' | 'user' | 'dev';
+  source?: 'bundled' | 'user' | 'dev' | 'draft';
 }
 
 const TRUSTED_PLUGINS_KEY = 'eaves:trustedPlugins';
@@ -61,8 +61,14 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
   const originHint = (plugin: Plugin) =>
     plugin.source === 'dev'
       ? 'Linked from your dev checkout. Remove its symlink from plugins/ and restart to unload it — Disable stops it in the meantime.'
-      : 'Ships with Eaves and cannot be uninstalled. Disable stops it from running.';
-  const isTrusted = (plugin: Plugin) => !isUserPlugin(plugin) || trustedPlugins.has(plugin.id);
+      : plugin.source === 'draft'
+        ? 'An agent staged this and it has not been installed. It stops running when you retract it or restart Eaves.'
+        : 'Ships with Eaves and cannot be uninstalled. Disable stops it from running.';
+  // A draft is never implicitly trusted. Bundled and dev plugins are there
+  // because the user or the build put them there; a draft is there because an
+  // agent wrote it, which is exactly the case the trust badge exists to mark.
+  const isTrusted = (plugin: Plugin) =>
+    plugin.source !== 'draft' && (!isUserPlugin(plugin) || trustedPlugins.has(plugin.id));
 
   const handleTrustPlugin = (pluginId: string) => {
     const newTrusted = new Set(trustedPlugins);

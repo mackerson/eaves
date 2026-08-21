@@ -199,6 +199,7 @@ export class SettingsRepository {
       // Default ON for safety if the column is null/missing
       workflowReviewRequired: row.workflow_review_required === null ? true : !!row.workflow_review_required,
       routinesPaused: !!row.routines_paused,
+      pluginAuthoringEnabled: !!row.plugin_authoring_enabled,
       updateMode: (row.update_mode as UpdateMode) || 'auto',
       // Default ON if the column is null/missing (rows written before the
       // column existed).
@@ -301,6 +302,10 @@ export class SettingsRepository {
     if (settings.routinesPaused !== undefined) {
       this.db.prepare('UPDATE settings SET routines_paused = ?, updated_at = ? WHERE id = 1')
         .run(settings.routinesPaused ? 1 : 0, Date.now());
+    }
+    if (settings.pluginAuthoringEnabled !== undefined) {
+      this.db.prepare('UPDATE settings SET plugin_authoring_enabled = ?, updated_at = ? WHERE id = 1')
+        .run(settings.pluginAuthoringEnabled ? 1 : 0, Date.now());
     }
     if (settings.workflowReviewRequired !== undefined) {
       this.db.prepare('UPDATE settings SET workflow_review_required = ?, updated_at = ? WHERE id = 1')

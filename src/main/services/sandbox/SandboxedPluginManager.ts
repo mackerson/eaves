@@ -28,7 +28,7 @@ import { getEventBridge } from './EventBridge';
 import { getToolBridge } from './ToolBridge';
 import { getServiceBridge } from './ServiceBridge';
 import { getResourceMonitor } from './ResourceMonitor';
-import { readInstalledPluginId, sanitizeFolderName } from './pathContainment';
+import { isInsideDirectory, readInstalledPluginId, sanitizeFolderName } from './pathContainment';
 
 import {
   getPluginStorageRepository,
@@ -90,6 +90,7 @@ export class SandboxedPluginManager {
   private plugins = new Map<string, LoadedPlugin>();
   private bundledPluginsDir: string;
   private userPluginsDir: string;
+  private draftPluginsDir: string;
   private sourcePluginsDir: string | null = null;
 
   // Centralized registries for views, terminal views, and tools
@@ -116,6 +117,12 @@ export class SandboxedPluginManager {
     // User plugins: {userData}/plugins/
     this.userPluginsDir = path.join(app.getPath('userData'), 'plugins');
 
+    // Draft plugins: {userData}/plugins-draft/ — agent-authored, quarantined.
+    // Deliberately absent from discoverPlugins(): a draft only ever runs
+    // because someone activated it in this session, so a restart is always a
+    // clean slate. See services/pluginDraftService.ts.
+    this.draftPluginsDir = path.join(app.getPath('userData'), 'plugins-draft');
+
     // Source plugins (dev only): {appPath}/plugins/
     if (!app.isPackaged) {
       this.sourcePluginsDir = path.join(appPath, 'plugins');
@@ -125,6 +132,7 @@ export class SandboxedPluginManager {
     logger.info('[SandboxedPluginManager] Initialized', {
       bundledPluginsDir: this.bundledPluginsDir,
       userPluginsDir: this.userPluginsDir,
+      draftPluginsDir: this.draftPluginsDir,
       sourcePluginsDir: this.sourcePluginsDir,
     });
 
@@ -1050,6 +1058,96 @@ export class SandboxedPluginManager {
     getPluginConfigManager().deleteConfig(pluginId);
   }
 
+  /** Absolute path to the draft plugins dir (agent-authored staging). */
+  getDraftPluginsDir(): string {
+    return this.draftPluginsDir;
+  }
+
+  /**
+   * Load a staged draft from userData/plugins-draft. The counterpart of
+   * loadUserPlugin for the quarantined tier: same validation, stamped
+   * `source: 'draft'` so every surface that treats drafts differently — view
+   * registration, uninstall ownership, the bundle protocol — can tell.
+   *
+   * This is the only way a draft ever runs. Nothing calls it at startup.
+   */
+  async loadDraftPlugin(folderName: string): Promise<PluginManifest> {
+    const pluginDir = path.join(this.draftPluginsDir, folderName);
+    if (!isInsideDirectory(pluginDir, this.draftPluginsDir)) {
+      throw new Error(`Refusing to load a draft from outside the draft directory: ${folderName}`);
+    }
+    const manifestPath = path.join(pluginDir, 'plugin.json');
+    if (!fs.existsSync(manifestPath)) {
+      throw new Error(`No plugin.json in ${pluginDir}`);
+    }
+    const manifestData = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    const validation = validateWithSchema(PluginManifestSchema, manifestData);
+    if (isValidationFailure(validation)) {
+      throw new Error(`Invalid plugin manifest: ${validation.error}`);
+    }
+    const manifest = {
+      ...validation.data,
+      path: pluginDir,
+      source: 'draft',
+      folderName,
+    } as PluginManifest;
+
+    // A draft must never take over an id something else already answers to.
+    // The draft service refuses this at define time; re-check here because
+    // the installed set can change between defining and activating.
+    const existing = this.plugins.get(manifest.id);
+    if (existing && existing.manifest?.source !== 'draft') {
+      throw new Error(
+        `Cannot activate draft "${manifest.id}": that id belongs to a loaded ` +
+        `${existing.manifest?.source} plugin.`
+      );
+    }
+    if (existing) {
+      await this.unloadPlugin(manifest.id); // re-activating a draft replaces it
+    }
+    await this.loadPlugin(manifest);
+    return manifest;
+  }
+
+  /**
+   * Stop a draft and delete its staged directory.
+   *
+   * Mirrors removeUserPlugin's ownership check rather than trusting the folder
+   * name: the name is derived from an id, which is a guess about what occupies
+   * that path, and the operation on the other side of the guess is a recursive
+   * delete. Refuses anything that is not a draft, so this can never reach an
+   * installed plugin.
+   */
+  async removeDraftPlugin(pluginId: string): Promise<void> {
+    const manifest = this.getPluginManifest(pluginId);
+    const loadedFrom = manifest?.source;
+    if (loadedFrom && loadedFrom !== 'draft') {
+      throw new Error(`Cannot retract ${loadedFrom} plugin ${pluginId} — it is not a draft`);
+    }
+    const folderName = manifest?.folderName || sanitizeFolderName(pluginId);
+
+    if (this.plugins.has(pluginId)) {
+      await this.unloadPlugin(pluginId);
+    }
+
+    const dir = path.join(this.draftPluginsDir, folderName);
+    if (isInsideDirectory(dir, this.draftPluginsDir) && fs.existsSync(dir)) {
+      const occupant = readInstalledPluginId(dir);
+      if (occupant !== pluginId) {
+        throw new Error(
+          `Refusing to retract "${pluginId}": ${dir} is ` +
+          (occupant
+            ? `occupied by a different draft ("${occupant}")`
+            : 'not identifiable as that draft (no readable plugin.json)') +
+          '. Remove the directory by hand if that is really what you want.'
+        );
+      }
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    getPluginStateRepository().delete(pluginId);
+    getPluginConfigManager().deleteConfig(pluginId);
+  }
+
   /**
    * Get loaded plugin IDs
    */
@@ -1140,7 +1238,14 @@ export class SandboxedPluginManager {
   }
 
   getRegisteredViews(): RegisteredView[] {
-    const views = Array.from(this.registeredViews.values());
+    // Draft views never reach the renderer. A plugin UI bundle is import()ed
+    // into the main window's JS realm (which is why plugin-install consent is a
+    // separate main-owned window at all — see windows/pluginConsentWindow.ts),
+    // so surfacing unconsented agent-written UI there would let it script the
+    // very gate that later approves it. Drafts are exercised through their own
+    // out-of-realm preview surface, not the sidebar.
+    const views = Array.from(this.registeredViews.values())
+      .filter(view => this.plugins.get(view.pluginId)?.manifest?.source !== 'draft');
 
     // During reload, preserve cached views so UI doesn't flicker
     for (const pluginId of this.reloadingPlugins) {
@@ -1155,11 +1260,11 @@ export class SandboxedPluginManager {
     return views;
   }
 
-  /** Returns terminal views from enabled plugins only */
+  /** Returns terminal views from enabled plugins only (never drafts — see getRegisteredViews) */
   getRegisteredTerminalViews(): RegisteredTerminalView[] {
     return Array.from(this.registeredTerminalViews.values()).filter(view => {
       const plugin = this.plugins.get(view.pluginId);
-      return plugin && plugin.enabled;
+      return plugin && plugin.enabled && plugin.manifest?.source !== 'draft';
     });
   }
 

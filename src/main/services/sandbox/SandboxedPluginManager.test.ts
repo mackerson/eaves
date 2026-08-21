@@ -387,4 +387,88 @@ describe('SandboxedPluginManager', () => {
       );
     });
   });
+
+  /**
+   * The draft tier: agent-authored plugins staged under userData/plugins-draft.
+   * Its safety rests on three properties, one test each — drafts are never
+   * discovered, never reach the renderer, and can never be confused with an
+   * installed plugin in either direction.
+   */
+  describe('draft tier', () => {
+    const fsMock = fs as unknown as {
+      existsSync: ReturnType<typeof vi.fn>;
+      readFileSync: ReturnType<typeof vi.fn>;
+      readdirSync: ReturnType<typeof vi.fn>;
+      rmSync: ReturnType<typeof vi.fn>;
+    };
+
+    const registerView = (pluginId: string, viewId: string) => {
+      for (const handler of eventBusHandlers.get('plugin:view:registered') ?? []) {
+        handler({ data: { pluginId, view: { id: viewId, name: viewId } } });
+      }
+    };
+
+    it('never reads the draft directory while discovering plugins', async () => {
+      fsMock.readdirSync.mockReturnValue([]);
+      await manager.discoverPlugins();
+
+      const scanned = fsMock.readdirSync.mock.calls.map(call => String(call[0]));
+      expect(scanned.length).toBeGreaterThan(0);
+      expect(scanned.some(dir => dir.includes('plugins-draft'))).toBe(false);
+    });
+
+    it('keeps a draft view out of the registry the renderer reads', async () => {
+      await manager.loadPlugin(makeManifest({ id: 'installed', folderName: 'installed' }));
+      await manager.loadPlugin(
+        makeManifest({ id: 'staged', folderName: 'staged', source: 'draft' }),
+      );
+      registerView('installed', 'view-installed');
+      registerView('staged', 'view-staged');
+
+      const ids = manager.getRegisteredViews().map(view => view.id);
+      expect(ids).toContain('view-installed');
+      expect(ids).not.toContain('view-staged');
+    });
+
+    it('refuses to activate a draft whose id belongs to an installed plugin', async () => {
+      await manager.loadPlugin(makeManifest({ id: 'com.alice.notes', folderName: 'notes' }));
+      fsMock.existsSync.mockReturnValue(true);
+      fsMock.readFileSync.mockReturnValue(
+        JSON.stringify({
+          id: 'com.alice.notes',
+          name: 'Impostor',
+          version: '1.0.0',
+          type: 'tool',
+          sandboxVersion: 1,
+        }),
+      );
+
+      await expect(manager.loadDraftPlugin('notes')).rejects.toThrow(/belongs to a loaded user plugin/);
+    });
+
+    it('refuses to retract an installed plugin', async () => {
+      await manager.loadPlugin(makeManifest({ id: 'com.alice.notes', folderName: 'notes' }));
+      await expect(manager.removeDraftPlugin('com.alice.notes')).rejects.toThrow(/not a draft/);
+      expect(fsMock.rmSync).not.toHaveBeenCalled();
+    });
+
+    it('deletes a retracted draft from the draft directory, not the install directory', async () => {
+      await manager.loadPlugin(
+        makeManifest({ id: 'com.alice.sketch', folderName: 'com-alice-sketch', source: 'draft' }),
+      );
+      fsMock.existsSync.mockReturnValue(true);
+      fsMock.readFileSync.mockImplementation((file: string) =>
+        String(file).endsWith('plugin.json') ? JSON.stringify({ id: 'com.alice.sketch' }) : '{}',
+      );
+
+      await manager.removeDraftPlugin('com.alice.sketch');
+
+      // 'plugins-draft' has 'plugins' as a string prefix, so assert on the
+      // full segment — the same trap isInsideDirectory exists to avoid.
+      const deleted = fsMock.rmSync.mock.calls.map(call => String(call[0]));
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0]).toContain('plugins-draft');
+      expect(deleted[0]).toContain('com-alice-sketch');
+    });
+  });
 });

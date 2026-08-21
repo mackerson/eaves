@@ -320,6 +320,7 @@ export interface SettingsRow {
   oobe_completed: number | null;
   workflow_review_required: number | null;
   routines_paused: number | null;
+  plugin_authoring_enabled: number | null;
   update_mode: string | null;
   api_keys_json: string | null;
   openrouter_sticky_provider: number | null;
