@@ -90,6 +90,7 @@ export function Sidebar() {
           <SystemSection />
           <MemorySection />
           <PluginsSection />
+          <WorkshopSection />
         </div>
         {!isCollapsed && (
           <div

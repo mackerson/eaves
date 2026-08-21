@@ -103,7 +103,7 @@ export function WorkshopView() {
 
             return (
               <div key={draft.id} className="border border-border rounded-lg bg-card">
-                <div className="p-4 flex items-start justify-between gap-4">
+                <div className="p-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-medium truncate">{draft.name}</h3>
@@ -141,7 +141,7 @@ export function WorkshopView() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center flex-wrap gap-2 justify-end mt-3">
                     {draft.bundleUrl && (
                       <Button
                         variant="outline"

@@ -162,7 +162,28 @@ the system will ever have.
   shipping a v2 means uninstalling first. Installed code is never
   agent-rewritable
 
-Not built yet: the Workshop UI and its out-of-realm draft preview.
+**Workshop** (`views/WorkshopView.tsx`, sidebar section, `view: 'workshop'`) is the
+review surface: every staged draft with its manifest, permissions and **file
+contents verbatim**, plus Run / Stop / Preview / Keep / Discard. Reading the code
+before approving it is the point — the agent still works in chat, this is not a
+second conversation.
+
+**Draft preview** (`windows/pluginPreviewWindow.ts` + `renderer/preview.html`) is
+a separate `BrowserWindow` with **no preload at all**, and that is the entire
+design. A plugin UI bundle is `import()`ed into the realm of the window that
+renders it; for an installed plugin that is fine, but a draft has not been
+approved and the consent dialog is reachable from the main window's realm — so
+previewing in-app would let unreviewed agent code script its own approval. With
+no bridge in that realm there is nothing to call. `preview.tsx` builds its own
+minimal `EavesAPI` (React + presentational components; **no** `electron`, **no**
+stores), so it is a second Vite entry rather than a route. Popups and navigation
+are denied; `pluginPreviewWindow.test.ts` pins all of it.
+
+Note a draft plugin UI needs **no build step**: `moduleShim.ts` externalizes
+React, so a hand-written ES module using `React.createElement` loads as written.
+
+Not built yet: a workshop-scoped agent session (would need a `'workshop'`
+channel type, i.e. a `channels` CHECK-constraint rebuild).
 
 **Marketplace** (`src/main/services/MarketplaceService.ts`, live):
 - Installs by **registry id, never a URL** — confined to entries in the curated
