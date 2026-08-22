@@ -373,4 +373,94 @@ describe('migrateLegacyProfile', () => {
     expect(migrateLegacyProfile()).toBeNull();
     expect(fs.existsSync(current)).toBe(false);
   });
+
+  describe('collapsing the old profile once it is empty', () => {
+    it('removes the legacy profile, rather than leaving emptied directories', () => {
+      seedLegacyProfile();
+
+      migrateLegacyProfile();
+
+      // Recursing moved the contents out but used to leave every directory it
+      // walked standing behind, so the old profile never actually went away.
+      expect(fs.existsSync(path.join(legacy, 'plugins'))).toBe(false);
+      expect(fs.existsSync(path.join(legacy, 'Local Storage'))).toBe(false);
+      expect(fs.existsSync(legacy)).toBe(false);
+    });
+
+    it('removes the emptied legacy attachments directory', () => {
+      seedLegacyProfile();
+
+      migrateLegacyProfile();
+
+      expect(fs.readFileSync(path.join(current, 'eaves-data', 'eaves-attachments', 'a.png'), 'utf8'))
+        .toBe('image');
+      expect(fs.existsSync(path.join(current, 'eaves-data', 'enclave-attachments'))).toBe(false);
+    });
+
+    it('keeps a directory whose contents could not all transfer', () => {
+      seedLegacyProfile();
+      // Same name on both sides, conflicting types: mergeInto skips it, so the
+      // parent must stay too — stranded data has to remain visible.
+      write(path.join(legacy, 'themes', 'custom'), 'legacy file');
+      fs.mkdirSync(path.join(current, 'themes', 'custom'), { recursive: true });
+
+      migrateLegacyProfile();
+
+      expect(fs.existsSync(path.join(legacy, 'themes', 'custom'))).toBe(true);
+      expect(fs.existsSync(legacy)).toBe(true);
+    });
+
+    it('stops re-running on a profile an earlier build already migrated', () => {
+      // 0.5.0 moved the contents out but left the directory skeleton behind,
+      // and nothing in that build ever pruned it. Those profiles exist in the
+      // wild, so the fix has to reach them too — not just fresh migrations.
+      write(path.join(current, 'eaves-data', 'eaves.db'), 'main');
+      write(path.join(current, '.migrated-from-enclave'), '2026-08-22T00:00:00.000Z');
+      fs.mkdirSync(path.join(legacy, 'logs'), { recursive: true });
+      fs.mkdirSync(path.join(legacy, 'Local Storage', 'leveldb'), { recursive: true });
+
+      migrateLegacyProfile();
+      write(path.join(current, 'logs', 'enclave-canary.log'), 'canary');
+
+      expect(migrateLegacyProfile()).toBeNull();
+
+      expect(fs.existsSync(path.join(current, 'logs', 'enclave-canary.log'))).toBe(true);
+      expect(fs.existsSync(path.join(current, 'logs', 'eaves-canary.log'))).toBe(false);
+    });
+
+    it('removes an attachments directory an earlier build left emptied', () => {
+      write(path.join(current, 'eaves-data', 'eaves.db'), 'main');
+      write(path.join(current, '.migrated-from-enclave'), '2026-08-22T00:00:00.000Z');
+      write(path.join(current, 'eaves-data', 'eaves-attachments', 'a.png'), 'image');
+      fs.mkdirSync(path.join(current, 'eaves-data', 'enclave-attachments'), { recursive: true });
+      // The directory skeleton 0.5.0 left is what says the migration has
+      // unfinished business; once that is gone we stop touching the disk, so
+      // the cleanup has to happen on the same launch that prunes it.
+      fs.mkdirSync(path.join(legacy, 'logs'), { recursive: true });
+
+      migrateLegacyProfile();
+
+      expect(fs.existsSync(path.join(current, 'eaves-data', 'enclave-attachments'))).toBe(false);
+      expect(fs.existsSync(path.join(current, 'eaves-data', 'eaves-attachments', 'a.png'))).toBe(true);
+    });
+
+    it('stops re-running once only skip-listed state is left behind', () => {
+      seedLegacyProfile();
+      // Never migrated, so the legacy directory outlives the migration and can
+      // never be the signal that the work is done.
+      fs.symlinkSync('somehost-12345', path.join(legacy, 'SingletonLock'));
+
+      migrateLegacyProfile();
+      expect(fs.existsSync(legacy)).toBe(true);
+
+      // A canary only the migration tail would touch. Renaming it on a launch
+      // that should be a no-op is what re-running the tail forever looks like.
+      write(path.join(current, 'logs', 'enclave-canary.log'), 'canary');
+
+      expect(migrateLegacyProfile()).toBeNull();
+
+      expect(fs.existsSync(path.join(current, 'logs', 'enclave-canary.log'))).toBe(true);
+      expect(fs.existsSync(path.join(current, 'logs', 'eaves-canary.log'))).toBe(false);
+    });
+  });
 });

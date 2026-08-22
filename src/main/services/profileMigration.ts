@@ -102,6 +102,11 @@ function mergeInto(src: string, dst: string): void {
     // one would merge into wherever it happens to point.
     if (fs.lstatSync(from).isDirectory() && fs.lstatSync(to).isDirectory()) {
       mergeInto(from, to);
+      // Recursing moves the contents out but leaves the source directory
+      // standing, and an emptied directory still counts as the old profile
+      // being present. Only ever removed once actually empty, so a child that
+      // could not transfer keeps its parent — and stays visible.
+      removeIfEmptied(from);
     }
   }
 }
@@ -133,7 +138,7 @@ export function migrateLegacyProfile(): string | null {
   //
   // Every step below is idempotent, so re-running until the marker lands
   // costs nothing and is the only thing that makes a failure recoverable.
-  if (fs.existsSync(marker) && !fs.existsSync(legacyProfile)) return null;
+  if (fs.existsSync(marker) && !hasMigratableEntries(legacyProfile)) return null;
 
   // Two databases means two profiles, and nothing here can know which one the
   // user wants. Renaming the legacy sidecars would be actively destructive:
@@ -160,7 +165,7 @@ export function migrateLegacyProfile(): string | null {
   // that live database — a rename interrupted after the main file moved.
   if (fs.existsSync(path.join(dataDir, DB))) {
     renameDatabaseFiles(dataDir);
-    finishRenames(userData, dataDir);
+    finishRenames(userData, dataDir, legacyProfile);
     return null;
   }
 
@@ -177,7 +182,7 @@ export function migrateLegacyProfile(): string | null {
     // and gating them on the move meant a profile migrated by an earlier build
     // never received them — leaving manifests on the old ids while the
     // database had already been remapped.
-    finishRenames(userData, dataDir);
+    finishRenames(userData, dataDir, legacyProfile);
     return null;
   }
 
@@ -187,7 +192,10 @@ export function migrateLegacyProfile(): string | null {
   // skip list uniformly. Everything not skipped comes across, so the Chromium
   // state — localStorage, cookies, window bounds — stays with the data it
   // belongs to.
-  if (fs.existsSync(legacyProfile)) mergeInto(legacyProfile, userData);
+  if (fs.existsSync(legacyProfile)) {
+    mergeInto(legacyProfile, userData);
+    removeIfEmptied(legacyProfile);
+  }
 
   // Merge rather than rename: the destination can already exist from an
   // interrupted run, and renaming a directory onto a non-empty one is ENOTEMPTY
@@ -203,7 +211,7 @@ export function migrateLegacyProfile(): string | null {
   const attachments = path.join(dataDir, LEGACY_ATTACHMENTS);
   if (fs.existsSync(attachments)) mergeInto(attachments, path.join(dataDir, ATTACHMENTS));
 
-  finishRenames(userData, dataDir);
+  finishRenames(userData, dataDir, legacyProfile);
 
   return `Migrated profile from ${legacyProfile} to ${userData}`;
 }
@@ -215,7 +223,15 @@ export function migrateLegacyProfile(): string | null {
  * finished — and the marker has to be written by all of them or the migration
  * runs again on the next launch forever.
  */
-function finishRenames(userData: string, dataDir: string): void {
+function finishRenames(userData: string, dataDir: string, legacyProfile: string): void {
+  // Depth-first, because a profile migrated by 0.5.0 was left holding the
+  // skeleton of its own directory tree — that build moved the files out but
+  // never removed the directories it walked, and those profiles exist in the
+  // wild. Without this the fix would only ever reach fresh migrations.
+  pruneEmptyDirs(legacyProfile);
+  // Same reasoning one level down: a profile 0.5.0 migrated has already moved
+  // these files, so the merge that used to clear this never runs again.
+  removeIfEmptied(path.join(dataDir, LEGACY_ATTACHMENTS));
   renamePrefixed(path.join(dataDir, 'backups'), LEGACY_BACKUP);
   renamePrefixed(path.join(userData, 'logs'), LEGACY_LOG);
   rekeyPluginIds(userData);
@@ -247,6 +263,55 @@ function removeIfEmptied(dir: string): void {
     // Non-empty, so something did not transfer. Leaving the directory is both
     // the safe outcome and the visible one — deliberately not logged, because
     // this runs before the logger has anywhere to write.
+  }
+}
+
+/**
+ * Remove the directory skeleton a migration leaves behind, bottom-up.
+ *
+ * Only ever removes directories that are already empty, so it cannot discard
+ * anything a merge could not move: a child that stayed keeps its parent, and
+ * stays visible.
+ */
+function pruneEmptyDirs(dir: string): void {
+  if (!fs.existsSync(dir)) return;
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const child = path.join(dir, entry);
+    // lstat, not stat: a symlink to a directory is not a directory to descend
+    // into, and the profile keeps several pointing outside itself.
+    if (fs.lstatSync(child, { throwIfNoEntry: false })?.isDirectory()) pruneEmptyDirs(child);
+  }
+
+  removeIfEmptied(dir);
+}
+
+/**
+ * Whether a legacy profile still holds anything this migration would move.
+ *
+ * The directory itself outlives the migration by design: every entry on the
+ * skip list is deliberately left where it is, because those encode a pid and a
+ * socket belonging to whichever process wrote them. So keying "already done"
+ * on the directory being *gone* never came true, and a fully migrated profile
+ * re-ran the whole idempotent tail — two directory scans plus a rewrite of
+ * every installed plugin manifest — on every single launch, forever.
+ *
+ * Unreadable counts as work remaining: declaring a profile done is the one
+ * answer that cannot be revisited later.
+ */
+function hasMigratableEntries(dir: string): boolean {
+  if (!fs.existsSync(dir)) return false;
+  try {
+    return fs.readdirSync(dir).some(entry => !NEVER_MIGRATE.test(entry));
+  } catch {
+    return true;
   }
 }
 
