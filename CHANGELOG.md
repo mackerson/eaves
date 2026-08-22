@@ -7,7 +7,7 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 and versions follow [semantic versioning](https://semver.org/) with the caveat
 above: in 0.x, a minor bump can carry breaking changes.
 
-## [Unreleased]
+## [0.5.0] — 2026-08-22
 
 The project is now called **Eaves**. Enclave and Eaves are the same app; only
 the name changed.
@@ -37,6 +37,50 @@ the name changed.
   macOS behaves like GNOME, and Windows is unaffected. Where it happens Eaves
   now says so and asks you to re-enter the key, rather than sending an
   unreadable one to the provider.
+
+### Added
+
+- **A plugin marketplace.** Install from a curated registry by id — never by
+  URL — with the download checked against the registry's sha256 and the
+  manifest required to declare exactly the permissions the registry lists.
+  Consent is a separate window owned by the main process, so a plugin cannot
+  script or spoof the dialog that gates its own install. Plugins can be
+  uninstalled from the Plugins view, and update prompts re-appear only when the
+  permission set changes.
+- **Usage, cost and energy accounting.** A durable ledger records every
+  inference, with a System view and a Usage tab in Settings over it. Free local
+  models are distinguished from cloud models with no published price, so a
+  total that is missing data says so instead of quietly reading low. Energy is
+  estimated for cloud inference with a stated range, and genuinely measured for
+  local inference where the hardware allows it.
+- **Routines can deliver their result somewhere** rather than finishing into
+  nothing.
+- **Crash diagnostics.** Main-process aborts leave a local minidump.
+- A new brand mark, applied throughout.
+
+### Fixed
+
+- **Prompt-cache tokens were not billed.** Cache reads and writes are reported
+  differently by different providers — alongside the input count by Anthropic,
+  inside it by OpenAI-shaped APIs — and treating them the same double-billed
+  one and under-billed the other.
+- **Two inference paths reported no usage at all**, so shadow turns and
+  automatic conversation titling cost real money invisibly.
+- **Plugin hot reload had been inert.** The watcher was given a glob, and
+  chokidar 4 matches a glob as a literal path — so it watched nothing and
+  silently reported success.
+- **A plugin you had disabled started anyway** on the next launch.
+- **A plugin shutting down cleanly was reported as a crash.**
+- **The `deactivate` lifecycle hook was never called**, so plugins never got to
+  clean up on disable, reload, update or uninstall.
+- **An unrecognized plugin icon name rendered as raw text** in the sidebar.
+- **A marketplace-installed plugin's UI would not load in development.**
+- **The setup wizard was partly covered** by the window caption row.
+- **An undecryptable API key could be sent to a provider as plaintext.** It is
+  now recognized as unreadable, and you are asked to re-enter it.
+- Filesystem MCP servers are pooled per project directory instead of being
+  started and torn down every turn, and the heaviest views no longer load as
+  part of the initial renderer chunk.
 
 ### Note for existing installs
 
@@ -150,6 +194,7 @@ First public release, and the first with installers.
 - A plugin's UI bundle is not sandboxed; it runs in the renderer with the full
   IPC bridge. See [SECURITY.md](SECURITY.md).
 
+[0.5.0]: https://github.com/mackerson/eaves/releases/tag/v0.5.0
 [0.4.2]: https://github.com/mackerson/eaves/releases/tag/v0.4.2
 [0.4.1]: https://github.com/mackerson/eaves/releases/tag/v0.4.1
 [0.4.0]: https://github.com/mackerson/eaves/releases/tag/v0.4.0
