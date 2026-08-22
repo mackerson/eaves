@@ -240,7 +240,15 @@ export function registerPluginHandlers(getMainWindow?: () => BrowserWindow | nul
     const currentUser = getUserRepository().getCurrent();
     if (!currentUser) return { success: false, error: 'No current user' };
 
-    const session = getChannelRepository().createWorkshopSession(
+    const channelRepo = getChannelRepository();
+
+    // Reuse a session nobody has spoken in rather than stacking up another.
+    // Clicking "New build" and walking away used to leave an empty one behind
+    // permanently, all of them called "New build".
+    const empty = channelRepo.findEmptyWorkshopSession();
+    if (empty) return { success: true, session: empty };
+
+    const session = channelRepo.createWorkshopSession(
       { name: 'New build', agentId: agent.id },
       [
         { id: currentUser.id, type: 'human', displayName: currentUser.name, color: currentUser.color, joinedAt: Date.now() },

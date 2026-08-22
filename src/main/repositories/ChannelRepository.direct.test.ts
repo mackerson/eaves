@@ -720,6 +720,26 @@ describe('ChannelRepository direct-channel (chat) projection', () => {
       expect(repository.isWorkshopSession('nope')).toBe(false);
     });
 
+    it('offers an unused session back rather than stacking up another', () => {
+      const first = seedWorkshop();
+      expect(repository.findEmptyWorkshopSession()?.id).toBe(first.id);
+    });
+
+    it('stops offering one back once it has been spoken in', () => {
+      const session = seedWorkshop();
+      repository.createDirectMessage({
+        chatId: session.id, senderId: 'user', senderType: 'human',
+        content: 'a dice roller', timestamp: Date.now(),
+      });
+
+      expect(repository.findEmptyWorkshopSession()).toBeNull();
+    });
+
+    it('never offers back an ordinary empty chat', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+      expect(repository.findEmptyWorkshopSession()).toBeNull();
+    });
+
     it('cannot be faked with a tag, which a user can set', () => {
       const ordinary = repository.createDirectChat({
         name: 'Ordinary', agentId: 'agent-1', tags: 'workshop',

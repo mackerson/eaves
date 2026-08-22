@@ -815,6 +815,24 @@ export class ChannelRepository {
     return row?.workshop === 1;
   }
 
+  /**
+   * A workshop session nobody has said anything in yet.
+   *
+   * Starting a build creates a session, and abandoning one before typing
+   * leaves it empty and named "New build" forever. Handing the existing empty
+   * one back instead of making another keeps the past-builds list to sessions
+   * that actually happened.
+   */
+  findEmptyWorkshopSession(): Chat | null {
+    const row = this.db.prepare(`
+      SELECT c.* FROM channels c
+       WHERE c.workshop = 1
+         AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.channel_id = c.id)
+       ORDER BY c.created_at DESC LIMIT 1
+    `).get() as ChatRow | undefined;
+    return row ? this.mapRowToChat(row, { includeParticipants: true }) : null;
+  }
+
   /** Workshop sessions, newest first. The Workshop's own list. */
   listWorkshopSessions(): Chat[] {
     const rows = this.db.prepare(

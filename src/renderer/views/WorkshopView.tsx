@@ -69,6 +69,8 @@ export function WorkshopView() {
   const session = useConversationsStore((s) => s.chats.find((c) => c.id === s.currentChatId));
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  /** One send at a time — see the comment in send(). */
+  const sending = useRef(false);
 
   const refreshDrafts = useCallback(async () => {
     const result = await window.electron.listPluginDrafts();
@@ -137,47 +139,76 @@ export function WorkshopView() {
 
   const send = useCallback(async () => {
     const { input: text, setInput: clear, isLoading: busy } = useConversationsStore.getState();
-    if (!text.trim() || busy) return;
+    if (!text.trim() || busy || sending.current) return;
 
-    let target = sessionId;
-    const isFirstMessage = !target || !session?.messages?.length;
-    if (!target) {
-      target = await startSession();
-      if (!target) return;
-    }
+    // Claim the send before the first await. Creating a session is a round
+    // trip, and `isLoading` is not set until after it — so without this a
+    // second Enter during that window passed both guards and started a second
+    // session, leaving an empty one orphaned in the past-builds list.
+    sending.current = true;
+    const text_ = text;
     clear('');
 
-    // Name the build after what was asked for. Every session is created as
-    // "New build", which makes the past-builds list a row of identical entries
-    // — useless exactly when you want to go back to one.
-    if (isFirstMessage) {
-      const name = text.trim().replace(/\s+/g, ' ').slice(0, 60);
-      void window.electron
-        .updateChat(target, { name })
-        .then(() => refreshSessions())
-        .catch(() => { /* naming is cosmetic; never fail a send over it */ });
-    }
-
-    useConversationsStore.setState({
-      isLoading: true, streamingContent: '', streamingContentBlocks: [], activeToolCalls: [],
-    });
     try {
-      const sent = await window.electron.sendChatMessage({ chatId: target, content: text });
+      let target = sessionId;
+      const isFirstMessage = !target || !session?.messages?.length;
+      if (!target) {
+        target = await startSession();
+        if (!target) return;
+      }
+
+      // Name the build after what was asked for. Every session is created as
+      // "New build", which makes the past-builds list a row of identical
+      // entries — useless exactly when you want to go back to one.
+      if (isFirstMessage) {
+        const name = text_.trim().replace(/\s+/g, ' ').slice(0, 60);
+        void window.electron
+          .updateChat(target, { name })
+          .then(() => refreshSessions())
+          .catch(() => { /* naming is cosmetic; never fail a send over it */ });
+      }
+
+      useConversationsStore.setState({
+        isLoading: true, streamingContent: '', streamingContentBlocks: [], activeToolCalls: [],
+      });
+
+      const sent = await window.electron.sendChatMessage({ chatId: target, content: text_ });
       if (sent && sent.success === false) {
         showToast(sent.error || 'Message could not be sent', 'error');
         useConversationsStore.setState({ isLoading: false });
         return;
       }
+
       const reloaded = await window.electron.getChat(target);
-      if (reloaded.success && reloaded.chat) {
-        const fresh = reloaded.chat;
+      const fresh = reloaded.success ? reloaded.chat : undefined;
+      if (fresh) {
         useConversationsStore.setState((state) => ({
           chats: state.chats.map((c) => (c.id === fresh.id ? fresh : c)),
         }));
       }
+
+      // sendChatMessage only STORES the message. Nothing on the main side
+      // starts a turn from it — the renderer asks for the reply, which is what
+      // ChatsView.dispatchSend does too. Without this the message lands, no
+      // agent ever answers, and the composer sits on "Working…" forever.
+      const agentId = fresh?.agentId ?? session?.agentId;
+      if (agentId) {
+        await window.electron.chatWithAgent({ chatId: target, agentId });
+      } else {
+        // Nobody to answer: release the busy state rather than waiting for a
+        // stream:end that will never arrive.
+        useConversationsStore.setState({
+          isLoading: false, streamingContent: '', streamingContentBlocks: [], activeToolCalls: [],
+        });
+        showToast('This build has no agent to answer', 'error');
+      }
     } catch (error: any) {
       showToast(error?.message || 'Message could not be sent', 'error');
-      useConversationsStore.setState({ isLoading: false });
+      useConversationsStore.setState({
+        isLoading: false, streamingContent: '', streamingContentBlocks: [], activeToolCalls: [],
+      });
+    } finally {
+      sending.current = false;
     }
   }, [sessionId, session, startSession, refreshSessions, showToast]);
 
