@@ -7,6 +7,23 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 and versions follow [semantic versioning](https://semver.org/) with the caveat
 above: in 0.x, a minor bump can carry breaking changes.
 
+## [0.5.1] — 2026-08-22
+
+### Fixed
+
+- **A completed profile migration never recorded itself as complete**, so every
+  launch after the upgrade re-did the whole idempotent tail — rescanning two
+  directories and rewriting every installed plugin manifest. The old profile
+  directory was the signal that work remained, and it always remained: merging
+  left behind each directory it had emptied, and the Chromium singleton files
+  are deliberately never moved. Migrating now clears the directories it
+  empties, and asks whether anything is actually left rather than whether the
+  directory exists. Profiles already migrated by 0.5.0 are cleaned up on the
+  next launch, so the fix reaches them too. No data was at risk — this was
+  repeated work, not lost work.
+- The emptied `enclave-attachments` directory is removed once its contents have
+  moved, instead of lingering beside the new one.
+
 ## [0.5.0] — 2026-08-22
 
 The project is now called **Eaves**. Enclave and Eaves are the same app; only
@@ -194,6 +211,7 @@ First public release, and the first with installers.
 - A plugin's UI bundle is not sandboxed; it runs in the renderer with the full
   IPC bridge. See [SECURITY.md](SECURITY.md).
 
+[0.5.1]: https://github.com/mackerson/eaves/releases/tag/v0.5.1
 [0.5.0]: https://github.com/mackerson/eaves/releases/tag/v0.5.0
 [0.4.2]: https://github.com/mackerson/eaves/releases/tag/v0.4.2
 [0.4.1]: https://github.com/mackerson/eaves/releases/tag/v0.4.1
