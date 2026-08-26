@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Package manager: **yarn (classic, 1.x)**. Node version pinned in `.nvmrc` (currently 22).
 
+On **Windows** nothing extra is needed: every script on the install/dev/build
+path runs on plain Node — no Git Bash, no `jq`, no symlink privileges. Node must
+be >= 22.12 (`@electron/rebuild`). Note that a bare `bash` on Windows resolves to
+WSL, not Git Bash, so do not add one to a package script.
+Full notes: [docs/development.md](docs/development.md#on-windows).
+
 ```bash
 # First-time setup
 yarn install              # Install deps + rebuild sqlite for Electron
