@@ -88,16 +88,14 @@ export function WorkshopView() {
     void refreshSessions();
   }, [enabled, refreshDrafts, refreshSessions]);
 
-  // A preview's verdict lands in main a moment after the window opens, and
-  // nothing pushes it here. Poll briefly rather than adding an event for one
-  // fact that a person is already watching for.
-  const [watchingPreview, setWatchingPreview] = useState(false);
+  // A preview's verdict arrives once, seconds after a click, and never again.
+  // That is the worst possible shape for a poll — the old one ran every 1.5s
+  // for 30s and then gave up, so a slow bundle rendered into a bench that had
+  // stopped listening. Main pushes it instead.
   useEffect(() => {
-    if (!watchingPreview) return;
-    const timer = setInterval(() => void refreshDrafts(), 1500);
-    const stop = setTimeout(() => setWatchingPreview(false), 30_000);
-    return () => { clearInterval(timer); clearTimeout(stop); };
-  }, [watchingPreview, refreshDrafts]);
+    if (!enabled) return;
+    return window.electron.onPluginRenderReport(() => void refreshDrafts());
+  }, [enabled, refreshDrafts]);
 
   // A turn ending is when the bench changes: a draft was written, or started.
   const wasLoading = useRef(isLoading);
@@ -479,10 +477,9 @@ export function WorkshopView() {
                       {draft.bundleUrl && (
                         <Button
                           variant="outline" size="sm" disabled={busy}
-                          onClick={() => {
-                            setWatchingPreview(true);
-                            void act(draft, 'preview', () => window.electron.previewPluginDraft(draft.id), 'Preview opened');
-                          }}
+                          onClick={() =>
+                            void act(draft, 'preview', () => window.electron.previewPluginDraft(draft.id), 'Preview opened')
+                          }
                         >
                           Preview
                         </Button>

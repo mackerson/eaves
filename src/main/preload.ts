@@ -127,6 +127,18 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('channel-message-added', listener);
     return () => ipcRenderer.removeListener('channel-message-added', listener);
   },
+  // A draft preview's verdict. It arrives once, seconds after a click, and
+  // never again — exactly the shape that a poll handles badly.
+  onPluginRenderReport: (
+    callback: (event: { draftId: string; status: 'ok' | 'failed'; message?: string }) => void,
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { draftId: string; status: 'ok' | 'failed'; message?: string },
+    ) => callback(data);
+    ipcRenderer.on('plugin-render-report', listener);
+    return () => ipcRenderer.removeListener('plugin-render-report', listener);
+  },
   onChannelsChanged: (callback: () => void): (() => void) => {
     const listener = () => callback();
     ipcRenderer.on('channels-changed', listener);

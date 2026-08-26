@@ -25,10 +25,13 @@ class FakeWindow {
   handlers = new Map<string, Handler>();
   url = 'http://localhost:5173/index.html';
 
+  sent: Array<{ channel: string; payload: any }> = [];
+
   webContents = {
     setWindowOpenHandler: (fn: () => { action: string }) => { this.windowOpenHandler = fn; },
     on: (event: string, fn: Handler) => { this.contentsHandlers.set(event, fn); },
     getURL: () => this.url,
+    send: (channel: string, payload: any) => { this.sent.push({ channel, payload }); },
   };
 
   constructor(opts: any) {
@@ -53,7 +56,13 @@ vi.mock('electron', () => ({
   ),
 }));
 
-import { showPluginPreview, closePluginPreview, parseRenderMarker } from './pluginPreviewWindow';
+import {
+  showPluginPreview,
+  closePluginPreview,
+  parseRenderMarker,
+  readConsoleMessage,
+} from './pluginPreviewWindow';
+import { getRenderReport, resetRenderReports } from '../services/pluginRenderReports';
 
 const request = {
   bundleUrl: 'plugin://draft.com-alice-sketch/ui/index.js',
@@ -71,6 +80,7 @@ describe('showPluginPreview', () => {
     FakeWindow.created = [];
     allWindows = [parent];
     closePluginPreview('com.alice.sketch');
+    resetRenderReports();
   });
 
   const preview = () => FakeWindow.created[FakeWindow.created.length - 1];
@@ -126,6 +136,49 @@ describe('showPluginPreview', () => {
     expect(first.focused).toBe(true);
   });
 
+  // The verdict's whole round trip: a console line out of a realm with no
+  // preload, into the report store, and pushed at the bench. Nothing else
+  // exercises the handler itself — parseRenderMarker is tested in isolation
+  // below, which is exactly how a signature change slips past.
+  it('records a render verdict off the console line and pushes it at the bench', () => {
+    showPluginPreview('com.alice.sketch', request);
+    const onConsole = preview().contentsHandlers.get('console-message');
+    expect(onConsole).toBeDefined();
+
+    onConsole!({}, 1, '[eaves:render] {"status":"failed","message":"boom"}', 3, 'http://localhost:5173/preview.tsx');
+
+    expect(getRenderReport('com.alice.sketch')).toMatchObject({ status: 'failed', message: 'boom' });
+    expect(parent.sent).toEqual([
+      { channel: 'plugin-render-report', payload: { draftId: 'com.alice.sketch', status: 'failed', message: 'boom' } },
+    ]);
+  });
+
+  // Electron 35 moved this payload onto a single event object. Reading only
+  // the positional shape would make every draft read "never previewed" after
+  // an Electron bump, with no error to notice.
+  it('reads the verdict from the object-shaped console event too', () => {
+    showPluginPreview('com.alice.sketch', request);
+    const onConsole = preview().contentsHandlers.get('console-message');
+
+    onConsole!({
+      message: '[eaves:render] {"status":"ok"}',
+      sourceId: 'http://localhost:5173/preview.tsx',
+      level: 'info',
+    });
+
+    expect(getRenderReport('com.alice.sketch')).toMatchObject({ status: 'ok' });
+  });
+
+  it('still refuses a verdict the draft bundle logged for itself', () => {
+    showPluginPreview('com.alice.sketch', request);
+    const onConsole = preview().contentsHandlers.get('console-message');
+
+    onConsole!({}, 1, '[eaves:render] {"status":"ok"}', 3, 'plugin://draft.com-alice-sketch/ui/index.js');
+
+    expect(getRenderReport('com.alice.sketch')).toBeUndefined();
+    expect(parent.sent).toEqual([]);
+  });
+
   it('opens a fresh window after the previous one was closed', () => {
     showPluginPreview('com.alice.sketch', request);
     closePluginPreview('com.alice.sketch');
@@ -168,5 +221,30 @@ describe('parseRenderMarker', () => {
 
   it('ignores a status it does not recognise', () => {
     expect(parseRenderMarker(line({ status: 'maybe' }), APP)).toBeNull();
+  });
+});
+
+describe('readConsoleMessage', () => {
+  it('reads the positional signature (Electron ≤ 34)', () => {
+    expect(readConsoleMessage([{}, 1, 'hello', 7, 'file.js'])).toEqual({
+      message: 'hello',
+      sourceId: 'file.js',
+    });
+  });
+
+  it('reads the event-object signature (Electron ≥ 35)', () => {
+    expect(readConsoleMessage([{ message: 'hello', sourceId: 'file.js' }])).toEqual({
+      message: 'hello',
+      sourceId: 'file.js',
+    });
+  });
+
+  it('tolerates a missing sourceId rather than dropping the line', () => {
+    expect(readConsoleMessage([{ message: 'hello' }])).toEqual({ message: 'hello', sourceId: '' });
+  });
+
+  it('returns null for a shape it does not recognise', () => {
+    expect(readConsoleMessage([])).toBeNull();
+    expect(readConsoleMessage([{}, 1, 42, 7, 'file.js'])).toBeNull();
   });
 });

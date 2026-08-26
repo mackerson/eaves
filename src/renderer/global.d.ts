@@ -265,6 +265,9 @@ declare global {
       previewPluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
       startWorkshopSession: (agentId?: string) => Promise<{ success: boolean; session?: Chat; error?: string }>;
       listWorkshopSessions: () => Promise<{ success: boolean; sessions?: Chat[]; error?: string }>;
+      onPluginRenderReport: (
+        callback: (event: { draftId: string; status: 'ok' | 'failed'; message?: string }) => void,
+      ) => () => void;
       executePluginTool: (pluginId: string, toolName: string, args: Record<string, unknown>) => Promise<unknown>;
       getPluginConfig: (pluginId: string) => Promise<{ schema: Record<string, { type: string; default?: unknown; description?: string }>; values: Record<string, unknown>; pluginId: string; pluginName: string }>;
       setPluginConfig: (pluginId: string, config: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;

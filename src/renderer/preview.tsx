@@ -64,14 +64,28 @@ import './index.css';
 const RENDER_MARKER = '[eaves:render]';
 
 let failed = false;
+let reported = false;
 
 function report(status: 'ok' | 'failed', message?: string): void {
   if (status === 'failed') failed = true;
   else if (failed) return; // never overwrite a failure with a late all-clear
+  reported = true;
   const line = `${RENDER_MARKER} ${JSON.stringify({ draftId, status, message })}`;
   if (status === 'failed') console.error(line);
   else console.info(line);
 }
+
+/**
+ * Silence is the one outcome that helps nobody: a draft that suspends forever,
+ * or wedges before React commits, reads as "never previewed" — indistinguishable
+ * from one nobody has opened. Say what actually happened instead.
+ */
+const WATCHDOG_MS = 8000;
+setTimeout(() => {
+  if (!reported) {
+    report('failed', `Nothing rendered within ${WATCHDOG_MS / 1000}s. The component may be suspended or stuck in a loop.`);
+  }
+}, WATCHDOG_MS);
 
 const params = new URLSearchParams(window.location.search);
 const bundleUrl = params.get('bundle') ?? '';
@@ -106,6 +120,22 @@ function Failure({ title, detail }: { title: string; detail: string }) {
       {detail}
     </div>
   );
+}
+
+/**
+ * "It rendered" is an effect, not a frame.
+ *
+ * This used to be a `requestAnimationFrame` after `root.render`, which is two
+ * assumptions deep: that a concurrent root has committed by the next frame, and
+ * that there *is* a next frame — the window is created `show: false`, and a
+ * hidden window's rAF is throttled or parked entirely. A mount effect asks the
+ * question React can actually answer, and child effects flush before parent
+ * ones, so a component that throws in its own effect has already set `failed`
+ * by the time this runs.
+ */
+function Mounted() {
+  React.useEffect(() => { report('ok'); }, []);
+  return null;
 }
 
 /**
@@ -171,12 +201,7 @@ async function mount() {
     return;
   }
 
-  root.render(frame(<Boundary><Component /></Boundary>));
-  // React renders synchronously enough that a throw has already reached the
-  // boundary by the next frame; anything still standing then has rendered.
-  requestAnimationFrame(() => {
-    if (!failed) report('ok');
-  });
+  root.render(frame(<><Boundary><Component /></Boundary><Mounted /></>));
 }
 
 // Anything React never sees — an async throw inside an effect, a rejected

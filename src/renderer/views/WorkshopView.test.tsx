@@ -21,6 +21,8 @@ beforeEach(() => {
   electron = {
     listPluginDrafts: vi.fn().mockResolvedValue({ success: true, drafts: [] }),
     listWorkshopSessions: vi.fn().mockResolvedValue({ success: true, sessions: [] }),
+    // The bench subscribes to the preview verdict rather than polling for it.
+    onPluginRenderReport: vi.fn().mockReturnValue(() => {}),
     startWorkshopSession: vi.fn().mockResolvedValue({ success: true, session: SESSION }),
     sendChatMessage: vi.fn().mockResolvedValue({ success: true }),
     getChat: vi.fn().mockResolvedValue({ success: true, chat: SESSION }),

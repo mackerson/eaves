@@ -64,6 +64,40 @@ export function parseRenderMarker(
   }
 }
 
+/**
+ * Electron changed the `console-message` signature under us once already.
+ *
+ * Up to Electron 34 it is positional — `(event, level, message, line, sourceId)`.
+ * From 35 the payload moved onto a single event object with `message` and
+ * `sourceId` on it. Reading only one shape means the render report silently
+ * stops arriving on an Electron bump: no error, no log, every draft just reads
+ * "never previewed" forever. So read whichever shape turned up.
+ */
+export function readConsoleMessage(
+  args: unknown[],
+): { message: string; sourceId: string } | null {
+  const [first, , positionalMessage, , positionalSourceId] = args;
+
+  if (typeof positionalMessage === 'string') {
+    return {
+      message: positionalMessage,
+      sourceId: typeof positionalSourceId === 'string' ? positionalSourceId : '',
+    };
+  }
+
+  if (first && typeof first === 'object') {
+    const event = first as { message?: unknown; sourceId?: unknown };
+    if (typeof event.message === 'string') {
+      return {
+        message: event.message,
+        sourceId: typeof event.sourceId === 'string' ? event.sourceId : '',
+      };
+    }
+  }
+
+  return null;
+}
+
 /** One window per draft id, so previewing twice focuses rather than piles up. */
 const open = new Map<string, BrowserWindow>();
 
@@ -99,9 +133,17 @@ export function showPluginPreview(draftId: string, req: PreviewRequest): void {
   // The window has no preload and therefore no way to send anything back. It
   // does not need one: main owns this webContents, so the outcome rides out on
   // a console line. See the report() helper in renderer/preview.tsx.
-  win.webContents.on('console-message', (_event, _level, message, _line, sourceId) => {
-    const report = parseRenderMarker(message, sourceId);
-    if (report) recordRenderReport(draftId, report);
+  win.webContents.on('console-message', (...args: unknown[]) => {
+    const line = readConsoleMessage(args);
+    if (!line) return;
+    const report = parseRenderMarker(line.message, line.sourceId);
+    if (!report) return;
+    recordRenderReport(draftId, report);
+    // Push the verdict at the bench rather than making it poll for a fact that
+    // arrives once, seconds after a click, and never again.
+    if (parent && !parent.isDestroyed()) {
+      parent.webContents.send('plugin-render-report', { draftId, ...report });
+    }
   });
 
   const params = new URLSearchParams({
