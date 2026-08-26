@@ -21,8 +21,12 @@ By participating you agree to our [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 Eaves is an Electron + React + TypeScript app. You'll need:
 
-- **Node 22** (pinned in [`.nvmrc`](./.nvmrc) — `nvm use` picks it up)
+- **Node 22.12 or newer** (the major is pinned in [`.nvmrc`](./.nvmrc) — `nvm use`
+  picks it up; `@electron/rebuild` needs the 22.12 minimum, which `engines` enforces)
 - **Yarn (classic, 1.x)**
+- On **Windows**: Visual Studio Build Tools (C++ workload) and Python, to compile
+  `better-sqlite3`. Nothing else — no Git Bash, no `jq`, no Developer Mode.
+  See [docs/development.md](./docs/development.md#on-windows).
 
 ```bash
 git clone https://github.com/mackerson/eaves.git
