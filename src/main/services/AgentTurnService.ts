@@ -40,7 +40,6 @@ import type { StreamResult, PendingApprovalInfo } from '../ipc/chatHelpers';
 import { getChannelRepository } from '../repositories';
 import { getPendingApprovalRegistry } from './PendingApprovalRegistry';
 import { getActiveWorkRegistry } from './ActiveWorkRegistry';
-import { calculateCost } from '../../shared/pricing';
 import type { Tool } from 'ai';
 import type { ToolSessionState } from './discoveryTools';
 import type { Agent, Channel, ChannelBehavior, ContentBlock, Message, Project, Settings } from '../types';
@@ -825,26 +824,13 @@ async function runChatAssistantTurn(
       includeSystemPrompt: agent.debugLogging,
     });
 
-    // Prefer OpenRouter's real reported cost (usage accounting); otherwise
-    // estimate from token usage (agent-level pricing overrides built-in table).
+    // OpenRouter's usage accounting is the provider's own invoiced figure, so
+    // it wins. Everything else is settled by finalizeCost inside
+    // emitAgentSpend — computing it here is what used to make the user's
+    // settings override unreachable on exactly the turns that spend the money.
     if (typeof orReportedCost === 'number') {
       streamMetrics.cost = orReportedCost;
       streamMetrics.costBasis = 'reported';
-    } else {
-      const cost = calculateCost(
-        agent.provider,
-        agent.model,
-        streamMetrics.inputTokens,
-        streamMetrics.outputTokens,
-        { promptCostPer1M: agent.promptCostPer1M, completionCostPer1M: agent.completionCostPer1M },
-        // Cache tiers, so a warm turn is not billed as if every cached token
-        // were fresh input.
-        { cachedTokens: streamMetrics.cachedTokens, cacheWriteTokens: streamMetrics.cacheWriteTokens },
-      );
-      if (cost !== null) {
-        streamMetrics.cost = cost;
-        streamMetrics.costBasis = 'estimated';
-      }
     }
 
     // A genuinely-empty generation (no text, no tool cards, nothing pending) —

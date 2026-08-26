@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron';
 import { eventBus } from './EventBus';
-import { calculateCost } from '../../shared/pricing';
+import { calculateCost, isLocalProvider } from '../../shared/pricing';
 import { resolvePricing } from './pricingResolver';
 import type { MessageMetrics } from '../../shared/types';
 
@@ -83,8 +83,54 @@ export function trackUsage(event: unknown, metrics: StreamMetrics): void {
     if (e.servedProvider) metrics.servedProvider = e.servedProvider;
     if (typeof e.cachedTokens === 'number') metrics.cachedTokens = e.cachedTokens;
     if (typeof e.cacheWriteTokens === 'number') metrics.cacheWriteTokens = e.cacheWriteTokens;
-    if (typeof e.cost === 'number') metrics.cost = e.cost;
+    // OpenRouter's usage accounting: the provider's own invoiced figure, not
+    // ours. Setting the cost without the basis let it be stored as
+    // 'estimated', which is the one label the ledger exists to keep honest.
+    if (typeof e.cost === 'number') {
+      metrics.cost = e.cost;
+      metrics.costBasis = 'reported';
+    }
   }
+}
+
+/**
+ * Settle what a finished turn cost, once, in the place that knows about all
+ * three pricing layers.
+ *
+ * The turn paths used to do this themselves with `calculateCost`, which
+ * resolves *agent override → built-in table* and has never heard of
+ * `settings.usage.pricingOverrides`. Because `emitAgentSpend` takes an
+ * already-set `metrics.cost` at face value — deliberately, so a provider's
+ * reported figure is never replaced by an estimate — a pre-computed cost meant
+ * `resolvePricing` never ran. The documented precedence therefore applied to
+ * compaction, auto-titles and shadow flushes, and not to chat or channel
+ * turns, which are essentially all of the spend.
+ *
+ * Idempotent and reported-preserving: a cost already carrying an explicit
+ * basis (see trackUsage above) is left exactly as it is.
+ */
+export function finalizeCost(
+  agent: { provider: string; model: string; promptCostPer1M?: number | null; completionCostPer1M?: number | null },
+  metrics: StreamMetrics,
+): void {
+  if (metrics.costBasis) return; // already settled by the provider itself
+
+  const resolved = resolvePricing(agent.provider, agent.model, agent);
+  const cost = calculateCost(
+    agent.provider, agent.model, metrics.inputTokens, metrics.outputTokens,
+    resolved
+      ? { promptCostPer1M: resolved.promptCostPer1M, completionCostPer1M: resolved.completionCostPer1M }
+      : undefined,
+    // Cache tiers, so a warm turn is not billed as though every cached token
+    // were fresh input.
+    { cachedTokens: metrics.cachedTokens, cacheWriteTokens: metrics.cacheWriteTokens },
+  );
+  if (cost === null) return; // unpriced: leave both unset so it reads as unknown
+
+  metrics.cost = cost;
+  // A local model costs zero because it is free to run, which is a different
+  // statement from "we estimated zero" — the ledger keeps them apart.
+  metrics.costBasis = isLocalProvider(agent.provider) && cost === 0 ? 'local' : 'estimated';
 }
 
 /**
@@ -105,25 +151,14 @@ export function emitAgentSpend(
   metrics: StreamMetrics,
   context: { kind: string; containerId?: string; projectId?: string },
 ): void {
-  // Cache tiers are passed through: without them a warm Anthropic turn is
-  // billed as though every cached token were fresh input, which overstates the
-  // cached portion tenfold.
-  const cacheUsage = { cachedTokens: metrics.cachedTokens, cacheWriteTokens: metrics.cacheWriteTokens };
-  // Agent override > user settings override > built-in table. Resolved here
-  // rather than passing the agent's fields straight through, so a rate the
-  // user corrected in settings reaches the ledger instead of being quietly
-  // outvoted by a shipped table that has since gone stale.
-  const resolved = resolvePricing(agent.provider, agent.model, agent);
-  const computed = typeof metrics.cost === 'number'
-    ? metrics.cost
-    : calculateCost(agent.provider, agent.model, metrics.inputTokens, metrics.outputTokens,
-      resolved ? { promptCostPer1M: resolved.promptCostPer1M, completionCostPer1M: resolved.completionCostPer1M } : undefined,
-      cacheUsage) ?? undefined;
-
-  // The caller sets costBasis when it knows the figure came from the provider
-  // itself. Absent that, anything we derived here is an estimate, and saying
-  // otherwise would lend the pricing table an authority it does not have.
-  const costBasis = metrics.costBasis ?? (computed != null ? 'estimated' : 'unknown');
+  // Pricing is settled by finalizeCost, above — one place that knows about all
+  // three layers (agent override > user setting > built-in table) and about
+  // the difference between reported, estimated, local and unknown. Computing
+  // it here as well is what let a pre-computed figure silently outvote the
+  // user's own correction.
+  finalizeCost(agent, metrics);
+  const computed = metrics.cost;
+  const costBasis = metrics.costBasis ?? 'unknown';
 
   eventBus.emitEvent('agent:spend', {
     agentId: agent.id,

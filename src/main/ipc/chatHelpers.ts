@@ -21,7 +21,6 @@ import { ContentBlocksBuilder } from '../services/ContentBlocksBuilder';
 import type { Tool } from 'ai';
 import { routeStreamEvent, emitStreamStart, emitStreamComplete, emitAgentSpend, createStreamMetrics, type StreamMetrics, type StreamEnvelope } from '../services/streamEventRouter';
 import type { Agent, Project, Settings, CurrentState, ContentBlock, RequestInfo } from '../types';
-import { calculateCost } from '../../shared/pricing';
 import { getProvider } from '../../shared/providers';
 import { estimateTokens, type ModelSizeClass, type ContextBudget } from '../services/contextBudget';
 import { substituteMustacheVars } from '../utils/substituteMustacheVars';
@@ -942,23 +941,13 @@ export async function runStream(options: RunStreamOptions): Promise<StreamResult
     streamMetrics.requestInfo = options.requestInfo;
   }
 
-  // Prefer OpenRouter's real reported cost (usage accounting) over the estimate
-  // from token counts × agent pricing; fall back to the estimate otherwise.
+  // OpenRouter's usage accounting is the provider's own invoiced figure, so it
+  // wins. Everything else is settled by finalizeCost inside emitAgentSpend —
+  // computing it here is what used to make the user's settings override
+  // unreachable on exactly the turns that spend the money.
   if (typeof orReportedCost === 'number') {
     streamMetrics.cost = orReportedCost;
     streamMetrics.costBasis = 'reported';
-  } else {
-    const cost = calculateCost(
-      agent.provider, agent.model, streamMetrics.inputTokens, streamMetrics.outputTokens,
-      { promptCostPer1M: agent.promptCostPer1M, completionCostPer1M: agent.completionCostPer1M },
-      // Cache tiers, so a warm turn is not billed as if every cached token
-      // were fresh input.
-      { cachedTokens: streamMetrics.cachedTokens, cacheWriteTokens: streamMetrics.cacheWriteTokens },
-    );
-    if (cost !== null) {
-      streamMetrics.cost = cost;
-      streamMetrics.costBasis = 'estimated';
-    }
   }
 
   // Surface a hard output-limit truncation.

@@ -495,6 +495,56 @@ describe('runStream', () => {
     expect(JSON.stringify(result.contentBlocks)).not.toContain('cut off');
   });
 
+  // The bug this pins: the turn paths used to price the turn themselves with
+  // calculateCost, which resolves agent-override → built-in table and has
+  // never heard of settings.usage.pricingOverrides. emitAgentSpend takes an
+  // already-set cost at face value (so a provider's reported figure is never
+  // overwritten), so pre-computing here made the user's own correction
+  // unreachable on exactly the turns that spend the money. The turn path must
+  // now leave the cost alone unless the provider reported one.
+  it('leaves an unreported cost for emitAgentSpend to price', async () => {
+    routeStreamEvent.mockImplementation((event: any, _id: unknown, _win: unknown, metrics: any) => {
+      if (event?.usage) Object.assign(metrics, event.usage);
+    });
+    streamAIResponse.mockImplementation(async function* () {
+      yield 'Hi';
+      yield { type: 'usage-total', usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } };
+      return 'Hi';
+    });
+
+    await runStream({
+      agent: agent({ promptCostPer1M: 1, completionCostPer1M: 1 }),
+      formattedResult: { messages: [{ role: 'user', content: 'hi' }], systemPrompt: 'sys' },
+      enabledTools: {},
+      abortSignal: new AbortController().signal,
+      mainWindow: null,
+      messageCount: 2,
+    });
+
+    const [, metricsAtEmit] = emitAgentSpend.mock.calls[emitAgentSpend.mock.calls.length - 1];
+    expect(metricsAtEmit.cost).toBeUndefined();
+    expect(metricsAtEmit.costBasis).toBeUndefined();
+  });
+
+  it('still keeps a provider-reported cost, which nothing may overwrite', async () => {
+    streamAIResponse.mockImplementation(async function* () {
+      yield 'Hi';
+      yield { type: 'provider-metadata', servedProvider: 'DeepInfra', cost: 0.031 };
+      return 'Hi';
+    });
+
+    const result = await runStream({
+      agent: agent({ promptCostPer1M: 1, completionCostPer1M: 1 }),
+      formattedResult: { messages: [{ role: 'user', content: 'hi' }], systemPrompt: 'sys' },
+      enabledTools: {},
+      abortSignal: new AbortController().signal,
+      mainWindow: null,
+      messageCount: 2,
+    });
+
+    expect(result.metrics).toMatchObject({ cost: 0.031, costBasis: 'reported' });
+  });
+
   it('routes events, collects approvals, captures response-messages and cost', async () => {
     streamAIResponse.mockImplementation(async function* () {
       yield 'Hello';
