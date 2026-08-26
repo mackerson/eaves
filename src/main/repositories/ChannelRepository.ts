@@ -46,6 +46,18 @@ function roomsOnly(alias = ''): string {
   return `${col} NOT IN ('direct', 'work')`;
 }
 
+/**
+ * The chat list's half of the routing split (v81).
+ *
+ * `surface` says which view owns a conversation; `workshop` says what one may
+ * do. Rows written before v81 have the column defaulted to 'chat', and the
+ * NULL guard covers a row inserted by an older build against a newer schema.
+ */
+function ownedByChat(alias = ''): string {
+  const col = alias ? `${alias}.surface` : 'surface';
+  return `(${col} IS NULL OR ${col} = 'chat')`;
+}
+
 export class ChannelRepository {
   private db: Database.Database;
 
@@ -601,9 +613,13 @@ export class ChannelRepository {
     const includeParticipants = options.includeParticipants ?? false;
     const messageLimit = options.messageLimit ?? 50;
 
-    // WORKSHOP_EXCLUDED: a workshop session is a direct chat, but it belongs to
-    // the Workshop, not the chat list. getChatById deliberately does not filter.
-    let query = "SELECT * FROM channels WHERE type = 'direct' AND workshop = 0";
+    // ownedByChat: a workshop session is a direct chat that another surface
+    // owns, so the chat list does not carry it. Keyed off `surface` rather
+    // than `workshop` (v81) — the question here is "whose list is this",
+    // which is not the same question as "may this conversation run code", and
+    // a future plugin surface must be able to answer the first without
+    // touching the second. getChatById deliberately does not filter at all.
+    let query = `SELECT * FROM channels WHERE type = 'direct' AND ${ownedByChat()}`;
     if (!includeArchived) {
       query += ' AND archived_at IS NULL';
     }
@@ -645,7 +661,7 @@ export class ChannelRepository {
     const includeArchived = options.includeArchived ?? false;
     const includeParticipants = options.includeParticipants ?? false;
 
-    let query = "SELECT * FROM channels WHERE type = 'direct' AND workshop = 0 AND agent_id = ?";
+    let query = `SELECT * FROM channels WHERE type = 'direct' AND ${ownedByChat()} AND agent_id = ?`;
     if (!includeArchived) {
       query += ' AND archived_at IS NULL';
     }
@@ -656,7 +672,10 @@ export class ChannelRepository {
   }
 
   /** Search direct chats by name or message content (chat-shaped results). */
-  searchDirectChats(query: string, options: { includeArchived?: boolean } = {}): Chat[] {
+  searchDirectChats(
+    query: string,
+    options: { includeArchived?: boolean; allSurfaces?: boolean } = {},
+  ): Chat[] {
     const includeArchived = options.includeArchived ?? false;
     const searchPattern = `%${this.escapeLikePattern(query)}%`;
 
@@ -664,7 +683,17 @@ export class ChannelRepository {
       SELECT DISTINCT c.*
       FROM channels c
       LEFT JOIN messages m ON c.id = m.channel_id
-      WHERE c.type = 'direct' AND c.workshop = 0
+      -- Global search opts into spanning every surface: a build's transcript
+      -- is where the reasoning behind a plugin lives, and agents could
+      -- already reach it via transcript_search while the person who wrote it
+      -- could not. Each row carries its surface so the UI can say where it
+      -- lives and send a click to the right place.
+      --
+      -- The sidebar's search does NOT opt in, because its results populate a
+      -- *list*, and the whole point of the routing split is that the chat
+      -- list does not carry conversations another surface owns.
+      WHERE c.type = 'direct'
+        ${options.allSurfaces ? '' : `AND ${ownedByChat('c')}`}
         AND (c.name LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')
     `;
 
@@ -686,7 +715,7 @@ export class ChannelRepository {
     const tagPatterns = tags.map(tag => `%${this.escapeLikePattern(tag)}%`);
     const tagConditions = tagPatterns.map(() => "tags LIKE ? ESCAPE '\\'").join(' OR ');
 
-    let query = `SELECT * FROM channels WHERE type = 'direct' AND workshop = 0 AND (${tagConditions})`;
+    let query = `SELECT * FROM channels WHERE type = 'direct' AND ${ownedByChat()} AND (${tagConditions})`;
     if (!includeArchived) {
       query += ' AND archived_at IS NULL';
     }
@@ -781,9 +810,14 @@ export class ChannelRepository {
     const id = `chat-${randomUUID()}`;
     const createdAt = Date.now();
 
+    // Two columns, two questions, written together here and nowhere else.
+    // `surface` routes — the Workshop owns this conversation, so the chat list
+    // does not carry it. `workshop` is the capability — this conversation may
+    // write and run code. A future plugin surface sets the first and never the
+    // second, which is the whole point of them being separate (v81).
     this.db.prepare(`
-      INSERT INTO channels (id, name, type, agent_id, project_id, workshop, created_at)
-      VALUES (?, ?, 'direct', ?, ?, 1, ?)
+      INSERT INTO channels (id, name, type, agent_id, project_id, surface, workshop, created_at)
+      VALUES (?, ?, 'direct', ?, ?, 'workshop', 1, ?)
     `).run(id, session.name, session.agentId, session.projectId ?? null, createdAt);
 
     for (const participant of initialParticipants) {
@@ -909,6 +943,7 @@ export class ChannelRepository {
       userPersona: row.user_persona || undefined,
       pinned: !!row.pinned,
       folderId: row.folder_id ?? undefined,
+      surface: row.surface ?? undefined,
     };
   }
 

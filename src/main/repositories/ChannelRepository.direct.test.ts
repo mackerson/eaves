@@ -685,11 +685,40 @@ describe('ChannelRepository direct-channel (chat) projection', () => {
       expect(repository.getDirectChatsByAgentId('agent-1').map(c => c.name)).toEqual(['Ordinary']);
     });
 
-    it('excludes them from search', () => {
+    // Search is the one place that deliberately spans surfaces. A build's
+    // transcript is where the reasoning behind a plugin lives, and agents
+    // could already reach it through transcript_search while the person who
+    // wrote it could not. The result says which surface it belongs to, so the
+    // UI can label it and send a click to the Workshop rather than the chat.
+    it('finds them in search, labelled with the surface that owns them', () => {
       repository.createDirectChat({ name: 'a dice roller', agentId: 'agent-1' });
       seedWorkshop();
 
+      // Lists stay scoped; only a caller that opts in spans surfaces.
       expect(repository.searchDirectChats('dice roller').map(c => c.name)).toEqual(['a dice roller']);
+
+      const hits = repository.searchDirectChats('dice roller', { allSurfaces: true });
+
+      expect(hits.map(c => c.name).sort()).toEqual(['Build: a dice roller', 'a dice roller']);
+      expect(hits.find(c => c.name === 'Build: a dice roller')?.surface).toBe('workshop');
+      expect(hits.find(c => c.name === 'a dice roller')?.surface).toBe('chat');
+    });
+
+    // Routing and capability are separate columns on purpose: a future plugin
+    // surface must be able to own a conversation without that being a way to
+    // grant itself the plugin-authoring toolset.
+    it('keeps the capability flag independent of the routing column', () => {
+      const session = seedWorkshop();
+      const ordinary = repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+
+      expect(repository.isWorkshopSession(session.id)).toBe(true);
+      expect(repository.isWorkshopSession(ordinary.id)).toBe(false);
+
+      // A conversation another surface owns, with no authoring capability —
+      // the shape a plugin-owned conversation would take.
+      db.prepare("UPDATE channels SET surface = 'plugin:notes' WHERE id = ?").run(ordinary.id);
+      expect(repository.isWorkshopSession(ordinary.id)).toBe(false);
+      expect(repository.getDirectChats().map(c => c.id)).not.toContain(ordinary.id);
     });
 
     it('excludes them from tag filtering', () => {

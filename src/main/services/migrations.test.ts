@@ -13,7 +13,7 @@ import { legacyMigrations } from './__fixtures__/legacyChain';
 // The newest migration's version. The v75 baseline is still where a fresh
 // database's schema comes from; anything after it is an incremental migration
 // on top, so HEAD moves and the baseline does not.
-const HEAD = 80;
+const HEAD = 81;
 
 /** The squashed baseline every fresh database starts from. */
 const BASELINE = 75;

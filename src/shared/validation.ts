@@ -924,6 +924,7 @@ export const UpdateChatSchema = z.object({
 export const SearchChatsSchema = z.object({
   query: z.string().max(500),
   includeArchived: z.boolean().optional(),
+  allSurfaces: z.boolean().optional(),
 });
 
 export const GetChatsByTagsSchema = z.object({

@@ -204,6 +204,13 @@ export interface Chat {
    * buildRoleplayNote so the agent knows who the user is playing.
    */
   userPersona?: string;
+  /**
+   * Which surface owns this conversation. Absent or 'chat' for an ordinary
+   * chat; 'workshop' for a build. Search returns conversations from every
+   * surface so nothing is unfindable, and the result uses this to say where it
+   * lives and where clicking it should go — the lists themselves stay scoped.
+   */
+  surface?: string;
 }
 
 export interface ChatMessage extends BaseMessage {

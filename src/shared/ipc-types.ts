@@ -155,6 +155,12 @@ export interface AddChatParticipantRequest {
 export interface SearchChatsRequest {
   query: string;
   includeArchived?: boolean;
+  /**
+   * Span every surface, not just the chat list's own. Global search sets this
+   * so a Workshop build is findable; the sidebar's search does not, because
+   * its results populate a list the Workshop does not belong in.
+   */
+  allSurfaces?: boolean;
 }
 
 export interface GetChatsByTagsRequest {

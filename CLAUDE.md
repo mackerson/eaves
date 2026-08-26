@@ -229,10 +229,27 @@ state offers four openings rather than a blank composer.
 
 A **workshop session** is a `direct` chat with `channels.workshop = 1` (v80).
 Being an ordinary chat is the point: messages, streaming, approval cards and
-regeneration all work on it unchanged. The flag keeps it out of the chat list,
-per-agent list, search and tag filtering — but *not* `getChatById`, which is how
-the Workshop opens it. Deliberately a column, not a tag: tags are user-editable
-and this flag decides whether a conversation may write and run code.
+regeneration all work on it unchanged.
+
+**Routing and capability are two columns, on purpose** (v81):
+- `surface` — which view owns the conversation (`'chat'`, `'workshop'`, one day
+  `'plugin:<id>'`). The chat list, per-agent list and tag filter all key off
+  `ownedByChat()`. Extensible
+- `workshop` — whether the conversation may write and run code. What
+  `isWorkshopSession` reads and `buildToolset` gates the authoring tools on.
+  Written only by `createWorkshopSession`
+
+Collapsing them is the trap: if the column that *routes* a conversation is also
+the column that *grants* the authoring toolset, then declaring your kind is how
+you grant yourself the tools. A plugin surface sets the first and never the
+second. Neither is a tag — tags are user-editable.
+
+**Search spans surfaces; lists do not.** `searchDirectChats(q, { allSurfaces })`
+defaults to chat-only, because the sidebar's search populates a *list*. Global
+search opts in, groups builds separately and routes a click to the Workshop —
+a build's transcript is where the reasoning behind a plugin lives, and agents
+could already reach it through `transcript_search` while its author could not.
+`getChatById` filters by neither column, which is how the Workshop opens one.
 
 The transcript composes `ChatMessageRow` + `ChatInput` directly rather than
 reusing `ChatsView` (721 lines of queueing, attachments, editing and branch
