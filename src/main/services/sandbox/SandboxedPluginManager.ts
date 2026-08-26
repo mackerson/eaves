@@ -1338,8 +1338,19 @@ export class SandboxedPluginManager {
     });
   }
 
-  /** Returns tool definitions compatible with Vercel AI SDK */
-  getRegisteredTools(): Record<string, unknown> {
+  /**
+   * Returns tool definitions compatible with Vercel AI SDK.
+   *
+   * Drafts are excluded by default for the same reason their views are (see
+   * getRegisteredViews): a draft is agent-written code that nobody has
+   * approved, and it is activated inside the Workshop, where a person is
+   * watching a bench. Leaking its tools into the general toolset would let any
+   * agent in any chat call it, which is a wider blast radius than the surface
+   * that authorised it. Callers that legitimately want them — the Workshop's
+   * own toolset, and plugin_activate reporting what it just registered — ask
+   * for them explicitly.
+   */
+  getRegisteredTools(options: { includeDrafts?: boolean } = {}): Record<string, unknown> {
     const { tool } = require('ai');
     const { z } = require('zod');
     const tools: Record<string, unknown> = {};
@@ -1347,6 +1358,7 @@ export class SandboxedPluginManager {
     for (const [toolName, registeredTool] of this.registeredTools.entries()) {
       const plugin = this.plugins.get(registeredTool.pluginId);
       if (!plugin || !plugin.enabled) continue;
+      if (plugin.manifest?.source === 'draft' && !options.includeDrafts) continue;
 
       const pluginTool = registeredTool.tool;
       const zodSchema = jsonSchemaToZod(z, pluginTool.inputSchema);
@@ -1362,6 +1374,21 @@ export class SandboxedPluginManager {
     }
 
     return tools;
+  }
+
+  /**
+   * Just the tools a running draft registered — the Workshop's half of the
+   * split above. Returns nothing when no draft is running, which is the
+   * ordinary case.
+   */
+  getDraftTools(): Record<string, unknown> {
+    const all = this.getRegisteredTools({ includeDrafts: true });
+    const installed = this.getRegisteredTools();
+    const drafts: Record<string, unknown> = {};
+    for (const [name, def] of Object.entries(all)) {
+      if (!(name in installed)) drafts[name] = def;
+    }
+    return drafts;
   }
 
   async executePluginTool(pluginId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> {

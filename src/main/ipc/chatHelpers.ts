@@ -111,7 +111,9 @@ export async function buildToolset(
     projectDirectories
   );
 
-  // Plugin tools
+  // Plugin tools. Drafts are excluded here — see getRegisteredTools. They are
+  // added back below, for the workshop session that authorised them and
+  // nowhere else.
   const pluginManager = getSandboxedPluginManager();
   const pluginTools = pluginManager.getRegisteredTools();
 
@@ -130,11 +132,17 @@ export async function buildToolset(
   // plugin authoring happens only in the Workshop, where the bench is showing
   // the human what is being built. An ordinary chat never gets these tools, so
   // there is nowhere an agent can write and run code unobserved.
-  const pluginDraftTools =
+  const inWorkshop =
     getSettingsRepository().get().pluginAuthoringEnabled &&
-    getChannelRepository().isWorkshopSession(channelId)
-      ? createPluginDraftTools()
-      : {};
+    getChannelRepository().isWorkshopSession(channelId);
+  const pluginDraftTools = inWorkshop ? createPluginDraftTools() : {};
+  // A running draft's own tools follow the same rule as the verbs that made
+  // them. Activation happens in the Workshop under a person's eye; letting the
+  // tool it registered be callable from every other chat would hand agent-
+  // written code a far wider reach than the surface that approved it.
+  const draftTools = inWorkshop ? pluginManager.getDraftTools() : {};
+  /** Kept in front of the model for the whole session — see computeActiveToolNames. */
+  const workshopVerbs = Object.keys(pluginDraftTools);
 
   // Merge in priority order: builtin → agent-scoped → plugin → MCP
   const toolMetadata = new Map<string, { category: string; origin: string }>();
@@ -147,7 +155,7 @@ export async function buildToolset(
     bindProjectScope(
       {
         ...builtinTools, ...channelTools, ...transcriptTools, ...selfTools,
-        ...coreMemoryTools, ...workSessionTools, ...pluginDraftTools,
+        ...coreMemoryTools, ...workSessionTools, ...pluginDraftTools, ...draftTools,
       },
       currentProject.id,
     ),
@@ -176,6 +184,9 @@ export async function buildToolset(
   for (const toolName of Object.keys(pluginDraftTools)) {
     toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
   }
+  for (const toolName of Object.keys(draftTools)) {
+    toolMetadata.set(toolName, { category: 'plugin', origin: 'plugin-draft' });
+  }
 
   for (const [toolName, toolDef] of Object.entries(pluginTools)) {
     if (allAvailableTools[toolName]) {
@@ -202,7 +213,14 @@ export async function buildToolset(
   // (typically empty). No discovery, no list_tools — the model can't escape
   // out of empty-tool jail. Keeps the system prompt clean and prevents
   // meta-talk about tool availability.
-  if (agent.archetype?.type === 'roleplay') {
+  //
+  // Except in the Workshop. That allowlist is normally empty, so a roleplay
+  // agent — which is whatever `defaultAgentId` happens to point at — used to
+  // land in a workshop session with the four authoring verbs silently
+  // stripped: no error, no toast, just a bench that never fills. A workshop
+  // session is explicitly not an in-character chat, so it takes the ordinary
+  // path.
+  if (agent.archetype?.type === 'roleplay' && !inWorkshop) {
     const allowlist = new Set<string>(agent.defaultTools ?? []);
     const sessionState = loadSessionState(channelId, channelToolStates, allowlist);
 
@@ -261,7 +279,9 @@ export async function buildToolset(
     toolSendMode: sendMode,
     // Live read — re-evaluated per step, so enable→use lands on the next step.
     getActiveToolNames: (modeOverride) =>
-      computeActiveToolNames(allToolsForSDK, sessionState.enabledTools, modeOverride ?? sendMode),
+      computeActiveToolNames(
+        allToolsForSDK, sessionState.enabledTools, modeOverride ?? sendMode, workshopVerbs,
+      ),
     allAvailableTools,
     mcpClients,
     projectDirectories,
@@ -298,7 +318,11 @@ const ALWAYS_ACTIVE_TOOL_NAMES = [...DISCOVERY_TOOL_NAMES, 'eaves_guide'] as con
  * (see toolDeferral.ts): large-schema, rarely-called tools that would otherwise
  * be billed on every request of every turn.
  *
- * In `'enabled'` mode, nothing rides along — only what is explicitly enabled.
+ * In `'enabled'` mode, nothing rides along — only what is explicitly enabled,
+ * plus `alsoAlwaysActive`: names the *surface* guarantees regardless of the
+ * agent's configuration. The Workshop passes its four authoring verbs, because
+ * a session whose entire purpose is writing a plugin should not require the
+ * model to discover that it can.
  *
  * The enabled set is applied last and is purely additive. That is deliberate:
  * a context that already has a persisted enabled-set from the Tool Panel can
@@ -310,11 +334,12 @@ export function computeActiveToolNames(
   allTools: Record<string, unknown>,
   enabled: ReadonlySet<string>,
   sendMode: 'all' | 'enabled',
+  alsoAlwaysActive: readonly string[] = [],
 ): string[] {
   // Presence-checked like the enabled set below: a name with no tool behind it
   // would be sent to the model as a schema-less phantom it could never call.
   const names = new Set<string>(
-    ALWAYS_ACTIVE_TOOL_NAMES.filter(name => allTools[name]),
+    [...ALWAYS_ACTIVE_TOOL_NAMES, ...alsoAlwaysActive].filter(name => allTools[name]),
   );
 
   if (sendMode === 'all') {

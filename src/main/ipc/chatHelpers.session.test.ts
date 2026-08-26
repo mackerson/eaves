@@ -306,7 +306,10 @@ describe('buildToolset', () => {
     ]);
     projectRepo.getById.mockReturnValue({ id: 'p1', directory: '/data/projects/proj-abc12345' });
     connectMCPServers.mockResolvedValue({ clients: [], tools: {} });
-    getSandboxedPluginManager.mockReturnValue({ getRegisteredTools: () => ({}) });
+    getSandboxedPluginManager.mockReturnValue({
+      getRegisteredTools: () => ({}),
+      getDraftTools: () => ({}),
+    });
     channelRepo.isWorkSession.mockReturnValue(false);
     channelRepo.isWorkshopSession.mockReturnValue(false);
     toolStateRepo.get.mockReturnValue(null);
@@ -383,6 +386,57 @@ describe('buildToolset', () => {
     expect(Object.keys(toolset.enabledTools)).toEqual(
       expect.arrayContaining(['plugin_inspect', 'plugin_define', 'plugin_activate', 'plugin_retract']),
     );
+  });
+
+  // A session whose entire purpose is writing a plugin should not require the
+  // model to first discover that it can. In 'enabled' send mode nothing rides
+  // along unless it is explicitly enabled, and the four verbs are in no
+  // agent's defaultTools.
+  it('keeps the authoring verbs in front of the model even in enabled send mode', async () => {
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const toolset = await buildToolset(agent(), project(), 'ws-1', new Map());
+    expect(toolset.getActiveToolNames('enabled')).toEqual(
+      expect.arrayContaining(['plugin_inspect', 'plugin_define', 'plugin_activate', 'plugin_retract']),
+    );
+  });
+
+  // The Workshop's agent is whatever defaultAgentId points at. When that was a
+  // roleplay agent, the roleplay short-circuit intersected the toolset with an
+  // empty defaultTools allowlist and the four verbs vanished — no error, just a
+  // bench that never filled.
+  it('does not strip the authoring verbs from a roleplay agent in the workshop', async () => {
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const toolset = await buildToolset(
+      agent({ archetype: { type: 'roleplay' } as Agent['archetype'], defaultTools: [] }),
+      project(),
+      'ws-1',
+      new Map(),
+    );
+    expect(toolset.enabledTools.plugin_define).toBeDefined();
+    expect(toolset.getActiveToolNames()).toEqual(expect.arrayContaining(['plugin_define']));
+  });
+
+  // A draft is activated in the Workshop, under a person's eye. The tool it
+  // registers must not become callable from every other chat — that is a wider
+  // reach than the surface that approved it.
+  it('exposes a running draft\'s own tools in the workshop and nowhere else', async () => {
+    const draftTool = { description: 'rolls dice' };
+    getSandboxedPluginManager.mockReturnValue({
+      getRegisteredTools: () => ({}),
+      getDraftTools: () => ({ draft_roll: draftTool }),
+    });
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const inWorkshop = await buildToolset(agent(), project(), 'ws-1', new Map());
+    expect(inWorkshop.enabledTools.draft_roll).toBe(draftTool);
+
+    channelRepo.isWorkshopSession.mockReturnValue(false);
+    const ordinary = await buildToolset(agent(), project(), 'ch-1', new Map());
+    expect(ordinary.enabledTools.draft_roll).toBeUndefined();
+    expect(ordinary.allAvailableTools.draft_roll).toBeUndefined();
   });
 });
 

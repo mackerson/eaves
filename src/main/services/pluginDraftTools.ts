@@ -164,16 +164,20 @@ export function createPluginDraftTools() {
           }
 
           const manager = getSandboxedPluginManager();
-          const before = new Set(Object.keys(manager.getRegisteredTools()));
+          // includeDrafts: the general toolset deliberately hides draft tools
+          // (see getRegisteredTools), and this is the one caller that has to
+          // see them — it is reporting what it just registered.
+          const before = new Set(Object.keys(manager.getRegisteredTools({ includeDrafts: true })));
           const manifest = await manager.loadDraftPlugin(staged.record.folderName);
-          const registered = Object.keys(manager.getRegisteredTools()).filter(name => !before.has(name));
+          const registered = Object.keys(manager.getRegisteredTools({ includeDrafts: true }))
+            .filter(name => !before.has(name));
 
           return {
             success: true,
             id: manifest.id,
             registeredTools: registered,
             note: registered.length
-              ? `Running. ${registered.join(', ')} become callable on your next turn.`
+              ? `Running. ${registered.join(', ')} become callable on your next turn, in this workshop session only.`
               : 'Running. It registered no tools.',
             viewNote: manifest.ui
               ? 'Its view is not shown in the sidebar: a draft UI does not share a window with the dialog ' +
