@@ -202,7 +202,11 @@ interface OpenRouterModelMeta {
   // With sticky-provider pinning on, the served window is what a request is
   // validated against, so prefer top_provider when present.
   context_length?: number;
-  top_provider?: { context_length?: number };
+  // `max_completion_tokens` is the served backend's real output cap, and it is
+  // published for all but a handful of the catalogue. Ignoring it is what made
+  // every OpenRouter model generate at most 4096 tokens regardless of being
+  // able to do sixteen times that.
+  top_provider?: { context_length?: number; max_completion_tokens?: number };
 }
 
 const openrouterCapabilityCache = new Map<string, ModelCapabilities>();
@@ -287,7 +291,12 @@ const openrouterAdapter: ProviderAdapter = {
       const max = numericOrUndefined(meta.context_length);
       const window = served ?? max;
       if (!window) return null;
-      return { contextWindow: window, maxContextLength: max ?? window, source: 'openrouter-api' };
+      return {
+        contextWindow: window,
+        maxContextLength: max ?? window,
+        maxOutputTokens: numericOrUndefined(meta.top_provider?.max_completion_tokens),
+        source: 'openrouter-api',
+      };
     } catch (error) {
       logger.debug('[providers] OpenRouter context detect failed', {
         modelId, error: error instanceof Error ? error.message : String(error),
@@ -427,7 +436,22 @@ const lmstudioAdapter: ProviderAdapter = {
       // generation hit the real 8k wall mid-sentence.) The null is cached
       // under the short miss TTL, so the first request's JIT load reveals the
       // real window within seconds.
-      if (!loaded && entry.state && entry.state !== 'loaded') return null;
+      if (!loaded && entry.state && entry.state !== 'loaded') {
+        // Not loaded yet, so nobody knows what window it will get — see above
+        // for why trusting `max` is worse than admitting ignorance. But the
+        // fallback for "unknown" is a 4096 guess, which trims the first
+        // message of every session down to a small-model budget and then
+        // recovers on the second, once the real request has JIT-loaded it.
+        //
+        // So JIT-load it here instead. The load was going to happen on the
+        // very next request regardless; doing it a moment earlier costs the
+        // same wall-clock and buys a correct budget for the turn that pays it.
+        const warmed = await warmLmStudioModel(restRoot, modelId);
+        if (warmed) {
+          return { contextWindow: warmed, maxContextLength: max, loadedContextLength: warmed, source: 'lmstudio-api' };
+        }
+        return null;
+      }
       const contextWindow = loaded ?? max;
       if (!contextWindow) return null;
       return { contextWindow, maxContextLength: max, loadedContextLength: loaded, source: 'lmstudio-api' };
@@ -439,6 +463,53 @@ const lmstudioAdapter: ProviderAdapter = {
     }
   },
 };
+
+/**
+ * Force a not-loaded LM Studio model to load, and report the window it got.
+ *
+ * A one-token completion is the only portable way to trigger a JIT load: the
+ * REST API exposes the loaded window but nothing to load *with*. Bounded,
+ * because a cold load of a large model is slow and a turn blocked forever is
+ * worse than a turn budgeted conservatively — on timeout the caller falls back
+ * to exactly the behaviour it had before.
+ */
+const LMSTUDIO_WARM_TIMEOUT_MS = 45_000;
+
+async function warmLmStudioModel(restRoot: string, modelId: string): Promise<number | undefined> {
+  try {
+    const warm = await fetch(`${restRoot}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 1,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(LMSTUDIO_WARM_TIMEOUT_MS),
+    });
+    if (!warm.ok) return undefined;
+
+    // Re-ask: the window is only knowable after the load.
+    const after = await fetch(`${restRoot}/api/v0/models`, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!after.ok) return undefined;
+    const data = await after.json() as { data?: LmStudioModelMeta[] };
+    const entry = data.data?.find(m => m.id === modelId);
+    const loaded = numericOrUndefined(entry?.loaded_context_length);
+    if (loaded) {
+      logger.info('[providers] JIT-loaded an LM Studio model to read its window', { modelId, loaded });
+    }
+    return loaded;
+  } catch (error) {
+    logger.debug('[providers] LM Studio warm-up failed; budgeting conservatively', {
+      modelId, error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
 
 interface LmStudioModelMeta {
   id?: string;

@@ -446,6 +446,54 @@ describe('runStream', () => {
     settingsRepo.get.mockReturnValue({ userName: 'Robin' });
   });
 
+  // Channels have warned about this since the field reports of mid-sentence
+  // cut-offs; chats never did, so a reply that stopped at the cap was
+  // persisted and rendered as though the agent had finished speaking. The
+  // finish reason was already sitting in streamMetrics, unread.
+  it('says so when a reply was cut off at the output limit', async () => {
+    routeStreamEvent.mockImplementation((event: any, _id: unknown, _win: unknown, metrics: any) => {
+      if (event?.finishReason) metrics.finishReason = event.finishReason;
+    });
+    streamAIResponse.mockImplementation(async function* () {
+      yield 'A very long answer that stops abruptly mid-';
+      yield { type: 'step-finish', finishReason: 'length', usage: { inputTokens: 10, outputTokens: 4096, totalTokens: 4106 } };
+      return 'A very long answer that stops abruptly mid-';
+    });
+
+    const result = await runStream({
+      agent: agent(),
+      formattedResult: { messages: [{ role: 'user', content: 'hi' }], systemPrompt: 'sys' },
+      enabledTools: {},
+      abortSignal: new AbortController().signal,
+      mainWindow: null,
+      messageCount: 2,
+    });
+
+    expect(JSON.stringify(result.contentBlocks)).toContain('cut off at the output-token limit');
+  });
+
+  it('adds no such note when the model stopped because it was finished', async () => {
+    routeStreamEvent.mockImplementation((event: any, _id: unknown, _win: unknown, metrics: any) => {
+      if (event?.finishReason) metrics.finishReason = event.finishReason;
+    });
+    streamAIResponse.mockImplementation(async function* () {
+      yield 'Done.';
+      yield { type: 'step-finish', finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 3, totalTokens: 13 } };
+      return 'Done.';
+    });
+
+    const result = await runStream({
+      agent: agent(),
+      formattedResult: { messages: [{ role: 'user', content: 'hi' }], systemPrompt: 'sys' },
+      enabledTools: {},
+      abortSignal: new AbortController().signal,
+      mainWindow: null,
+      messageCount: 2,
+    });
+
+    expect(JSON.stringify(result.contentBlocks)).not.toContain('cut off');
+  });
+
   it('routes events, collects approvals, captures response-messages and cost', async () => {
     streamAIResponse.mockImplementation(async function* () {
       yield 'Hello';

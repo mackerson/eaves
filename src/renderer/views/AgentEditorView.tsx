@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { ModelCombobox } from '@/components/ModelCombobox';
 import { MEMORY_EXTRACTOR_PROMPT } from '../../shared/shadowDefaults';
 import { DEFAULT_PROMPT_TEMPLATE, PROMPT_TEMPLATE_VARIABLES } from '../../shared/promptTemplate';
+import { RESOLVED_MAX_OUTPUT_CEILING } from '../../shared/providers';
 
 interface AgentEditorViewProps {
   agentId?: string;
@@ -1103,11 +1104,22 @@ export function AgentEditorView({ agentId, agents, onClose, onSave }: AgentEdito
                               size="sm"
                               onClick={() => setField('topP', undefined)}
                               className="text-muted-foreground flex-none"
-                              title="Reset to model default"
+                              title="Reset to the model's own limit"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
                             </Button>
                           </div>
+                          {/* "Auto" was a lie for as long as the field existed:
+                              blank meant a flat 4096 for every model, which cut
+                              off replies from models advertising far more. It
+                              now asks the provider — and says where the number
+                              comes from, because a cap you cannot see is one
+                              you cannot debug. */}
+                          <p className="text-xs text-muted-foreground mt-1.5">
+                            Leave blank to use what the model reports it can produce, up to{' '}
+                            {RESOLVED_MAX_OUTPUT_CEILING.toLocaleString()}. Set a number to go
+                            beyond that, or to hold it lower.
+                          </p>
                         </div>
                       )}
                       {capabilities.maxOutputTokens && (
@@ -1119,7 +1131,7 @@ export function AgentEditorView({ agentId, agents, onClose, onSave }: AgentEdito
                               type="number"
                               value={form.maxOutputTokens || ''}
                               onChange={(e) => setField('maxOutputTokens', e.target.value ? parseInt(e.target.value) : undefined)}
-                              placeholder="Auto"
+                              placeholder="Auto (from the model)"
                             />
                             <Button
                               variant="ghost"

@@ -14,6 +14,8 @@ import {
   getModelSizeClass,
   resolveContextWindow,
   computeContextBudget,
+  resolveMaxOutputTokens,
+  isContextWindowKnown,
 } from './contextBudget';
 import type { Agent } from '../types';
 
@@ -380,5 +382,106 @@ describe('computeContextBudget', () => {
     expect(b.sizeClass).toBe(sizeClass);
     expect(b.systemPromptBudget).toBe(Math.floor(b.inputBudget * ratio));
     expect(b.systemPromptBudget + b.messageBudget).toBeLessThanOrEqual(b.inputBudget);
+  });
+});
+
+/**
+ * The output cap was `agent.maxOutputTokens || 4096`, written out twice — once
+ * as the budget's reserve and once as the value actually sent — so every model
+ * generated at most 4096 tokens however much it advertised, and the two copies
+ * were free to disagree about even that.
+ */
+describe('resolveMaxOutputTokens', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCachedModelContext.mockReturnValue(undefined);
+  });
+
+  it('falls back to the historical default when nothing is known', () => {
+    expect(resolveMaxOutputTokens(makeAgent())).toBe(4096);
+  });
+
+  it('uses what the provider reports the model can produce', () => {
+    // OpenRouter publishes top_provider.max_completion_tokens for all but a
+    // handful of its catalogue; ignoring it is what clipped every reply.
+    getCachedModelContext.mockReturnValue({ contextWindow: 1_000_000, maxOutputTokens: 64_000 });
+    expect(resolveMaxOutputTokens(makeAgent({ provider: 'openrouter' }))).toBe(16_384);
+  });
+
+  it('caps a provider-reported figure, so a blank field cannot authorise a huge reply', () => {
+    getCachedModelContext.mockReturnValue({ contextWindow: 200_000, maxOutputTokens: 64_000 });
+    expect(resolveMaxOutputTokens(makeAgent())).toBe(16_384);
+  });
+
+  it('passes a provider-reported figure through untouched when it is under the ceiling', () => {
+    getCachedModelContext.mockReturnValue({ contextWindow: 128_000, maxOutputTokens: 8_192 });
+    expect(resolveMaxOutputTokens(makeAgent())).toBe(8_192);
+  });
+
+  // The user's number is deliberate, so the ceiling does not apply to it.
+  it('honours an explicit agent override past the ceiling', () => {
+    getCachedModelContext.mockReturnValue({ contextWindow: 200_000, maxOutputTokens: 64_000 });
+    expect(resolveMaxOutputTokens(makeAgent({ maxOutputTokens: 32_000 }))).toBe(32_000);
+  });
+
+  it('clamps against a known window — no provider can serve more output than context', () => {
+    expect(resolveMaxOutputTokens(makeAgent({ contextWindow: 8_192, maxOutputTokens: 32_000 })))
+      .toBe(6_144);
+  });
+
+  // A cold local server reports nothing and gets the 4096 provider fallback.
+  // Halving an output cap on the strength of that guess is what truncated the
+  // first message of every LM Studio session.
+  it('does not clamp against a window it only guessed', () => {
+    expect(resolveMaxOutputTokens(makeAgent({ provider: 'lmstudio' }))).toBe(4096);
+  });
+
+  it('does clamp once the local server has told us the real window', () => {
+    getCachedModelContext.mockReturnValue({ contextWindow: 4_096 });
+    expect(resolveMaxOutputTokens(makeAgent({ provider: 'lmstudio' }))).toBe(3_072);
+  });
+});
+
+describe('isContextWindowKnown', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCachedModelContext.mockReturnValue(undefined);
+  });
+
+  it('is false for a provider-shaped guess', () => {
+    expect(isContextWindowKnown(makeAgent({ provider: 'lmstudio' }))).toBe(false);
+  });
+
+  it('is true for a user override, a detected window, or a known model', () => {
+    expect(isContextWindowKnown(makeAgent({ contextWindow: 32_000 }))).toBe(true);
+
+    getCachedModelContext.mockReturnValue({ contextWindow: 40_000 });
+    expect(isContextWindowKnown(makeAgent({ provider: 'ollama' }))).toBe(true);
+  });
+});
+
+describe('computeContextBudget output reserve', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCachedModelContext.mockReturnValue(undefined);
+  });
+
+  // The reserve and the request are now the same number by construction.
+  it('reserves exactly what the request will ask for', () => {
+    getCachedModelContext.mockReturnValue({ contextWindow: 128_000, maxOutputTokens: 8_192 });
+    const agent = makeAgent({ provider: 'openrouter' });
+    expect(computeContextBudget(agent).outputReserve).toBe(resolveMaxOutputTokens(agent));
+  });
+
+  it('stops halving the reserve for a window it only guessed at', () => {
+    const budget = computeContextBudget(makeAgent({ provider: 'lmstudio' }));
+    expect(budget.sizeClass).toBe('tiny');
+    expect(budget.outputReserve).toBe(4096); // was 2048 — half of a guess
+  });
+
+  it('still halves it when the window is genuinely known to be tiny', () => {
+    getCachedModelContext.mockReturnValue({ contextWindow: 4_096 });
+    const budget = computeContextBudget(makeAgent({ provider: 'lmstudio' }));
+    expect(budget.outputReserve).toBe(2048);
   });
 });
