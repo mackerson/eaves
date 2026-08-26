@@ -93,7 +93,10 @@ function devProcessesForRepo(repoRoot, { includeOwnTree = false } = {}) {
   return processes.filter(p => {
     if (own.has(p.pid)) return false;
     const cmd = process.platform === 'win32' ? p.cmd.toLowerCase() : p.cmd;
-    return cmd.includes(needle) && /electron|vite/i.test(cmd);
+    // `vite` must not also match `vitest`: its workers run out of this same
+    // checkout, so a bare /vite/ made `yarn kill:dev` kill a running test
+    // suite, and `dev:status` report one as a stray dev process.
+    return cmd.includes(needle) && /electron|vite(?!st)/i.test(cmd);
   });
 }
 
