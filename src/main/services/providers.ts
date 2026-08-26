@@ -21,6 +21,7 @@ import type { LanguageModel } from 'ai';
 import { logger } from './logger';
 import { ProviderId, ModelCapabilities, ModelContextInfo, getProvider } from '../../shared/providers';
 import { friendlyAIErrorMessage } from '../utils/aiErrors';
+import { loopbackFetch } from '../utils/loopbackFetch';
 
 export interface FetchModelsResult {
   success: boolean;
@@ -322,7 +323,7 @@ const ollamaAdapter: ProviderAdapter = {
     const root = baseURL || apiKey || OLLAMA_DEFAULT_ROOT;
     // .chat() — Ollama's /v1 is Chat-Completions-shaped only; Responses API
     // (the v6 default) would 404 / 400 here.
-    return createOpenAI({ baseURL: `${root}/v1`, apiKey: 'ollama' }).chat(modelId);
+    return createOpenAI({ baseURL: `${root}/v1`, apiKey: 'ollama', fetch: loopbackFetch }).chat(modelId);
   },
   getCapabilities() {
     // Local models accept the full sampling toolkit through Ollama's
@@ -333,7 +334,7 @@ const ollamaAdapter: ProviderAdapter = {
   async fetchModels({ apiKey, baseURL }) {
     const root = baseURL || apiKey || OLLAMA_DEFAULT_ROOT;
     try {
-      const response = await fetch(`${root}/api/tags`);
+      const response = await loopbackFetch(`${root}/api/tags`);
       if (!response.ok) {
         // Answering at all means it was reached — "cannot reach" would send
         // someone off to restart a server that is already up.
@@ -355,7 +356,7 @@ const ollamaAdapter: ProviderAdapter = {
   async detectContext(modelId, { apiKey, baseURL }) {
     const root = baseURL || apiKey || OLLAMA_DEFAULT_ROOT;
     try {
-      const response = await fetch(`${root}/api/show`, {
+      const response = await loopbackFetch(`${root}/api/show`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelId }),
@@ -383,7 +384,9 @@ const lmstudioAdapter: ProviderAdapter = {
   createLanguageModel(modelId, { apiKey, baseURL }) {
     const endpoint = normalizeLmStudioUrl(baseURL || apiKey || 'http://localhost:1234/v1');
     // .chat() — LM Studio's /v1 mirrors Chat Completions only.
-    return createOpenAI({ baseURL: endpoint, apiKey: 'lm-studio' }).chat(modelId);
+    // loopbackFetch so inference reaches a server bound to the other IP family;
+    // the probes below would otherwise succeed while the turn itself failed.
+    return createOpenAI({ baseURL: endpoint, apiKey: 'lm-studio', fetch: loopbackFetch }).chat(modelId);
   },
   getCapabilities() {
     return defaultCapabilitiesFor('lmstudio');
@@ -391,7 +394,7 @@ const lmstudioAdapter: ProviderAdapter = {
   async fetchModels({ apiKey, baseURL }) {
     const endpoint = normalizeLmStudioUrl(baseURL || apiKey || 'http://localhost:1234/v1');
     try {
-      const response = await fetch(`${endpoint}/models`, {
+      const response = await loopbackFetch(`${endpoint}/models`, {
         headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) {
@@ -414,7 +417,7 @@ const lmstudioAdapter: ProviderAdapter = {
   async detectContext(modelId, { apiKey, baseURL }) {
     const restRoot = lmStudioRestRoot(baseURL || apiKey || 'http://localhost:1234/v1');
     try {
-      const response = await fetch(`${restRoot}/api/v0/models`, {
+      const response = await loopbackFetch(`${restRoot}/api/v0/models`, {
         headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) return null;
@@ -477,7 +480,7 @@ const LMSTUDIO_WARM_TIMEOUT_MS = 45_000;
 
 async function warmLmStudioModel(restRoot: string, modelId: string): Promise<number | undefined> {
   try {
-    const warm = await fetch(`${restRoot}/v1/chat/completions`, {
+    const warm = await loopbackFetch(`${restRoot}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -491,7 +494,7 @@ async function warmLmStudioModel(restRoot: string, modelId: string): Promise<num
     if (!warm.ok) return undefined;
 
     // Re-ask: the window is only knowable after the load.
-    const after = await fetch(`${restRoot}/api/v0/models`, {
+    const after = await loopbackFetch(`${restRoot}/api/v0/models`, {
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(10_000),
     });
