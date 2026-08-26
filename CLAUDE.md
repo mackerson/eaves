@@ -139,11 +139,16 @@ Agent-authored plugins, staged by `services/pluginDraftService.ts` and run by
 properties define it, and each is load-bearing:
 - **Never discovered.** `discoverPlugins()` does not scan it, so a draft only
   runs because someone activated it this session and a restart is a clean slate
-- **Never surfaces a view.** `getRegisteredViews()` filters drafts out. Plugin
-  UI bundles are `import()`ed into the main window's JS realm — which is *why*
-  install consent is a separate main-owned window (`pluginConsentWindow.ts`) —
-  so unconsented agent-written UI there could script the gate approving it.
-  A draft preview therefore needs its own out-of-realm surface
+- **Never surfaces a view, and never leaks a tool.** `getRegisteredViews()`
+  filters drafts out. Plugin UI bundles are `import()`ed into the main window's
+  JS realm — which is *why* install consent is a separate main-owned window
+  (`pluginConsentWindow.ts`) — so unconsented agent-written UI there could
+  script the gate approving it. A draft preview therefore needs its own
+  out-of-realm surface. `getRegisteredTools()` excludes drafts by the same
+  rule (which also keeps them out of the Tool Panel and `toolInventory`);
+  `getDraftTools()` hands them back, and only `buildToolset` in a workshop
+  session asks. Activation happens under a person's eye, so the tool it
+  registers is callable there and nowhere else
 - **Cannot be confused with an installed plugin.** Addressed as
   `plugin://draft.<folder>/…`; the namespaces cannot collide because
   `sanitizeFolderName` folds `.` to `-`. `plugin_define` and `loadDraftPlugin`
@@ -152,7 +157,13 @@ properties define it, and each is load-bearing:
 Gated on **two** conditions: `Settings.pluginAuthoringEnabled` (default off) is
 the trust decision, and `isWorkshopSession(channelId)` is the blast radius. The
 tools do not appear in ordinary chats at all, so there is nowhere an agent can
-write and run code unobserved. The setting is offered inline from the Workshop
+write and run code unobserved. In a workshop session the four verbs are
+**always-active** (`alsoAlwaysActive` on `computeActiveToolNames`) — in
+`'enabled'` send mode they are in no agent's `defaultTools`, and a session that
+exists to write a plugin should not make the model discover that it can. The
+roleplay short-circuit is skipped there for the same reason: its allowlist is
+normally empty, so a roleplay `defaultAgentId` used to silently strip the verbs
+and leave a bench that never filled. The setting is offered inline from the Workshop
 (shared copy in `lib/pluginAuthoringCopy.ts`) rather than only in Settings.
 Agents reach it through four tools —
 `plugin_inspect` / `plugin_define` / `plugin_activate` / `plugin_retract`
@@ -166,7 +177,11 @@ the system will ever have.
 `userData/plugins/` as a normal `'user'` install:
 - **Human-only.** There is deliberately *no* agent tool. An agent can write a
   plugin and run it; only a person can install one, so a prompt-injected agent
-  cannot even ask. `PluginsView` owns the Keep/Discard actions
+  cannot even ask. **Keep lives only on the Workshop bench**, which shows the
+  source, the grants and the calls the code actually makes; `PluginsView` lists
+  drafts and can Discard (safe without reading) but sends you to the bench to
+  keep one — installing code the surface never showed you is the failure this
+  tier exists to prevent
 - Consent is the same main-owned modal as the marketplace, with
   `kind: 'promote'` copy — the install wording promises "downloaded over HTTPS
   and checksum-verified", which for an agent-authored draft is false in every
@@ -180,10 +195,37 @@ the system will ever have.
 
 **Workshop** (`views/WorkshopView.tsx`, sidebar section, `view: 'workshop'`) is
 where a plugin gets built *and* judged. Two panes: the conversation you ask in,
-and a bench rail showing what has been made — file contents verbatim,
-permissions, elevated grants called out, and Run / Stop / Preview / Keep /
-Discard. It stacks below Tailwind's `lg` so a narrow window does not crush the
-conversation.
+and the bench. It stacks below Tailwind's `lg` so a narrow window does not
+crush the conversation.
+
+The bench is **one panel, not a list** (`components/workshop/DraftManifest.tsx`):
+there is normally exactly one draft in flight, so a list answered a question
+nobody had. It shows the ask that started the build, the build's state
+(written / running / renders / kept), what it will be able to do, and what it
+actually registered once it ran. A selector appears only past one draft.
+
+"It will be able to" comes from `services/pluginDraftAnalysis.ts`, which reads
+the *source* against `PERMISSION_REQUIREMENTS` and separates three things a
+declared grant can be — used (with the calls named), declared-and-never-called,
+and **called-but-never-declared**, which is a live bug because the gate denies
+it. The three gating kinds are drawn differently on purpose:
+- `gated` — PermissionGate enforces it
+- `ungated` — `network:http` / `system:filesystem` unlock *nothing* in that
+  table. A plugin holding them calls `fetch` or `require('fs')` directly, which
+  the worker's module list is documented not to stop. They are labels, not
+  gates, and the panel says so
+- `inert` — a coarse alias (`data:read`, …) the sandbox never matches
+
+It is text matching, not an AST: a call in a comment counts, a dynamically-built
+one does not. The panel states that. The permission vocabulary is shared with
+the consent dialog (`shared/pluginPermissions.ts`) — two tables describing the
+same grant differently is the drift worth designing out.
+
+Code opens in a dialog (`DraftCodeDialog.tsx`), not the 320px rail, with a
+**Changes** tab: `plugin_define` overwrites wholesale and agents iterate, so
+`pluginDraftRevisions.ts` keeps the replaced version (in memory, one step deep,
+cleared on retract and promotion) and `shared/textDiff.ts` diffs it. The empty
+state offers four openings rather than a blank composer.
 
 A **workshop session** is a `direct` chat with `channels.workshop = 1` (v80).
 Being an ordinary chat is the point: messages, streaming, approval cards and
