@@ -1,5 +1,10 @@
 import { BrowserWindow, ipcMain, type IpcMainEvent } from 'electron';
 import * as path from 'path';
+import {
+  ELEVATED_PERMISSIONS as ELEVATED,
+  INERT_PERMISSIONS as INERT,
+  permissionLabel,
+} from '../../shared/pluginPermissions';
 
 /**
  * Plugin-install consent, shown in a modal window owned by the main process.
@@ -50,44 +55,7 @@ export interface ConsentRequest {
  * back to its raw id, which reads as noise at exactly the moment the user is
  * being asked to make a trust decision.
  */
-const PERMISSION_LABELS: Record<string, string> = {
-  'data:agents:read': 'Read your agents',
-  'data:projects:read': 'Read your projects',
-  'data:channels:read': 'Read your channels',
-  'data:chats:read': 'Read your chats',
-  'data:settings:read': 'Read your settings',
-  'data:tasks:write': 'Create or modify tasks',
-  'data:notes:write': 'Create or modify notes',
-  'data:messages:write': 'Write messages',
-  'data:chats:write': 'Create or modify chats',
-  'data:agents:write': 'Create or modify agents',
-  'ui:views:register': 'Add its own views to the app',
-  'ui:notifications:show': 'Show notifications',
-  'events:listen': 'Observe app events',
-  'events:emit': 'Emit app events',
-  'tools:register': 'Add tools your agents can use',
-  'services:register': 'Provide services to other plugins',
-  'services:call': 'Use services from other plugins',
-  'storage:read': 'Read its own stored data',
-  'storage:write': 'Store its own data',
-  'network:http': 'Make network requests',
-  'system:filesystem': 'Read and write files on your computer',
-  // Coarse aliases — legal in a manifest, but the sandbox matches only the
-  // granular ids, so these grant nothing. Shown separately, never as capabilities.
-  'data:read': 'Read your data',
-  'data:write': 'Modify your data',
-  'ui:register': 'Add its own UI',
-  'storage:access': 'Use its own storage',
-  'network:access': 'Use the network',
-};
-
-/** The union's own "Dangerous (require explicit grant)" group. */
-const ELEVATED = new Set(['network:http', 'system:filesystem']);
-
-/** Grants the sandbox never matches — declaring one confers no access. */
-const INERT = new Set(['data:read', 'data:write', 'ui:register', 'storage:access', 'network:access']);
-
-const label = (p: string) => PERMISSION_LABELS[p] || p;
+const label = (p: string) => permissionLabel(p);
 
 function esc(s: string): string {
   return String(s)
