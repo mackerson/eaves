@@ -223,8 +223,14 @@ describe('BackupService', () => {
 
       const walPath = env.dbPath + '-wal';
       const shmPath = env.dbPath + '-shm';
-      fs.writeFileSync(walPath, 'stale-wal');
-      fs.writeFileSync(shmPath, 'stale-shm');
+      // The connection is in WAL mode, so SQLite has already created both
+      // sidecars for real — a write is enough to guarantee it. They used to be
+      // fabricated with writeFileSync, which cannot work on Windows: the -shm
+      // file is memory-mapped and refuses a second write handle, so the test
+      // died in its own setup with a bare "UNKNOWN" before reaching restore.
+      insertProject(env.db, 'mutated');
+      expect(fs.existsSync(walPath)).toBe(true);
+      expect(fs.existsSync(shmPath)).toBe(true);
 
       await env.service.restoreFromSnapshot(checkpoint.filename);
 
