@@ -13,16 +13,22 @@ export class ShellExecutor extends BaseExecutor {
   }
 
   protected getCommand(scriptPath: string): { command: string; args: string[] } {
-    // stock Windows has no `bash` on PATH — probe the common Git-for-Windows
-    // and WSL locations before giving up, and fail with an actionable message
-    // instead of a bare `spawn bash ENOENT`.
+    // Stock Windows has no usable `bash` — probe the common Git-for-Windows
+    // locations and fail with an actionable message instead of a bare
+    // `spawn bash ENOENT`.
+    //
+    // Git Bash is tried *before* a bare `bash` deliberately. System32 is on
+    // every Windows PATH, and the bash.exe it holds is the WSL launcher, which
+    // cannot run a script addressed by a Windows path. Resolution rejects that
+    // one outright (see BaseExecutor.resolveExecutable), so a bare `bash` stays
+    // last as the way to find a Git Bash installed somewhere non-standard.
     const candidates =
       process.platform === 'win32'
         ? [
-            'bash',
             'C:\\Program Files\\Git\\bin\\bash.exe',
             'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
             'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+            'bash',
           ]
         : ['bash'];
 
@@ -30,7 +36,8 @@ export class ShellExecutor extends BaseExecutor {
     if (!bash) {
       throw new Error(
         process.platform === 'win32'
-          ? 'bash was not found. Install Git for Windows (which bundles bash) or WSL, then restart Eaves.'
+          ? 'bash was not found. Install Git for Windows (which bundles bash), then restart Eaves. ' +
+            'WSL does not work here: it cannot read a Windows script path.'
           : 'bash was not found on PATH.'
       );
     }

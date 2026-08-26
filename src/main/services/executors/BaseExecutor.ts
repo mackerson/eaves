@@ -11,6 +11,13 @@ import { logger } from '../logger';
 const MAX_CAPTURED_OUTPUT_BYTES = 1_000_000;
 
 /**
+ * Grace period between killing a timed-out process tree and dropping our read
+ * ends of its pipes — long enough for any last output to land, short enough
+ * that a caller is not left waiting.
+ */
+const STDIO_DRAIN_AFTER_KILL_MS = 250;
+
+/**
  * Env var names that carry secrets, stripped from code-execution child
  * environments. Matches provider keys (`*_API_KEY`), tokens (`*_TOKEN`, incl.
  * AWS/GitHub), passwords, credentials, and private keys anywhere in the name.
@@ -50,6 +57,14 @@ export abstract class BaseExecutor {
     const usable = (full: string): boolean => {
       if (!existsSync(full)) return false;
       if (isWin && /\\WindowsApps\\/i.test(full)) return false;
+      // C:\Windows\System32\bash.exe is the WSL launcher, not a shell we can
+      // hand a script to: it runs inside a Linux VM with its own filesystem
+      // and its own PATH, so a Windows script path arrives as an unresolvable
+      // string with the backslashes eaten. It also sits in System32, which is
+      // on every PATH ahead of Git — so probing a bare `bash` found WSL first
+      // on any machine that had it, and shell execution failed with 127
+      // (or hung while WSL cold-started) rather than using Git Bash.
+      if (isWin && /\\System32\\bash\.exe$/i.test(full)) return false;
       return true;
     };
 
@@ -203,6 +218,19 @@ export abstract class BaseExecutor {
         // (SIGTERM is emulated and doesn't cascade), so a shell that spawned a
         // runaway PowerShell survives its own timeout. Kill the whole tree.
         this.killProcessTree(child);
+
+        // Killing the tree is still not enough. 'close' fires only once the
+        // stdio pipes are done, and a shell's own child can outlive
+        // taskkill /T holding the write end open — an MSYS `sleep` under Git
+        // Bash does exactly that. The child then reports 'exit' and never
+        // 'close', so this promise never settled and a timed-out script hung
+        // forever instead of reporting 124. Drop our read ends after a short
+        // drain so resolution cannot depend on a process we no longer control.
+        const drain = setTimeout(() => {
+          child.stdout?.destroy();
+          child.stderr?.destroy();
+        }, STDIO_DRAIN_AFTER_KILL_MS);
+        drain.unref?.();
       }, options.timeout);
 
       child.on('close', (code) => {
