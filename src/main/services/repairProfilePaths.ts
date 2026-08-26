@@ -144,14 +144,32 @@ function repairContentBlockPaths(db: Database.Database, mappings: PrefixMapping[
   for (const { from, to, machineOnly } of mappings) {
     if (!machineOnly) continue;
 
+    // content_blocks holds JSON *text*, so the path inside it is JSON-escaped:
+    // on Windows every separator is a doubled backslash. Matching the raw
+    // filesystem path therefore found nothing at all there, and attachment
+    // paths in existing conversations kept pointing into the old profile —
+    // one dead attachment per message, permanently. On POSIX a path needs no
+    // escaping and this is a no-op.
+    const encodedFrom = jsonEncode(from);
+    const encodedTo = jsonEncode(to);
+
     changes += db.prepare(
       `UPDATE messages
           SET content_blocks = replace(content_blocks, ?, ?)
         WHERE instr(content_blocks, ?) > 0`
-    ).run(from, to, from).changes;
+    ).run(encodedFrom, encodedTo, encodedFrom).changes;
   }
 
   return changes;
+}
+
+/**
+ * A string as it appears *inside* JSON text, without the surrounding quotes —
+ * backslashes doubled, quotes escaped. This is what a path actually looks like
+ * once stored in a JSON column.
+ */
+function jsonEncode(value: string): string {
+  return JSON.stringify(value).slice(1, -1);
 }
 
 function tableHasColumn(db: Database.Database, table: string, column: string): boolean {
