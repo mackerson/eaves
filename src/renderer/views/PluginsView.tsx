@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { useToastStore } from '@/stores';
+import { useToastStore, useUIStore } from '@/stores';
 import { ConfigurePluginModal } from '@/components/modals/ConfigurePluginModal';
 import { ConfirmDialog } from '@/components/modals/ConfirmDialog';
 import { AlertTriangle, Shield, ShieldCheck } from 'lucide-react';
@@ -57,6 +57,7 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
   const [discardTarget, setDiscardTarget] = useState<PluginDraft | null>(null);
   const [trustedPlugins, setTrustedPlugins] = useState<Set<string>>(getTrustedPlugins);
   const showToast = useToastStore((state) => state.showToast);
+  const setView = useUIStore((state) => state.setView);
 
   const isUserPlugin = (plugin: Plugin) => plugin.source === 'user';
 
@@ -104,22 +105,6 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
       showToast('Failed to load plugins', 'error');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Keeping a draft installs it permanently. Consent is a main-owned modal, so
-  // this call blocks on a dialog this renderer cannot draw, script or dismiss.
-  const handlePromoteDraft = async (draft: PluginDraft) => {
-    try {
-      const result = await window.electron.promotePluginDraft(draft.id);
-      if (!result?.success) {
-        showToast(result?.error || 'Failed to keep plugin', 'error');
-        return;
-      }
-      showToast(`${draft.name} is now installed`, 'success');
-      await loadPlugins();
-    } catch (error: any) {
-      showToast(error?.message || 'Failed to keep plugin', 'error');
     }
   };
 
@@ -249,7 +234,8 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
           <p className="text-sm text-muted-foreground mb-4">
             Written by an agent and staged here. They are <strong>not installed</strong>: they never
             appear in the sidebar, and they disappear when you discard them or restart Eaves.
-            Keeping one installs it permanently and asks you to approve what it can reach.
+            Keeping one installs it permanently — which is done in the Workshop, where the code,
+            the permissions it asks for and the calls it actually makes are all in front of you.
           </p>
           <div className="space-y-4">
             {drafts.map((draft) => (
@@ -282,12 +268,17 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
                         : 'asks for no special access'}
                     </p>
                   </div>
+                  {/* Discard is safe without reading anything; Keep is not, and
+                      this surface never shows the code. Installing agent-written
+                      code you were not shown is the exact failure the draft tier
+                      exists to prevent, so Keep lives only on the bench that
+                      shows it. */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <Button variant="outline" size="sm" onClick={() => setDiscardTarget(draft)}>
                       Discard
                     </Button>
-                    <Button size="sm" onClick={() => handlePromoteDraft(draft)}>
-                      Keep
+                    <Button size="sm" onClick={() => setView('workshop')}>
+                      Review in Workshop
                     </Button>
                   </div>
                 </div>

@@ -28,6 +28,7 @@ beforeEach(() => {
     getChat: vi.fn().mockResolvedValue({ success: true, chat: SESSION }),
     chatWithAgent: vi.fn().mockResolvedValue({ success: true }),
     updateChat: vi.fn().mockResolvedValue({ success: true }),
+    deleteChat: vi.fn().mockResolvedValue({ success: true }),
     // switchChat() in the real store reaches for these; without them opening a
     // session throws and the send never gets as far as the thing under test.
     switchChat: vi.fn().mockResolvedValue({ success: true }),
@@ -113,5 +114,23 @@ describe('WorkshopView send', () => {
 
     expect(await screen.findByText(/Agents can run code they wrote/i)).toBeTruthy();
     expect(screen.queryByPlaceholderText(/Describe what you want/i)).toBeNull();
+  });
+
+  // Every "New build" is a chat row the chat list is deliberately blind to,
+  // so without a delete here the only way to be rid of one is the database.
+  it('deletes a build, once, and only after the confirmation', async () => {
+    render(<WorkshopView />);
+
+    fireEvent.change(await screen.findByPlaceholderText(/Describe what you want/i), {
+      target: { value: 'a dice roller' },
+    });
+    fireEvent.keyDown(screen.getByPlaceholderText(/Describe what you want/i), { key: 'Enter' });
+    await waitFor(() => expect(electron.startWorkshopSession).toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByRole('button', { name: /Delete build/i }));
+    expect(electron.deleteChat).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Delete$/i }));
+    await waitFor(() => expect(electron.deleteChat).toHaveBeenCalledWith(SESSION.id));
   });
 });

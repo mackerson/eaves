@@ -54,6 +54,7 @@ export function WorkshopView() {
     name: string; files: DraftFile[]; previous?: DraftFile[];
   } | null>(null);
   const [discardTarget, setDiscardTarget] = useState<PluginDraft | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -109,6 +110,29 @@ export function WorkshopView() {
     setSessionId(id);
     await useConversationsStore.getState().switchChat(id);
   }, []);
+
+  /**
+   * Builds accumulate: every "New build" is a chat row that the chat list is
+   * deliberately blind to, so without this the only way to be rid of one is
+   * the database. Deleting the conversation is all it takes — the drafts it
+   * produced live on disk and are discarded separately, on the bench.
+   */
+  const deleteSession = useCallback(async (id: string) => {
+    const result = await window.electron.deleteChat(id);
+    if (result && result.success === false) {
+      showToast('Could not delete that build', 'error');
+      return;
+    }
+    if (sessionId === id) {
+      setSessionId(null);
+      useConversationsStore.setState({ currentChatId: null });
+    }
+    useConversationsStore.setState((state) => ({
+      chats: state.chats.filter((c) => c.id !== id),
+    }));
+    await refreshSessions();
+    showToast('Build deleted', 'success');
+  }, [sessionId, refreshSessions, showToast]);
 
   const startSession = useCallback(async (): Promise<string | null> => {
     setStarting(true);
@@ -319,6 +343,14 @@ export function WorkshopView() {
                 ))}
               </select>
             )}
+            {session && (
+              <Button
+                variant="outline" size="sm"
+                onClick={() => setDeleteTarget({ id: session.id, name: session.name })}
+              >
+                Delete build
+              </Button>
+            )}
             <Button variant="outline" size="sm" disabled={starting} onClick={() => void startSession()}>
               New build
             </Button>
@@ -451,6 +483,24 @@ export function WorkshopView() {
           name={reading.name}
           files={reading.files}
           previous={reading.previous}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+          title={`Delete ${deleteTarget.name}?`}
+          message={
+            `This deletes the conversation and everything said in it. Anything the agent built ` +
+            `stays on the bench until you discard it separately.`
+          }
+          confirmLabel="Delete"
+          onConfirm={() => {
+            const target = deleteTarget;
+            setDeleteTarget(null);
+            void deleteSession(target.id);
+          }}
         />
       )}
 
