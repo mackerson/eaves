@@ -17,12 +17,19 @@
  */
 import { spawn, execSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../..');
-const scratch = process.env.EAVES_QA_DIR || path.join(process.env.TMPDIR || '/tmp', 'eaves-qa-bench');
+// os.tmpdir() rather than TMPDIR: Windows sets TEMP/TMP and leaves TMPDIR
+// unset, so the old fallback put the scratch profile in C:\tmp.
+const scratch = process.env.EAVES_QA_DIR || path.join(os.tmpdir(), 'eaves-qa-bench');
+// The real executable — node_modules/.bin/electron is an extensionless shell
+// script on Windows, which Node will not spawn without shell:true.
+const electronBin = createRequire(import.meta.url)('electron');
 const arg = (name, def) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : def; };
 const RUNS = Number(arg('--runs', 3));
 const HEADLESS = process.argv.includes('--headless');
@@ -45,6 +52,13 @@ function portUp(port) {
  * the real number, so PSS is what the < 200 MB gate should judge.
  */
 function treeMemory(root) {
+  // PSS comes from /proc/<pid>/smaps_rollup, which is Linux-only — macOS and
+  // Windows have no equivalent. Say so rather than dying inside `ps -e -o`,
+  // which is itself unavailable on Windows and produced an error about the
+  // wrong thing entirely.
+  if (process.platform !== 'linux') {
+    return { pids: [], counted: 0, pssKb: null, rssKb: null };
+  }
   const out = execSync('ps -e -o pid=,ppid=').toString().trim().split('\n');
   const kids = new Map();
   for (const line of out) {
@@ -73,6 +87,13 @@ function treeMemory(root) {
 }
 
 function killTree(pid) {
+  // Windows has no process groups to signal: process.kill(-pid) throws, which
+  // left every benchmarked Electron tree running and each subsequent cold-start
+  // run competing with the last one's leftovers.
+  if (process.platform === 'win32') {
+    try { execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' }); } catch { /* already dead */ }
+    return;
+  }
   try { process.kill(-pid, 'SIGKILL'); } catch { /* group may be gone */ }
   try { process.kill(pid, 'SIGKILL'); } catch { /* already dead */ }
 }
@@ -100,12 +121,20 @@ async function coldStart(runIdx) {
   const logPath = path.join(xdg, 'electron.out');
   const logFd = fs.openSync(logPath, 'w');
 
-  const electronArgs = ['.', '--remote-debugging-port=0'];
+  // --user-data-dir, not XDG_CONFIG_HOME alone: Electron only reads XDG on
+  // Linux, so off Linux this benchmarked a cold start against the developer's
+  // real profile — and against their real data volume, which is not a cold
+  // start at all. The switch is honoured everywhere and keeps the <xdg>/eaves
+  // layout the log watcher below expects.
+  const electronArgs = [
+    '.',
+    '--remote-debugging-port=0',
+    `--user-data-dir=${path.join(xdg, 'eaves')}`,
+  ];
   if (HEADLESS) electronArgs.push('--headless=new', '--disable-gpu');
-  const bin = path.join(repoRoot, 'node_modules', '.bin', 'electron');
 
   const t0 = Date.now();
-  const child = spawn(bin, electronArgs, {
+  const child = spawn(electronBin, electronArgs, {
     cwd: repoRoot,
     env: { ...process.env, XDG_CONFIG_HOME: xdg },
     detached: true,               // own process group so we can kill the whole tree
@@ -149,8 +178,12 @@ async function coldStart(runIdx) {
       process.stdout.write(`  run ${i}: cold ${(r.coldMs / 1000).toFixed(2)}s — idling ${MEM_IDLE}s for memory…`);
       await sleep(MEM_IDLE * 1000);
       const { counted, pssKb, rssKb } = treeMemory(r.pid);
-      var memMb = pssKb / 1024;
-      console.log(`  PSS ${memMb.toFixed(0)} MB (RSS-sum ${(rssKb / 1024).toFixed(0)} MB) across ${counted} procs`);
+      if (pssKb === null) {
+        console.log('  memory: n/a — PSS needs /proc/<pid>/smaps_rollup, which only Linux has');
+      } else {
+        var memMb = pssKb / 1024;
+        console.log(`  PSS ${memMb.toFixed(0)} MB (RSS-sum ${(rssKb / 1024).toFixed(0)} MB) across ${counted} procs`);
+      }
     } else {
       console.log(`  run ${i}: cold ${(r.coldMs / 1000).toFixed(2)}s`);
     }

@@ -16,6 +16,36 @@ yarn dev:clean               # Start development
 
 Node version is pinned in `.nvmrc` (currently **22**). Package manager: **yarn (classic, 1.x)**.
 
+### On Windows
+
+Nothing Windows-specific to configure. `yarn install`, `yarn dev`,
+`yarn build` and `yarn test:run` all run on plain Node — no Git Bash, no
+`jq`, no Developer Mode, no symlink privileges. What you do need:
+
+- **Node 22.12 or newer.** `.nvmrc` pins only the major, and `@electron/rebuild`
+  requires `>=22.12.0`.
+- **Visual Studio Build Tools** (C++ workload) and **Python**, to compile
+  `better-sqlite3` against Electron.
+- **Git for Windows**, if you want the in-app shell code executor to work.
+  That feature runs scripts through Git Bash; nothing in the build does.
+
+Two Windows behaviours are worth knowing, because both fail silently rather
+than loudly, and both have bitten this repo:
+
+- **`bash` on PATH is WSL, not Git Bash.** `C:\Windows\System32\bash.exe` ships
+  with Windows and shadows Git Bash, so anything that shells out to a bare
+  `bash` lands in a Linux VM with its own filesystem, its own Node, and no
+  ability to read the Windows path it was handed. Package scripts avoid bash
+  entirely for this reason; `ShellExecutor` probes Git Bash explicitly and
+  refuses the WSL launcher outright.
+- **`ln -s` under MSYS copies.** Without Developer Mode, Git Bash silently
+  copies a directory instead of linking it. `setup:plugins` creates junctions
+  from Node, which need no privileges at all.
+
+Keep `*.sh` files LF — `.gitattributes` enforces it, because Git's Windows
+default (`core.autocrlf=true`) otherwise rewrites them to CRLF on checkout
+and Git Bash rejects the carriage return with `$'\r': command not found`.
+
 ## Project structure
 
 ```
@@ -106,6 +136,17 @@ duplicate windows.
 ## Data storage
 
 Eaves stores all data locally on your machine.
+
+In a dev build, `EAVES_USER_DATA_DIR` redirects the whole profile somewhere
+disposable — so you can exercise a migration, a first-run path, or anything
+destructive without doing it to your own database first:
+
+```bash
+EAVES_USER_DATA_DIR=/tmp/eaves-scratch yarn dev
+```
+
+Packaged builds ignore it. Without it `yarn dev` opens the real profile below
+and migrates it.
 
 **Database** (platform-specific):
 - **macOS**: `~/Library/Application Support/eaves/eaves-data/eaves.db`

@@ -111,7 +111,7 @@ jspm_packages/
 app/
 release/src/shared/*.js
 
-# Plugins (symlinked from sibling repos via setup-plugins.sh)
+# Plugins (linked from sibling repos via setup-plugins.js)
 # Run `yarn setup:plugins` to clone and link plugin repos
 # Leading slash anchors this to the repo root: unanchored, it also matched
 # src/renderer/components/plugins/, so new files there were silently ignored.

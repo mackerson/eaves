@@ -28,6 +28,28 @@ describe('migrateLegacyProfile', () => {
     fs.writeFileSync(file, contents);
   };
 
+  /**
+   * A directory link. Windows grants file symlinks only to elevated or
+   * Developer Mode processes, but junctions to anyone — and fs.lstat reports a
+   * junction as a symlink, which is the property the migration's guard checks.
+   */
+  const linkDir = (target: string, linkPath: string) => {
+    fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+  };
+
+  /**
+   * Chromium's SingletonLock: on Linux and macOS a symlink whose *target* text
+   * encodes host and pid, so nothing it points at need exist. Windows has no
+   * such file and would not let an unprivileged process create the symlink
+   * anyway — but NEVER_MIGRATE matches on name (/^Singleton/), so a plain file
+   * reaches exactly the same branch.
+   */
+  const writeSingletonLock = (dir: string) => {
+    const lock = path.join(dir, 'SingletonLock');
+    if (process.platform === 'win32') fs.writeFileSync(lock, 'somehost-12345');
+    else fs.symlinkSync('somehost-12345', lock);
+  };
+
   /** A legacy profile with a database, its WAL sidecars, and some app state. */
   const seedLegacyProfile = () => {
     write(path.join(legacy, 'enclave-data', 'enclave.db'), 'main');
@@ -151,8 +173,8 @@ describe('migrateLegacyProfile', () => {
     fs.mkdirSync(current, { recursive: true });
     // The real profile carries SingletonLock and friends. Recursing through one
     // would merge into whatever it points at, outside the profile entirely.
-    fs.symlinkSync(outside, path.join(legacy, 'SingletonLock'));
-    fs.symlinkSync(outside, path.join(current, 'SingletonLock'));
+    linkDir(outside, path.join(legacy, 'SingletonLock'));
+    linkDir(outside, path.join(current, 'SingletonLock'));
 
     migrateLegacyProfile();
 
@@ -298,7 +320,7 @@ describe('migrateLegacyProfile', () => {
 
   it('never migrates Chromium singleton state', () => {
     seedLegacyProfile();
-    fs.symlinkSync('somehost-12345', path.join(legacy, 'SingletonLock'));
+    writeSingletonLock(legacy);
     write(path.join(legacy, '.org.chromium.Chromium.abc123'), 'scratch');
 
     migrateLegacyProfile();
@@ -448,7 +470,7 @@ describe('migrateLegacyProfile', () => {
       seedLegacyProfile();
       // Never migrated, so the legacy directory outlives the migration and can
       // never be the signal that the work is done.
-      fs.symlinkSync('somehost-12345', path.join(legacy, 'SingletonLock'));
+      writeSingletonLock(legacy);
 
       migrateLegacyProfile();
       expect(fs.existsSync(legacy)).toBe(true);

@@ -23,12 +23,18 @@
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+// The real executable, not node_modules/.bin/electron. That shim is an
+// extensionless shell script on Windows (the launchable copy is electron.cmd),
+// and Node refuses to spawn either without shell:true — so launching here died
+// before Electron ever started. The electron package exports the binary path.
+const electronBin = createRequire(import.meta.url)('electron');
 const scratchDir = process.env.EAVES_QA_DIR || path.join(os.tmpdir(), 'eaves-qa');
 const stateFile = path.join(scratchDir, 'state.json');
 // Tracked separately from state.json: the static server can outlive a run, and
@@ -338,11 +344,24 @@ async function launch() {
     console.log(`static renderer server: pid ${serverPid} serving dist/renderer on :${freePort}`);
   }
 
-  const electronArgs = ['.', `--remote-debugging-port=${port}`];
+  // Pin userData explicitly rather than trusting XDG_CONFIG_HOME alone.
+  // Electron only consults XDG on Linux: on Windows userData comes from the
+  // Roaming known-folder (the APPDATA *variable* is ignored) and on macOS from
+  // ~/Library/Application Support. So off Linux the XDG env did nothing and QA
+  // ran against the developer's real profile — real database, real plugins —
+  // the one thing this harness exists to prevent. --user-data-dir is honoured
+  // on every platform, and pointing it at <scratch>/xdg/eaves keeps the
+  // on-disk layout identical to the Linux one the docs describe.
+  const electronArgs = [
+    '.',
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${path.join(xdg, 'eaves')}`,
+  ];
   if (!headed) electronArgs.push('--headless=new', '--disable-gpu');
   const logPath = path.join(scratchDir, 'electron.log');
   const log = fs.openSync(logPath, 'w');
-  const electron = spawn(path.join(repoRoot, 'node_modules', '.bin', 'electron'), electronArgs, {
+
+  const electron = spawn(electronBin, electronArgs, {
     cwd: repoRoot,
     env: { ...process.env, XDG_CONFIG_HOME: xdg },
     detached: true,
@@ -387,7 +406,36 @@ function xdgProfileDir() {
  * node_modules, and killing that would be far worse than a leaked child.
  */
 function orphanPidsForProfile(profileDir) {
-  if (process.platform === 'win32') return [];
+  if (process.platform === 'win32') {
+    // Win32_Process is the only place a Windows process's full command line
+    // lives — tasklist does not expose it. Chromium passes --user-data-dir to
+    // every child, so the scratch profile path is the same reliable marker
+    // here as it is under ps.
+    try {
+      const out = execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          "Get-CimInstance Win32_Process -Filter \"Name='electron.exe' OR Name='node.exe'\" | " +
+            'Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress',
+        ],
+        { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }
+      );
+      if (!out.trim()) return [];
+      const parsed = JSON.parse(out);
+      // ConvertTo-Json emits a bare object, not an array, for a single match.
+      const rows = Array.isArray(parsed) ? parsed : [parsed];
+      const needle = profileDir.toLowerCase();
+      return rows
+        .filter(r => (r.CommandLine || '').toLowerCase().includes(needle))
+        .map(r => Number(r.ProcessId))
+        .filter(pid => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
+    } catch {
+      return [];
+    }
+  }
   try {
     const out = execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8' });
     return out.split('\n')

@@ -87,7 +87,17 @@ describe('Logs IPC Handlers', () => {
     it('refuses a symlink in the log dir pointing outside it', async () => {
       const secret = path.join(outsideDir, 'secret.txt');
       fs.writeFileSync(secret, 'top secret');
-      fs.symlinkSync(secret, path.join(logDir, 'eaves-evil.log'));
+      // Windows reserves file symlinks for elevated or Developer Mode
+      // processes, but junctions need no privilege whatsoever — so there the
+      // freely available escape is a directory reparse point, and that is the
+      // one the guard actually has to survive. Either way realpath resolves to
+      // somewhere outside the log dir, which is what the handler checks.
+      const link = path.join(logDir, 'eaves-evil.log');
+      if (process.platform === 'win32') {
+        fs.symlinkSync(outsideDir, link, 'junction');
+      } else {
+        fs.symlinkSync(secret, link);
+      }
       const result = await read('eaves-evil.log');
       expect(result.success).toBe(false);
       expect(result.content).toBeUndefined();

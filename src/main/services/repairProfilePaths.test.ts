@@ -7,12 +7,20 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as path from 'path';
 import Database from 'better-sqlite3';
 
 import { repairProfilePaths } from './repairProfilePaths';
 
-const LEGACY = '/home/u/.config/enclave';
-const CURRENT = '/home/u/.config/eaves';
+// Profile roots in the running platform's own shape, and every path below them
+// built with path.join. repairProfilePaths compares prefixes using path.sep, so
+// POSIX literals here matched nothing at all on Windows: each assertion failed
+// against a path the code had quite correctly declined to touch.
+const HOME = process.platform === 'win32' ? 'C:\\Users\\u' : '/home/u';
+const BASE =
+  process.platform === 'win32' ? path.join(HOME, 'AppData', 'Roaming') : path.join(HOME, '.config');
+const LEGACY = path.join(BASE, 'enclave');
+const CURRENT = path.join(BASE, 'eaves');
 
 describe('repairProfilePaths', () => {
   let db: Database.Database;
@@ -33,25 +41,25 @@ describe('repairProfilePaths', () => {
 
   it('repoints a project directory the app created inside the profile', () => {
     db.prepare('INSERT INTO projects VALUES (?, ?)')
-      .run('managed', `${LEGACY}/projects/personal-a3c27b5c`);
+      .run('managed', path.join(LEGACY, 'projects', 'personal-a3c27b5c'));
 
     const { updated } = repairProfilePaths(db, LEGACY, CURRENT);
 
-    expect(directoryOf('managed')).toBe(`${CURRENT}/projects/personal-a3c27b5c`);
+    expect(directoryOf('managed')).toBe(path.join(CURRENT, 'projects', 'personal-a3c27b5c'));
     expect(updated['projects.directory']).toBe(1);
   });
 
   it('leaves a project directory the user chose alone', () => {
     // Nothing moved it, so rewriting it would point the project at a path that
     // does not exist.
-    db.prepare('INSERT INTO projects VALUES (?, ?)').run('external', '/home/u/code/myapp');
-    db.prepare('INSERT INTO projects VALUES (?, ?)').run('lookalike', '/home/u/.config/enclave-notes/x');
+    db.prepare('INSERT INTO projects VALUES (?, ?)').run('external', path.join(HOME, 'code', 'myapp'));
+    db.prepare('INSERT INTO projects VALUES (?, ?)').run('lookalike', path.join(BASE, 'enclave-notes', 'x'));
 
     repairProfilePaths(db, LEGACY, CURRENT);
 
-    expect(directoryOf('external')).toBe('/home/u/code/myapp');
+    expect(directoryOf('external')).toBe(path.join(HOME, 'code', 'myapp'));
     // Matching the root without its separator would have caught this sibling.
-    expect(directoryOf('lookalike')).toBe('/home/u/.config/enclave-notes/x');
+    expect(directoryOf('lookalike')).toBe(path.join(BASE, 'enclave-notes', 'x'));
   });
 
   it('repoints attachment paths, interior directory names included', () => {
@@ -59,37 +67,37 @@ describe('repairProfilePaths', () => {
     // below it changed. Substituting only the root leaves a path that looks
     // repaired and still points at nothing.
     db.prepare('INSERT INTO message_attachments VALUES (?, ?)')
-      .run('a', `${LEGACY}/enclave-data/enclave-attachments/abc.png`);
+      .run('a', path.join(LEGACY, 'enclave-data', 'enclave-attachments', 'abc.png'));
 
     repairProfilePaths(db, LEGACY, CURRENT);
 
     const row = db.prepare('SELECT stored_path FROM message_attachments').get() as { stored_path: string };
-    expect(row.stored_path).toBe(`${CURRENT}/eaves-data/eaves-attachments/abc.png`);
+    expect(row.stored_path).toBe(path.join(CURRENT, 'eaves-data', 'eaves-attachments', 'abc.png'));
   });
 
   it('repoints a path left half-migrated under the new root', () => {
     // What an interruption between the profile move and the interior rename
     // leaves behind.
     db.prepare('INSERT INTO message_attachments VALUES (?, ?)')
-      .run('a', `${CURRENT}/enclave-data/enclave-attachments/abc.png`);
+      .run('a', path.join(CURRENT, 'enclave-data', 'enclave-attachments', 'abc.png'));
 
     repairProfilePaths(db, LEGACY, CURRENT);
 
     const row = db.prepare('SELECT stored_path FROM message_attachments').get() as { stored_path: string };
-    expect(row.stored_path).toBe(`${CURRENT}/eaves-data/eaves-attachments/abc.png`);
+    expect(row.stored_path).toBe(path.join(CURRENT, 'eaves-data', 'eaves-attachments', 'abc.png'));
   });
 
   it('repoints the copy of the path inside content blocks', () => {
     db.prepare('INSERT INTO messages VALUES (?, ?)').run('m', JSON.stringify([
       { type: 'text', text: 'here it is' },
-      { type: 'attachment', metadata: { storedPath: `${LEGACY}/enclave-data/enclave-attachments/x.png` } },
+      { type: 'attachment', metadata: { storedPath: path.join(LEGACY, 'enclave-data', 'enclave-attachments', 'x.png') } },
     ]));
 
     repairProfilePaths(db, LEGACY, CURRENT);
 
     const row = db.prepare('SELECT content_blocks FROM messages').get() as { content_blocks: string };
     const blocks = JSON.parse(row.content_blocks);
-    expect(blocks[1].metadata.storedPath).toBe(`${CURRENT}/eaves-data/eaves-attachments/x.png`);
+    expect(blocks[1].metadata.storedPath).toBe(path.join(CURRENT, 'eaves-data', 'eaves-attachments', 'x.png'));
     expect(blocks[0].text).toBe('here it is');
   });
 
@@ -97,7 +105,7 @@ describe('repairProfilePaths', () => {
     // The absolute root is something a person can plausibly have typed into a
     // message. Only the attachment-directory prefixes are specific enough to
     // rewrite inside conversation content.
-    const prose = `my data used to live in ${LEGACY}/ and I moved it`;
+    const prose = `my data used to live in ${LEGACY}${path.sep} and I moved it`;
     db.prepare('INSERT INTO messages VALUES (?, ?)').run('m', JSON.stringify([
       { type: 'text', text: prose },
     ]));
@@ -109,13 +117,13 @@ describe('repairProfilePaths', () => {
   });
 
   it('is idempotent and reports nothing on a second run', () => {
-    db.prepare('INSERT INTO projects VALUES (?, ?)').run('managed', `${LEGACY}/projects/p`);
+    db.prepare('INSERT INTO projects VALUES (?, ?)').run('managed', path.join(LEGACY, 'projects', 'p'));
 
     repairProfilePaths(db, LEGACY, CURRENT);
     const { updated } = repairProfilePaths(db, LEGACY, CURRENT);
 
     expect(updated).toEqual({});
-    expect(directoryOf('managed')).toBe(`${CURRENT}/projects/p`);
+    expect(directoryOf('managed')).toBe(path.join(CURRENT, 'projects', 'p'));
   });
 
   it('survives a schema without the optional tables', () => {

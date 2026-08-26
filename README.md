@@ -234,7 +234,8 @@ yarn setup:plugins           # Clone plugin repos + create symlinks
 yarn dev:clean               # Start development
 ```
 
-Node 22 (`.nvmrc`), yarn classic 1.x. Scripts, data locations, and migrations:
+Node 22.12+ (`.nvmrc`), yarn classic 1.x. The same commands work on macOS, Linux
+and Windows. Scripts, data locations, and migrations:
 [docs/development.md](docs/development.md). PR flow: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---

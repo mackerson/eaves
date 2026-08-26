@@ -5,10 +5,15 @@ description: Launch and drive an isolated headless Eaves instance for end-to-end
 
 # Headless E2E QA for Eaves
 
-`scripts/qa/harness.mjs` launches an isolated Eaves (fresh `XDG_CONFIG_HOME`
-→ fresh DB, migrations run on boot) with CDP on :9222 and drives it via
-`Runtime.evaluate`. `window.electron.*` is fully exposed, so flows can be
-exercised through real IPC and asserted against the rendered DOM.
+`scripts/qa/harness.mjs` launches an isolated Eaves (fresh profile → fresh DB,
+migrations run on boot) with CDP on :9222 and drives it via `Runtime.evaluate`.
+`window.electron.*` is fully exposed, so flows can be exercised through real
+IPC and asserted against the rendered DOM.
+
+Isolation is `--user-data-dir`, which Electron honours everywhere. It used to
+be `XDG_CONFIG_HOME`, which Electron reads *only on Linux* — so on Windows and
+macOS the switch did nothing and QA ran against the developer's real profile,
+migrating their real database.
 
 ## Order of operations (each step matters)
 
@@ -61,9 +66,9 @@ exercised through real IPC and asserted against the rendered DOM.
 
 ## Safety rails
 
-- Never point the harness at the real profile (`~/.config/eaves`) — the
-  fresh-XDG isolation is the whole point. `--fresh` wipes only the scratch
-  profile.
+- Never point the harness at the real profile (`~/.config/eaves`,
+  `%APPDATA%\eaves`, `~/Library/Application Support/eaves`) — the scratch
+  profile is the whole point. `--fresh` wipes only the scratch profile.
 - The CDP port is an unauthenticated localhost debug socket. Local runs
   only; never bind beyond 127.0.0.1, never leave an instance running after
   QA (`stop`).

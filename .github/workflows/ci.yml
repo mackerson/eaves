@@ -13,8 +13,19 @@ concurrency:
 
 jobs:
   check:
-    name: Typecheck and test
-    runs-on: ubuntu-latest
+    name: Typecheck and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # One platform failing must not cancel the other: when a change breaks
+      # only Windows, the Linux result is exactly what tells you that.
+      fail-fast: false
+      matrix:
+        # Windows is here because it never was, and everything drifted in the
+        # gap — path separators, symlink privileges, CRLF, and a `bash` on PATH
+        # that is WSL rather than Git Bash. Every one of those failed silently
+        # and none was visible from a Linux runner.
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout

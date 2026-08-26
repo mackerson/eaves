@@ -329,6 +329,25 @@ function createWindow() {
   });
 }
 
+// Development escape hatch: run against a throwaway profile instead of the
+// developer's real one.
+//
+// Without this, `yarn dev` opens the real database and migrates it — there is
+// no way to try a migration, a fresh-install path, or a destructive change
+// without doing it to your own data. Linux developers had a way out only by
+// accident: Electron derives userData from XDG_CONFIG_HOME there, and nowhere
+// else. On Windows userData comes from the Roaming known-folder and on macOS
+// from ~/Library/Application Support, so neither had any equivalent.
+//
+// Must precede the crashDumps path below, which is derived from userData, and
+// the profile migration further down, which acts on it.
+//
+// Ignored in packaged builds: a user's real profile is not something an
+// environment variable should be able to move.
+if (!app.isPackaged && process.env.EAVES_USER_DATA_DIR) {
+  app.setPath('userData', path.resolve(process.env.EAVES_USER_DATA_DIR));
+}
+
 // A main-process abort — a Chromium CHECK, a V8 fatal like OOM — is delivered
 // as SIGILL, because Chromium crashes deliberately by executing an undefined
 // instruction. No JS handler runs, nothing reaches the app log, and the process

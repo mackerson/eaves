@@ -27,10 +27,9 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
 
-      - name: Point yarn at Git Bash for script execution
-        # Package.json scripts use Unix-isms (mkdir -p, cp -rL, rm -rf) that
-        # die under cmd.exe. Git Bash ships with windows-latest.
-        run: yarn config set script-shell "C:\\Program Files\\Git\\bin\\bash.exe"
+      # No script-shell step here any more: the package scripts on the install
+      # and build path run on plain Node, so nothing needs Git Bash. Keeping
+      # this workflow free of it is also what proves that stays true.
 
       - name: Clone bundled plugins
         run: |
