@@ -1,0 +1,6 @@
+# Shell scripts must keep LF endings even where core.autocrlf=true, which is the
+# Windows default. Git Bash does not tolerate CRLF: a `#!/usr/bin/env bash` line
+# ending in \r fails with "bad interpreter", and every later line reports the
+# stray \r as part of a command name. Windows clones would otherwise get CRLF on
+# checkout and these scripts would break on arrival.
+*.sh text eol=lf

@@ -9,7 +9,7 @@ governed by `bundled-plugins.json` (tiers and the current manifest are below).
 
 Plugins are **separate git repos** (`mackerson/eaves-plugin-*`), **not**
 tracked in this repo. `plugins/` is gitignored and holds **symlinks** to
-sibling checkouts created by `scripts/setup-plugins.sh`:
+sibling checkouts created by `scripts/setup-plugins.js`:
 
 ```
 ../plugins/<name>/                  # the real repo (sibling checkout)
