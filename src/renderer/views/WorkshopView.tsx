@@ -64,6 +64,7 @@ export function WorkshopView() {
   const streamingContent = useConversationsStore((s) => s.streamingContent);
   const streamingContentBlocks = useConversationsStore((s) => s.streamingContentBlocks);
   const session = useConversationsStore((s) => s.chats.find((c) => c.id === s.currentChatId));
+  const regeneratingMessageId = useConversationsStore((s) => s.regeneratingMessageId);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   /** One send at a time — see the comment in send(). */
@@ -230,6 +231,62 @@ export function WorkshopView() {
     }
   }, [sessionId, session, startSession, refreshSessions, showToast]);
 
+  /**
+   * Regenerate, on the bench.
+   *
+   * This was stubbed to a no-op when the transcript was composed out of
+   * ChatMessageRow rather than reused from ChatsView, which left a button that
+   * looked live and did nothing — worst at exactly the moment it is most
+   * wanted, when a turn has died on a provider error and you have just
+   * switched models to get past it.
+   */
+  const regenerate = useCallback(async (messageId: string) => {
+    // Deliberately not gated on the local `sessionId`: regeneration is
+    // addressed by message, main resolves the conversation from it, and a row
+    // you can see is a row you can regenerate. Requiring the local state to
+    // agree is how the button goes dead again the first time the two drift.
+    if (isLoading) return;
+    // Hiding the row immediately is what makes the streaming bubble appear in
+    // its place rather than below it. Cleared by the stream:end listener.
+    useConversationsStore.setState({
+      isLoading: true,
+      streamingContent: '',
+      streamingContentBlocks: [],
+      activeToolCalls: [],
+      regeneratingMessageId: messageId,
+    });
+    try {
+      const result = await window.electron.regenerateChatMessage({ messageId });
+      if (!result.success && !result.aborted && result.error) showToast(result.error, 'error');
+    } catch (error: any) {
+      showToast(error?.message || 'Could not regenerate', 'error');
+      useConversationsStore.setState({
+        isLoading: false,
+        streamingContent: '',
+        streamingContentBlocks: [],
+        activeToolCalls: [],
+        regeneratingMessageId: null,
+      });
+    }
+  }, [isLoading, showToast]);
+
+  const deleteMessage = useCallback(async (messageId: string) => {
+    const openId = session?.id ?? sessionId;
+    if (!openId) return;
+    const result = await window.electron.deleteChatMessage(messageId);
+    if (result && result.success === false) {
+      showToast('Could not delete that message', 'error');
+      return;
+    }
+    const reloaded = await window.electron.getChat(openId);
+    if (reloaded.success && reloaded.chat) {
+      const fresh = reloaded.chat;
+      useConversationsStore.setState((state) => ({
+        chats: state.chats.map((c) => (c.id === fresh.id ? fresh : c)),
+      }));
+    }
+  }, [session, sessionId, showToast]);
+
   const readCode = async (draft: PluginDraft) => {
     const result = await window.electron.readPluginDraft(draft.id);
     if (!result?.success || !result.files) {
@@ -366,7 +423,7 @@ export function WorkshopView() {
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {session.messages?.map((msg) => (
+              {session.messages?.filter((msg) => msg.id !== regeneratingMessageId).map((msg) => (
                 <ChatMessageRow
                   key={msg.id}
                   messageId={msg.id}
@@ -386,12 +443,16 @@ export function WorkshopView() {
                       ? { context: 'chat', contextId: sessionId, agentId: msg.senderId }
                       : undefined
                   }
+                  // Editing a message mid-build would desync the transcript
+                  // from the drafts already written from it, so the bench does
+                  // not offer it — isEditing is pinned false above and these
+                  // are never reached. Regenerate and delete are real.
                   onStartEdit={() => {}}
                   onSetEditContent={() => {}}
                   onSaveEdit={() => {}}
                   onCancelEdit={() => {}}
-                  onDelete={() => {}}
-                  onRetry={() => {}}
+                  onDelete={(id) => void deleteMessage(id)}
+                  onRetry={(id) => void regenerate(id)}
                 />
               ))}
               {isLoading && streamingBlocks.length > 0 && (

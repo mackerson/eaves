@@ -12,6 +12,19 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { WorkshopView } from './WorkshopView';
 import { useConversationsStore, useSettingsStore, useToastStore } from '@/stores';
 
+// The real row hides regenerate/delete behind a dropdown menu. The wiring is
+// what regressed (both were `() => {}`), so the stand-in exposes the handlers
+// directly and the dropdown stays ChatMessageRow's own business.
+vi.mock('@/components/ChatMessageRow', () => ({
+  ChatMessageRow: ({ messageId, content, onRetry, onDelete }: any) => (
+    <div>
+      <span>{content}</span>
+      <button data-testid={`retry-${messageId}`} onClick={() => onRetry(messageId)}>retry</button>
+      <button data-testid={`delete-${messageId}`} onClick={() => onDelete(messageId)}>delete</button>
+    </div>
+  ),
+}));
+
 const SESSION = { id: 'chat-1', name: 'New build', agentId: 'agent-1', messages: [], participants: [], createdAt: 1 };
 
 let electron: Record<string, ReturnType<typeof vi.fn>>;
@@ -29,6 +42,8 @@ beforeEach(() => {
     chatWithAgent: vi.fn().mockResolvedValue({ success: true }),
     updateChat: vi.fn().mockResolvedValue({ success: true }),
     deleteChat: vi.fn().mockResolvedValue({ success: true }),
+    regenerateChatMessage: vi.fn().mockResolvedValue({ success: true }),
+    deleteChatMessage: vi.fn().mockResolvedValue({ success: true }),
     // switchChat() in the real store reaches for these; without them opening a
     // session throws and the send never gets as far as the thing under test.
     switchChat: vi.fn().mockResolvedValue({ success: true }),
@@ -40,6 +55,9 @@ beforeEach(() => {
   useConversationsStore.setState({
     input: '', currentChatId: null, chats: [], isLoading: false,
     streamingContent: '', streamingContentBlocks: [],
+    // Leaks between tests otherwise, and the transcript filters the row it
+    // names — a stale id silently empties the message list.
+    regeneratingMessageId: null,
   } as never);
   useToastStore.setState({ toasts: [] } as never);
 });
@@ -114,6 +132,49 @@ describe('WorkshopView send', () => {
 
     expect(await screen.findByText(/Agents can run code they wrote/i)).toBeTruthy();
     expect(screen.queryByPlaceholderText(/Describe what you want/i)).toBeNull();
+  });
+
+  // Regenerate was stubbed to a no-op when the transcript was composed out of
+  // ChatMessageRow instead of reused from ChatsView: a button that looked live
+  // and did nothing, worst at exactly the moment it is most wanted — a turn
+  // died on a provider error and you switched models to get past it.
+  // The real control lives behind a dropdown; what regressed was the wiring,
+  // so that is what is asserted — the row is handed a handler that reaches
+  // IPC, rather than the `() => {}` it used to get.
+  it('regenerates a message rather than pretending to', async () => {
+    const withReply = {
+      ...SESSION,
+      messages: [
+        { id: 'm1', content: 'build me a snowglobe', senderType: 'human', senderId: 'u1' },
+        { id: 'm2', content: 'Error: model retired', senderType: 'agent', senderId: 'a1' },
+      ],
+    };
+    electron.getChat.mockResolvedValue({ success: true, chat: withReply });
+    useConversationsStore.setState({ chats: [withReply as never], currentChatId: SESSION.id });
+
+    render(<WorkshopView />);
+
+    fireEvent.click(await screen.findByTestId('retry-m2'));
+
+    await waitFor(() =>
+      expect(electron.regenerateChatMessage).toHaveBeenCalledWith({ messageId: 'm2' }),
+    );
+    // The row vanishes while it restreams, so the new bubble lands in its place.
+    expect(useConversationsStore.getState().regeneratingMessageId).toBe('m2');
+  });
+
+  it('deletes a message rather than pretending to', async () => {
+    const withReply = {
+      ...SESSION,
+      messages: [{ id: 'm2', content: 'oops', senderType: 'agent', senderId: 'a1' }],
+    };
+    electron.getChat.mockResolvedValue({ success: true, chat: withReply });
+    useConversationsStore.setState({ chats: [withReply as never], currentChatId: SESSION.id });
+
+    render(<WorkshopView />);
+    fireEvent.click(await screen.findByTestId('delete-m2'));
+
+    await waitFor(() => expect(electron.deleteChatMessage).toHaveBeenCalledWith('m2'));
   });
 
   // Every "New build" is a chat row the chat list is deliberately blind to,
