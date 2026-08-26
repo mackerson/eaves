@@ -5,7 +5,13 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: 'happy-dom',
+    // Node by default. happy-dom was global, so all 173 suites paid to build a
+    // DOM and only 11 of them touch one — 153s of environment setup for the
+    // main-process files alone, which is most of why the Windows CI leg ran at
+    // twice the Linux one. The files that need a DOM opt in with a
+    // `@vitest-environment happy-dom` docblock; one that forgets fails at once
+    // with `document is not defined`.
+    environment: 'node',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
