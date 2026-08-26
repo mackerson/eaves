@@ -11,15 +11,21 @@ import {
   PLUGIN_AUTHORING_WARNING_TITLE,
   PLUGIN_AUTHORING_WARNING,
 } from '@/lib/pluginAuthoringCopy';
-import { AlertTriangle } from 'lucide-react';
+import { DraftManifest } from '@/components/workshop/DraftManifest';
+import { DraftCodeDialog } from '@/components/workshop/DraftCodeDialog';
+import { WorkshopScaffolds } from '@/components/workshop/WorkshopScaffolds';
 import type { Chat, PluginDraft } from '@/../shared/types';
 
 /**
  * The Workshop: a bench where a plugin gets built, with the human's hands on it.
  *
  * Left is the conversation — you say what you want Eaves to be able to do, and
- * an agent builds it. Right is the bench rail: what has actually been made so
- * far, what it asks for, and the controls only a person may use.
+ * an agent builds it. Right is the bench: not a list of cards, but one panel
+ * describing the thing being made — what state the build is in, what it will
+ * be able to do (read off its own source, not just its manifest), what it
+ * actually added once it ran, and only then the controls that commit. There is
+ * normally exactly one draft in flight, so a list was answering a question
+ * nobody had while leaving the real one unanswered. See DraftManifest.
  *
  * The transcript is composed from `ChatMessageRow` and `ChatInput` rather than
  * extracted out of `ChatsView`, which owns queueing, attachments, editing and
@@ -35,17 +41,6 @@ import type { Chat, PluginDraft } from '@/../shared/types';
 
 interface DraftFile { path: string; content: string }
 
-const ELEVATED = new Set(['network:http', 'system:filesystem']);
-
-/** Stage is derived from what exists, never stored — state cannot disagree with itself. */
-function stageOf(drafts: PluginDraft[], hasSession: boolean): 0 | 1 | 2 | 3 {
-  if (drafts.some((d) => d.running)) return 2;
-  if (drafts.length > 0) return 1;
-  return hasSession ? 0 : 0;
-}
-
-const STAGES = ['Asked', 'Written', 'Running', 'Kept'] as const;
-
 export function WorkshopView() {
   const enabled = useSettingsStore((s) => s.settings.pluginAuthoringEnabled) === true;
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -54,9 +49,10 @@ export function WorkshopView() {
   const [sessions, setSessions] = useState<Chat[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<PluginDraft[]>([]);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [files, setFiles] = useState<DraftFile[]>([]);
-  const [openFile, setOpenFile] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reading, setReading] = useState<{
+    name: string; files: DraftFile[]; previous?: DraftFile[];
+  } | null>(null);
   const [discardTarget, setDiscardTarget] = useState<PluginDraft | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -210,16 +206,13 @@ export function WorkshopView() {
     }
   }, [sessionId, session, startSession, refreshSessions, showToast]);
 
-  const openDraft = async (draft: PluginDraft) => {
-    if (openId === draft.id) { setOpenId(null); return; }
+  const readCode = async (draft: PluginDraft) => {
     const result = await window.electron.readPluginDraft(draft.id);
     if (!result?.success || !result.files) {
       showToast(result?.error || 'Could not read that draft', 'error');
       return;
     }
-    setOpenId(draft.id);
-    setFiles(result.files);
-    setOpenFile(result.files[0]?.path ?? null);
+    setReading({ name: draft.name, files: result.files, previous: result.previous });
   };
 
   /** Every bench control is the same shape: act, say what happened, re-read. */
@@ -245,7 +238,17 @@ export function WorkshopView() {
     }
   };
 
-  const stage = useMemo(() => stageOf(drafts, !!sessionId), [drafts, sessionId]);
+  // One draft is the normal case; the selector only appears past that.
+  const selected = useMemo(
+    () => drafts.find((d) => d.id === selectedId) ?? drafts[0],
+    [drafts, selectedId],
+  );
+
+  /** The ask that started this build — the first thing the human said in it. */
+  const ask = useMemo(
+    () => session?.messages?.find((m) => m.senderType === 'human')?.content?.trim(),
+    [session],
+  );
 
   // ── The trust decision, offered where it is actually met ───────────────────
   if (!enabled) {
@@ -326,13 +329,8 @@ export function WorkshopView() {
           {/* The ask stays until there is something to read. A started-but-empty
               session with a blank pane tells a first-time user nothing. */}
           {!session || !session.messages?.length ? (
-            <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
-              <p className="text-lg font-medium">What should Eaves be able to do?</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Describe it in your own words — "a dice roller for my roleplay chats", "a view
-                that shows my notes as cards". An agent writes it, you watch it happen, and
-                nothing is installed until you say so.
-              </p>
+            <div className="h-full flex flex-col items-center justify-center">
+              <WorkshopScaffolds onPick={setInput} />
             </div>
           ) : (
             <div className="flex flex-col gap-4">
@@ -395,150 +393,66 @@ export function WorkshopView() {
 
       {/* ── The bench ──────────────────────────────────────────────────────── */}
       <aside className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l border-border flex flex-col min-h-0 max-h-[45%] lg:max-h-none">
-        <div className="px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-1.5">
-            {STAGES.map((label, idx) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <span
-                  className={`text-xs px-1.5 py-0.5 rounded ${
-                    idx <= stage
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-muted-foreground'
-                  }`}
-                >
-                  {label}
-                </span>
-                {idx < STAGES.length - 1 && (
-                  <span className="text-muted-foreground text-xs">›</span>
-                )}
-              </div>
-            ))}
+        {/* A selector only when there is genuinely more than one thing being
+            built. The normal case is one draft, and a list of one is furniture. */}
+        {drafts.length > 1 && (
+          <div className="px-4 py-2 border-b border-border">
+            <select
+              className="w-full bg-background border border-border rounded-md text-sm px-2 py-1"
+              value={selected?.id ?? ''}
+              onChange={(e) => setSelectedId(e.target.value)}
+            >
+              {drafts.map((draft) => (
+                <option key={draft.id} value={draft.id}>
+                  {draft.name}{draft.running ? ' · running' : ''}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
+        )}
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {drafts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nothing on the bench yet. What the agent writes will show up here before it runs.
-            </p>
+        <div className="flex-1 overflow-y-auto p-4">
+          {!selected ? (
+            <div className="text-sm text-muted-foreground space-y-2">
+              <p>Nothing on the bench yet.</p>
+              <p className="text-xs">
+                When the agent writes a plugin it appears here first — what it is, what it will be
+                able to do, and every file it contains — before anything is installed.
+              </p>
+            </div>
           ) : (
-            drafts.map((draft) => {
-              const busy = busyId === draft.id;
-              const elevated = draft.permissions.filter((p) => ELEVATED.has(p));
-              return (
-                <div key={draft.id} className="border border-border rounded-lg bg-card">
-                  <div className="p-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm">{draft.name}</span>
-                      <span className="text-xs text-muted-foreground">v{draft.version}</span>
-                      <span
-                        className={`text-xs px-1.5 py-0.5 rounded ${
-                          draft.running
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                            : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        {draft.running ? 'running' : 'staged'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      <button className="underline underline-offset-2" onClick={() => void openDraft(draft)}>
-                        {draft.files.length} file{draft.files.length === 1 ? '' : 's'}
-                      </button>
-                      {' · '}
-                      {draft.permissions.length
-                        ? `asks for: ${draft.permissions.join(', ')}`
-                        : 'asks for no special access'}
-                    </p>
-                    {elevated.length > 0 && (
-                      <p className="text-xs mt-2 flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
-                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                        <span>Wants {elevated.join(' and ')} — read the code before you keep this.</span>
-                      </p>
-                    )}
-                    {/* Running is not rendering, so the preview's verdict is its
-                        own line. The agent reads the same fact through
-                        plugin_inspect, so telling it "it's broken" is no longer
-                        the only way it can find out. */}
-                    {draft.lastRender?.status === 'failed' && (
-                      <div className="text-xs mt-2 p-2 rounded border border-red-500/40 bg-red-500/10">
-                        <p className="font-medium text-red-400">Preview failed to render</p>
-                        <pre className="mt-1 whitespace-pre-wrap break-words text-[11px] text-muted-foreground max-h-24 overflow-y-auto">
-                          {draft.lastRender.message}
-                        </pre>
-                      </div>
-                    )}
-                    {draft.lastRender?.status === 'ok' && (
-                      <p className="text-xs mt-2 text-emerald-600 dark:text-emerald-400">
-                        Previewed and rendered cleanly.
-                      </p>
-                    )}
-                    <div className="flex items-center flex-wrap gap-1.5 mt-3">
-                      {draft.bundleUrl && (
-                        <Button
-                          variant="outline" size="sm" disabled={busy}
-                          onClick={() =>
-                            void act(draft, 'preview', () => window.electron.previewPluginDraft(draft.id), 'Preview opened')
-                          }
-                        >
-                          Preview
-                        </Button>
-                      )}
-                      {draft.running ? (
-                        <Button
-                          variant="outline" size="sm" disabled={busy}
-                          onClick={() => act(draft, 'stop', () => window.electron.deactivatePluginDraft(draft.id), `${draft.name} stopped`)}
-                        >
-                          Stop
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline" size="sm" disabled={busy}
-                          onClick={() => act(draft, 'run', () => window.electron.activatePluginDraft(draft.id), `${draft.name} is running`)}
-                        >
-                          Run
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm" disabled={busy} onClick={() => setDiscardTarget(draft)}>
-                        Discard
-                      </Button>
-                      <Button
-                        size="sm" disabled={busy}
-                        onClick={() => act(draft, 'keep', () => window.electron.promotePluginDraft(draft.id), `${draft.name} is now installed`)}
-                      >
-                        Keep
-                      </Button>
-                    </div>
-                  </div>
-
-                  {openId === draft.id && (
-                    <div className="border-t border-border">
-                      <div className="flex gap-1 px-2 py-1.5 overflow-x-auto border-b border-border">
-                        {files.map((file) => (
-                          <button
-                            key={file.path}
-                            onClick={() => setOpenFile(file.path)}
-                            className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${
-                              openFile === file.path
-                                ? 'bg-accent text-accent-foreground'
-                                : 'text-muted-foreground hover:bg-accent/50'
-                            }`}
-                          >
-                            {file.path}
-                          </button>
-                        ))}
-                      </div>
-                      <pre className="p-3 text-[11px] leading-relaxed overflow-x-auto max-h-64 overflow-y-auto font-mono">
-                        {files.find((f) => f.path === openFile)?.content ?? ''}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              );
-            })
+            <DraftManifest
+              draft={selected}
+              ask={ask}
+              busy={busyId === selected.id}
+              onPreview={() =>
+                void act(selected, 'preview', () => window.electron.previewPluginDraft(selected.id), 'Preview opened')
+              }
+              onReadCode={() => void readCode(selected)}
+              onRun={() =>
+                void act(selected, 'run', () => window.electron.activatePluginDraft(selected.id), `${selected.name} is running`)
+              }
+              onStop={() =>
+                void act(selected, 'stop', () => window.electron.deactivatePluginDraft(selected.id), `${selected.name} stopped`)
+              }
+              onKeep={() =>
+                void act(selected, 'keep', () => window.electron.promotePluginDraft(selected.id), `${selected.name} is now installed`)
+              }
+              onDiscard={() => setDiscardTarget(selected)}
+            />
           )}
         </div>
       </aside>
+
+      {reading && (
+        <DraftCodeDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setReading(null); }}
+          name={reading.name}
+          files={reading.files}
+          previous={reading.previous}
+        />
+      )}
 
       {discardTarget && (
         <ConfirmDialog
@@ -553,7 +467,6 @@ export function WorkshopView() {
           onConfirm={() => {
             const target = discardTarget;
             setDiscardTarget(null);
-            if (openId === target.id) setOpenId(null);
             void act(target, 'discard', () => window.electron.discardPluginDraft(target.id), `${target.name} discarded`);
           }}
         />
