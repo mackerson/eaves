@@ -137,6 +137,17 @@ duplicate windows.
 
 Eaves stores all data locally on your machine.
 
+In a dev build, `EAVES_USER_DATA_DIR` redirects the whole profile somewhere
+disposable — so you can exercise a migration, a first-run path, or anything
+destructive without doing it to your own database first:
+
+```bash
+EAVES_USER_DATA_DIR=/tmp/eaves-scratch yarn dev
+```
+
+Packaged builds ignore it. Without it `yarn dev` opens the real profile below
+and migrates it.
+
 **Database** (platform-specific):
 - **macOS**: `~/Library/Application Support/eaves/eaves-data/eaves.db`
 - **Linux**: `~/.config/eaves/eaves-data/eaves.db`
