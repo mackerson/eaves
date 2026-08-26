@@ -961,11 +961,14 @@ export async function runStream(options: RunStreamOptions): Promise<StreamResult
     }
   }
 
-  // Surface a hard output-limit truncation. The channel path has warned about
-  // this since the field reports of mid-sentence cut-offs; chats never did, so
-  // a reply that stopped at the cap was persisted and rendered as though the
-  // agent had finished speaking. The finish reason was already collected here
-  // — nothing read it.
+  // Surface a hard output-limit truncation.
+  //
+  // runStream drives *channel* turns (AgentTurnService.streamChannelTurn) and
+  // approval resumes; the 1:1 chat turn is runChatAssistantTurn, which has
+  // warned about this since the field reports of mid-sentence cut-offs. Those
+  // two paths did not, so a reply that stopped at the cap was persisted and
+  // rendered as though the agent had finished speaking. The finish reason was
+  // already collected here — nothing read it.
   if (streamMetrics.finishReason === 'length') {
     builder.addSystemNote(
       '⚠️ This reply was cut off at the output-token limit. Increase "Max Output Tokens" on this agent to allow longer responses.'

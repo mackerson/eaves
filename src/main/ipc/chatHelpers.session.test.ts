@@ -446,10 +446,11 @@ describe('runStream', () => {
     settingsRepo.get.mockReturnValue({ userName: 'Robin' });
   });
 
-  // Channels have warned about this since the field reports of mid-sentence
-  // cut-offs; chats never did, so a reply that stopped at the cap was
-  // persisted and rendered as though the agent had finished speaking. The
-  // finish reason was already sitting in streamMetrics, unread.
+  // runStream drives channel turns and approval resumes. The 1:1 chat path
+  // (runChatAssistantTurn) has warned about this since the field reports of
+  // mid-sentence cut-offs; these two did not, so a reply that stopped at the
+  // cap was persisted and rendered as though the agent had finished speaking.
+  // The finish reason was already sitting in streamMetrics, unread.
   it('says so when a reply was cut off at the output limit', async () => {
     routeStreamEvent.mockImplementation((event: any, _id: unknown, _win: unknown, metrics: any) => {
       if (event?.finishReason) metrics.finishReason = event.finishReason;
