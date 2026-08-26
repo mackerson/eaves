@@ -375,7 +375,7 @@ contextBridge.exposeInMainWorld('electron', {
   listPluginDrafts: (): Promise<{ success: boolean; drafts?: PluginDraft[]; error?: string }> => ipcRenderer.invoke('plugin:list-drafts'),
   promotePluginDraft: (pluginId: string): Promise<{ success: boolean; id?: string; folderName?: string; error?: string }> => ipcRenderer.invoke('plugin:promote-draft', pluginId),
   discardPluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:discard-draft', pluginId),
-  readPluginDraft: (pluginId: string): Promise<{ success: boolean; draft?: PluginDraft; files?: Array<{ path: string; content: string }>; error?: string }> => ipcRenderer.invoke('plugin:read-draft', pluginId),
+  readPluginDraft: (pluginId: string): Promise<{ success: boolean; draft?: PluginDraft; files?: Array<{ path: string; content: string }>; previous?: Array<{ path: string; content: string }>; previousAt?: number; error?: string }> => ipcRenderer.invoke('plugin:read-draft', pluginId),
   activatePluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:activate-draft', pluginId),
   deactivatePluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:deactivate-draft', pluginId),
   previewPluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:preview-draft', pluginId),

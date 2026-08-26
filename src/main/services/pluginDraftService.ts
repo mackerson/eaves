@@ -25,6 +25,8 @@ import { assertDestOwnership } from './MarketplaceService';
 import { getPluginGrantsRepository } from '../repositories';
 import { legacyEnv } from '../utils/legacyEnv';
 import { getRenderReport, clearRenderReport } from './pluginRenderReports';
+import { recordRevision, clearRevisions } from './pluginDraftRevisions';
+import { analyseDraft } from './pluginDraftAnalysis';
 import { logger } from './logger';
 import type { PluginDraft, PluginManifest } from '../../shared/types';
 
@@ -206,8 +208,12 @@ export function writeDraft(spec: DraftSpec): DraftRecord {
   }
 
   // The old files are about to be replaced, so any recorded render outcome
-  // describes code that will not exist in a moment.
+  // describes code that will not exist in a moment — but the code itself is
+  // worth keeping for exactly one step, so the bench can show what changed
+  // instead of asking a person to re-read the whole thing.
   clearRenderReport(manifest.id);
+  const outgoing = readDraft(manifest.id);
+  if (outgoing) recordRevision(manifest.id, outgoing.files);
 
   if (fs.existsSync(pluginDir)) {
     const occupant = readInstalledPluginId(pluginDir);
@@ -236,10 +242,21 @@ export function writeDraft(spec: DraftSpec): DraftRecord {
     permissions: manifest.permissions ?? [],
   });
 
-  return toRecord(manifest, folderName, files.map(file => file.path));
+  return toRecord(manifest, folderName, files);
 }
 
-function toRecord(manifest: PluginManifest, folderName: string, files: string[]): DraftRecord {
+/**
+ * A draft describing itself, as completely as the system can without being
+ * asked twice.
+ *
+ * `analysis` and `contributions` ride on the record rather than sitting behind
+ * their own IPC calls because the bench shows them at the same moment it shows
+ * the name — a second round trip would just be a frame of the panel rendering
+ * a plugin as a file count, which is the thing being fixed.
+ */
+function toRecord(manifest: PluginManifest, folderName: string, files: DraftFile[]): DraftRecord {
+  const manager = getSandboxedPluginManager();
+  const running = manager.isPluginLoaded(manifest.id);
   return {
     id: manifest.id,
     name: manifest.name,
@@ -248,11 +265,16 @@ function toRecord(manifest: PluginManifest, folderName: string, files: string[])
     description: manifest.description,
     folderName,
     permissions: manifest.permissions ?? [],
-    files: [...files].sort(),
-    running: getSandboxedPluginManager().isPluginLoaded(manifest.id),
+    files: files.map(file => file.path).sort(),
+    running,
     bundleUrl: manifest.ui?.entry ? `plugin://draft.${folderName}/${manifest.ui.entry}` : undefined,
     ui: manifest.ui,
     lastRender: getRenderReport(manifest.id),
+    analysis: analyseDraft(manifest.permissions ?? [], files),
+    // Nothing is registered until the draft runs, so this is empty by
+    // definition beforehand — which the bench renders as "not running yet"
+    // rather than as "contributes nothing".
+    contributions: running ? manager.getDraftContributions(manifest.id) : { tools: [], views: [] },
   };
 }
 
@@ -274,17 +296,31 @@ export function listDrafts(): DraftRecord[] {
     } catch {
       continue; // an unreadable directory is not a draft we can report on
     }
-    records.push(toRecord(manifest, entry.name, listFilesUnder(pluginDir, pluginDir)));
+    records.push(toRecord(manifest, entry.name, readFilesUnder(pluginDir, pluginDir)));
   }
   return records.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-function listFilesUnder(dir: string, root: string): string[] {
-  const out: string[] = [];
+/**
+ * Every file of a draft, with contents.
+ *
+ * Contents rather than paths because the record now describes what the plugin
+ * *does*, and that is read out of the source (see pluginDraftAnalysis). The
+ * caps in this module bound the cost: at most 40 files and 2MB per draft, and
+ * in practice one draft at a time.
+ */
+function readFilesUnder(dir: string, root: string): DraftFile[] {
+  const out: DraftFile[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...listFilesUnder(full, root));
-    else if (entry.name !== 'plugin.json') out.push(path.relative(root, full).split(path.sep).join('/'));
+    if (entry.isDirectory()) {
+      out.push(...readFilesUnder(full, root));
+    } else if (entry.name !== 'plugin.json') {
+      out.push({
+        path: path.relative(root, full).split(path.sep).join('/'),
+        content: fs.readFileSync(full, 'utf-8'),
+      });
+    }
   }
   return out;
 }
@@ -295,11 +331,7 @@ export function readDraft(id: string): { record: DraftRecord; files: DraftFile[]
   if (!record) return null;
 
   const pluginDir = path.join(draftsRoot(), record.folderName);
-  const files = record.files.map(relative => ({
-    path: relative,
-    content: fs.readFileSync(path.join(pluginDir, relative), 'utf-8'),
-  }));
-  return { record, files };
+  return { record, files: readFilesUnder(pluginDir, pluginDir) };
 }
 
 /**
@@ -365,6 +397,7 @@ export async function promoteDraft(id: string): Promise<{ id: string; folderName
   }
 
   fs.rmSync(draftDir, { recursive: true, force: true });
+  clearRevisions(id); // the draft it described is gone
   getPluginGrantsRepository().set(id, permissions, staged.record.version, Date.now());
   logger.info('[PluginDraft] Promoted a draft to an installed plugin', { id, permissions });
 

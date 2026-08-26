@@ -4,6 +4,7 @@ import { getPluginConfigManager } from '../services/PluginConfigManager';
 import { getServiceRegistry } from '../services/ServiceRegistry';
 import { getMarketplaceListing, installPlugin, uninstallPlugin } from '../services/MarketplaceService';
 import { listDrafts, readDraft, promoteDraft } from '../services/pluginDraftService';
+import { getPreviousRevision } from '../services/pluginDraftRevisions';
 import { getChannelRepository, getAgentRepository, getUserRepository, getSettingsRepository } from '../repositories';
 import { showPluginPreview, closePluginPreview } from '../windows/pluginPreviewWindow';
 import { eventBus } from '../services/EventBus';
@@ -193,7 +194,16 @@ export function registerPluginHandlers(getMainWindow?: () => BrowserWindow | nul
     if (!validation.success) return validation;
     const staged = readDraft(validation.data);
     if (!staged) return { success: false, error: `No draft with id "${validation.data}".` };
-    return { success: true, draft: staged.record, files: staged.files };
+    // The version this one replaced, when the agent has rewritten it. Reading
+    // a file for the second time should cost less than reading it the first.
+    const previous = getPreviousRevision(validation.data);
+    return {
+      success: true,
+      draft: staged.record,
+      files: staged.files,
+      previous: previous?.files,
+      previousAt: previous?.at,
+    };
   }));
 
   ipcMain.handle('plugin:activate-draft', ipcResult('plugin:activate-draft', async (event, pluginId: string) => {

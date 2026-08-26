@@ -945,6 +945,40 @@ export interface PluginDraft {
    * activation that reported success.
    */
   lastRender?: { status: 'ok' | 'failed'; message?: string; at: number };
+  /**
+   * What the draft's own source says it does, versus what its manifest
+   * declared. Read at list time so the bench can describe a plugin rather
+   * than count its files — see main/services/pluginDraftAnalysis.ts for what
+   * this can and cannot prove.
+   */
+  analysis?: PluginDraftAnalysis;
+  /**
+   * What it actually added to the app once it ran. Empty until activation:
+   * nothing is registered before then.
+   */
+  contributions?: {
+    tools: Array<{ name: string; description: string; parameters: string[] }>;
+    views: Array<{ id: string; title: string; icon?: string }>;
+  };
+}
+
+/** @see main/services/pluginDraftAnalysis.ts */
+export interface PluginDraftAnalysis {
+  capabilities: Array<{
+    permission: string;
+    label: string;
+    status: 'used' | 'declared-unused' | 'inert';
+    /**
+     * `gated` — PermissionGate enforces it. `ungated` — nothing in the
+     * requirements table unlocks it, so the grant is a label and the plugin
+     * reaches out directly. `inert` — a coarse alias the sandbox never matches.
+     */
+    gating: 'gated' | 'ungated' | 'inert';
+    elevated: boolean;
+    calls: string[];
+  }>;
+  /** Calls the gate will deny, because the manifest never declared them. */
+  undeclared: Array<{ call: string; requires: string[]; file: string }>;
 }
 
 /**

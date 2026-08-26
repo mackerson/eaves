@@ -18,6 +18,7 @@ const managerMock = {
   getUserPluginsDir: vi.fn<() => string>(),
   getPluginManifest: vi.fn<(id: string) => PluginManifest | null>(() => null),
   isPluginLoaded: vi.fn<(id: string) => boolean>(() => false),
+  getDraftContributions: vi.fn(() => ({ tools: [], views: [] })),
   unloadPlugin: vi.fn(async () => {}),
   loadUserPlugin: vi.fn(async () => ({})),
 };
@@ -30,6 +31,7 @@ const showPluginConsent = vi.fn(async () => true);
 vi.mock('../windows/pluginConsentWindow', () => ({ showPluginConsent }));
 
 import { writeDraft, listDrafts, readDraft, promoteDraft, PluginDraftError } from './pluginDraftService';
+import { getPreviousRevision, clearRevisions, resetRevisions } from './pluginDraftRevisions';
 
 const manifest = (overrides: Record<string, unknown> = {}) => ({
   id: 'com.alice.sketch',
@@ -55,6 +57,7 @@ describe('pluginDraftService', () => {
     managerMock.getUserPluginsDir.mockReturnValue(installRoot);
     managerMock.getPluginManifest.mockReturnValue(null);
     managerMock.isPluginLoaded.mockReturnValue(false);
+    resetRevisions();
     managerMock.loadUserPlugin.mockResolvedValue({});
     showPluginConsent.mockResolvedValue(true);
     // The env escape hatch is for headless runs; these tests exercise the
@@ -221,6 +224,50 @@ describe('pluginDraftService', () => {
     it('reports nothing when the draft root does not exist yet', () => {
       managerMock.getDraftPluginsDir.mockReturnValue(path.join(root, 'absent'));
       expect(listDrafts()).toEqual([]);
+    });
+
+    // The record describes what the plugin does, not just which files exist:
+    // the bench renders this instead of a comma-separated permission list.
+    it('describes what the source actually does with what it declared', () => {
+      writeDraft({
+        manifest: manifest({ permissions: ['ui:views:register', 'storage:write'] }),
+        files: [{ path: 'index.cjs', content: 'c.ui.registerView({});' }],
+      });
+
+      const analysis = listDrafts()[0].analysis;
+      expect(analysis?.capabilities).toEqual([
+        expect.objectContaining({ permission: 'ui:views:register', status: 'used' }),
+        expect.objectContaining({ permission: 'storage:write', status: 'declared-unused' }),
+      ]);
+    });
+  });
+
+  // An agent iterates on the same draft, and every plugin_define replaces the
+  // files wholesale. Without the outgoing copy, reading the second version
+  // costs exactly as much as reading the first, which in practice means it
+  // does not get read.
+  describe('revisions', () => {
+    it('keeps the version a redefinition replaced', () => {
+      writeDraft({ manifest: manifest(), files: [{ path: 'index.cjs', content: 'v1' }] });
+      expect(getPreviousRevision('com.alice.sketch')).toBeUndefined();
+
+      writeDraft({ manifest: manifest(), files: [{ path: 'index.cjs', content: 'v2' }] });
+
+      expect(getPreviousRevision('com.alice.sketch')?.files).toEqual([
+        { path: 'index.cjs', content: 'v1' },
+      ]);
+      expect(readDraft('com.alice.sketch')?.files).toEqual([
+        { path: 'index.cjs', content: 'v2' },
+      ]);
+    });
+
+    it('forgets the history once the draft is gone', () => {
+      writeDraft({ manifest: manifest(), files: [{ path: 'index.cjs', content: 'v1' }] });
+      writeDraft({ manifest: manifest(), files: [{ path: 'index.cjs', content: 'v2' }] });
+      expect(getPreviousRevision('com.alice.sketch')).toBeDefined();
+
+      clearRevisions('com.alice.sketch');
+      expect(getPreviousRevision('com.alice.sketch')).toBeUndefined();
     });
   });
 

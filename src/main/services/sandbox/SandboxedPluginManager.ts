@@ -13,6 +13,7 @@ import { PluginManifest } from '../../types';
 import { PluginManifestSchema, validateWithSchema, isValidationFailure } from '../../../shared/validation';
 import { eventBus } from '../EventBus';
 import { clearRenderReport } from '../pluginRenderReports';
+import { clearRevisions } from '../pluginDraftRevisions';
 import { logger } from '../logger';
 import { getPluginConfigManager } from '../PluginConfigManager';
 
@@ -67,6 +68,16 @@ interface RegisteredTerminalView {
   cwd?: string;
   env?: Record<string, string>;
   pluginId: string;
+}
+
+/**
+ * Top-level property names of a tool's JSON Schema. Enough to render a call
+ * shape on the bench; the full schema is in the code, which is one click away.
+ */
+function parameterNames(inputSchema: unknown): string[] {
+  const schema = inputSchema as { properties?: Record<string, unknown> } | undefined;
+  if (!schema || typeof schema !== 'object' || !schema.properties) return [];
+  return Object.keys(schema.properties);
 }
 
 interface RegisteredTool {
@@ -1214,6 +1225,7 @@ export class SandboxedPluginManager {
       fs.rmSync(dir, { recursive: true, force: true });
     }
     clearRenderReport(pluginId);
+    clearRevisions(pluginId); // nothing left for a diff to be against
     getPluginStateRepository().delete(pluginId);
     getPluginConfigManager().deleteConfig(pluginId);
   }
@@ -1389,6 +1401,43 @@ export class SandboxedPluginManager {
       if (!(name in installed)) drafts[name] = def;
     }
     return drafts;
+  }
+
+  /**
+   * What a running draft actually added to the app, as opposed to what its
+   * manifest said it would.
+   *
+   * The bench needs this to answer "what will I get if I keep this" without
+   * making a person read the source to find out. A draft's view is filtered
+   * out of getRegisteredViews on purpose — it must never reach the sidebar —
+   * but that is a rule about *rendering* it, not about naming it, and refusing
+   * to even say a view exists is how the bench ended up describing a plugin
+   * purely by its file count.
+   *
+   * Empty until the draft is activated: nothing is registered before then.
+   */
+  getDraftContributions(pluginId: string): {
+    tools: Array<{ name: string; description: string; parameters: string[] }>;
+    views: Array<{ id: string; title: string; icon?: string }>;
+  } {
+    const plugin = this.plugins.get(pluginId);
+    if (!plugin || plugin.manifest?.source !== 'draft') return { tools: [], views: [] };
+
+    const tools = Array.from(this.registeredTools.values())
+      .filter(entry => entry.pluginId === pluginId)
+      .map(entry => ({
+        name: entry.name,
+        description: entry.tool.description ?? '',
+        parameters: parameterNames(entry.tool.inputSchema),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const views = Array.from(this.registeredViews.values())
+      .filter(view => view.pluginId === pluginId)
+      .map(view => ({ id: view.id, title: view.title, icon: view.icon }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    return { tools, views };
   }
 
   async executePluginTool(pluginId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> {
