@@ -75,6 +75,15 @@ export default defineConfig({
   build: {
     outDir: '../../dist/renderer',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        // The app, and the draft-preview window. The preview is a separate
+        // HTML entry rather than a route because it must load in its own
+        // renderer realm — see src/renderer/preview.tsx for why.
+        main: path.resolve(__dirname, 'src/renderer/index.html'),
+        preview: path.resolve(__dirname, 'src/renderer/preview.html'),
+      },
+    },
   },
   resolve: {
     alias: {

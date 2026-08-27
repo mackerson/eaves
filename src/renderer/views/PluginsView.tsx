@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { useToastStore } from '@/stores';
+import { useToastStore, useUIStore } from '@/stores';
 import { ConfigurePluginModal } from '@/components/modals/ConfigurePluginModal';
 import { ConfirmDialog } from '@/components/modals/ConfirmDialog';
 import { AlertTriangle, Shield, ShieldCheck } from 'lucide-react';
+import type { PluginDraft } from '@/../shared/types';
 
 interface Plugin {
   id: string;
@@ -14,7 +15,7 @@ interface Plugin {
   enabled: boolean;
   hasView?: boolean;
   viewId?: string;
-  source?: 'bundled' | 'user' | 'dev';
+  source?: 'bundled' | 'user' | 'dev' | 'draft';
 }
 
 const TRUSTED_PLUGINS_KEY = 'eaves:trustedPlugins';
@@ -49,11 +50,14 @@ interface PluginsViewProps {
 
 export function PluginsView({ onNavigateToView }: PluginsViewProps) {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [drafts, setDrafts] = useState<PluginDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [configuringPluginId, setConfiguringPluginId] = useState<string | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<Plugin | null>(null);
+  const [discardTarget, setDiscardTarget] = useState<PluginDraft | null>(null);
   const [trustedPlugins, setTrustedPlugins] = useState<Set<string>>(getTrustedPlugins);
   const showToast = useToastStore((state) => state.showToast);
+  const setView = useUIStore((state) => state.setView);
 
   const isUserPlugin = (plugin: Plugin) => plugin.source === 'user';
 
@@ -61,8 +65,14 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
   const originHint = (plugin: Plugin) =>
     plugin.source === 'dev'
       ? 'Linked from your dev checkout. Remove its symlink from plugins/ and restart to unload it — Disable stops it in the meantime.'
-      : 'Ships with Eaves and cannot be uninstalled. Disable stops it from running.';
-  const isTrusted = (plugin: Plugin) => !isUserPlugin(plugin) || trustedPlugins.has(plugin.id);
+      : plugin.source === 'draft'
+        ? 'An agent staged this and it has not been installed. It stops running when you retract it or restart Eaves.'
+        : 'Ships with Eaves and cannot be uninstalled. Disable stops it from running.';
+  // A draft is never implicitly trusted. Bundled and dev plugins are there
+  // because the user or the build put them there; a draft is there because an
+  // agent wrote it, which is exactly the case the trust badge exists to mark.
+  const isTrusted = (plugin: Plugin) =>
+    plugin.source !== 'draft' && (!isUserPlugin(plugin) || trustedPlugins.has(plugin.id));
 
   const handleTrustPlugin = (pluginId: string) => {
     const newTrusted = new Set(trustedPlugins);
@@ -83,12 +93,32 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
   const loadPlugins = async () => {
     try {
       const loadedPlugins = await window.electron.getPlugins();
-      setPlugins(loadedPlugins);
+      // A running draft is also a loaded plugin, so it would otherwise appear
+      // twice. The Drafts section owns them: it is the only place offering the
+      // two actions that apply, and the only place that says they are not
+      // installed.
+      setPlugins(loadedPlugins.filter((p) => p.source !== 'draft'));
+      const draftResult = await window.electron.listPluginDrafts();
+      setDrafts(draftResult?.drafts ?? []);
     } catch (error) {
       console.error('Failed to load plugins:', error);
       showToast('Failed to load plugins', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDiscardDraft = async (draft: PluginDraft) => {
+    try {
+      const result = await window.electron.discardPluginDraft(draft.id);
+      if (!result?.success) {
+        showToast(result?.error || 'Failed to discard draft', 'error');
+        return;
+      }
+      showToast(`${draft.name} discarded`, 'success');
+      await loadPlugins();
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to discard draft', 'error');
     }
   };
 
@@ -194,6 +224,66 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
                 Only trust plugins from sources you trust. Review untrusted plugins below before enabling them.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {drafts.length > 0 && (
+        <div className="max-w-4xl mb-8">
+          <h3 className="text-xl font-semibold mb-1">Drafts</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Written by an agent and staged here. They are <strong>not installed</strong>: they never
+            appear in the sidebar, and they disappear when you discard them or restart Eaves.
+            Keeping one installs it permanently — which is done in the Workshop, where the code,
+            the permissions it asks for and the calls it actually makes are all in front of you.
+          </p>
+          <div className="space-y-4">
+            {drafts.map((draft) => (
+              <div
+                key={draft.id}
+                className="border border-dashed border-border rounded-lg p-4 bg-card"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-medium truncate">{draft.name}</h4>
+                      <span className="text-xs text-muted-foreground">v{draft.version}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        {draft.type}
+                      </span>
+                      {draft.running && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          running
+                        </span>
+                      )}
+                    </div>
+                    {draft.description && (
+                      <p className="text-sm text-muted-foreground mt-1">{draft.description}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {draft.files.length} file{draft.files.length === 1 ? '' : 's'}
+                      {' · '}
+                      {draft.permissions.length
+                        ? `asks for: ${draft.permissions.join(', ')}`
+                        : 'asks for no special access'}
+                    </p>
+                  </div>
+                  {/* Discard is safe without reading anything; Keep is not, and
+                      this surface never shows the code. Installing agent-written
+                      code you were not shown is the exact failure the draft tier
+                      exists to prevent, so Keep lives only on the bench that
+                      shows it. */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button variant="outline" size="sm" onClick={() => setDiscardTarget(draft)}>
+                      Discard
+                    </Button>
+                    <Button size="sm" onClick={() => setView('workshop')}>
+                      Review in Workshop
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -377,6 +467,24 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
             const target = uninstallTarget;
             setUninstallTarget(null);
             handleUninstallPlugin(target);
+          }}
+        />
+      )}
+
+      {discardTarget && (
+        <ConfirmDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setDiscardTarget(null); }}
+          title={`Discard ${discardTarget.name}?`}
+          message={
+            `This stops ${discardTarget.name} and deletes it. It was never installed, so nothing else changes — ` +
+            `but the agent's work on it is gone and it would have to be written again.`
+          }
+          confirmLabel="Discard"
+          onConfirm={() => {
+            const target = discardTarget;
+            setDiscardTarget(null);
+            handleDiscardDraft(target);
           }}
         />
       )}

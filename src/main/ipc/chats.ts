@@ -244,12 +244,15 @@ export function registerChatHandlers(getMainWindow: () => BrowserWindow | null) 
   }));
 
   // Search chats
-  ipcMain.handle('search-chats', ipcResult('search-chats', async (_event, { query, includeArchived }: SearchChatsRequest) => {
-    const validation = validateIPC(SearchChatsSchema, { query, includeArchived }, 'search-chats');
+  ipcMain.handle('search-chats', ipcResult('search-chats', async (_event, { query, includeArchived, allSurfaces }: SearchChatsRequest) => {
+    const validation = validateIPC(SearchChatsSchema, { query, includeArchived, allSurfaces }, 'search-chats');
     if (!validation.success) return validation;
 
     const chatRepo = getChannelRepository();
-    const chats = chatRepo.searchDirectChats(validation.data.query, { includeArchived: validation.data.includeArchived });
+    const chats = chatRepo.searchDirectChats(validation.data.query, {
+      includeArchived: validation.data.includeArchived,
+      allSurfaces: validation.data.allSurfaces,
+    });
     return { success: true, chats };
   }));
 

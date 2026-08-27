@@ -5,6 +5,8 @@ import { getProviderAdapter } from './providers';
 import { friendlyAIErrorMessage, isConnectionError, summarizeProviderError } from '../utils/aiErrors';
 import { stripApprovalRequiredTools } from './toolGating';
 import { withToolCacheBreakpoint, withMessageCacheBreakpoint, supportsSystemCacheBreakpoint, CACHE_BREAKPOINT_PROVIDER_OPTIONS } from './promptCache';
+import { resolveMaxOutputTokens } from './contextBudget';
+import { resolveDetectEndpoint } from './modelContext';
 
 // Type definitions for AI service
 interface MessageMetadata {
@@ -166,9 +168,16 @@ export async function* streamAIResponse(
 
   // Gate maxOutputTokens on the capability — a model that doesn't accept
   // max_tokens (some reasoning models) would otherwise be sent it unconditionally.
-  // Default 4096 when unset — a smaller cap truncates real answers mid-sentence.
+  //
+  // The value is resolved, not hardcoded. It used to be `|| 4096` here and a
+  // separately-computed reserve in contextBudget, which meant two things:
+  // every model generated at most 4096 tokens no matter what it advertised
+  // (OpenRouter publishes 64k for Sonnet 4.5, 65k for Gemini 2.5 Pro), and the
+  // budget's reserve could disagree with what was actually asked for.
   if (caps?.maxOutputTokens !== false) {
-    streamConfig.maxOutputTokens = agent.maxOutputTokens || 4096;
+    streamConfig.maxOutputTokens = resolveMaxOutputTokens(agent, {
+      endpoint: resolveDetectEndpoint(agent.provider),
+    });
   }
 
   // caps falls back to optimistic-allow when the adapter doesn't know the

@@ -204,6 +204,13 @@ export interface Chat {
    * buildRoleplayNote so the agent knows who the user is playing.
    */
   userPersona?: string;
+  /**
+   * Which surface owns this conversation. Absent or 'chat' for an ordinary
+   * chat; 'workshop' for a build. Search returns conversations from every
+   * surface so nothing is unfindable, and the result uses this to say where it
+   * lives and where clicking it should go — the lists themselves stay scoped.
+   */
+  surface?: string;
 }
 
 export interface ChatMessage extends BaseMessage {
@@ -763,6 +770,14 @@ export interface Settings {
    */
   routinesPaused?: boolean;
   /**
+   * When true, agents get the plugin-authoring toolset: they can stage a plugin
+   * into userData/plugins-draft and activate it. An activated draft is
+   * agent-written code running in a real sandbox worker under real permission
+   * grants — the same trust you extend to a bash tool. Off by default, and both
+   * tools with effects still require per-call approval.
+   */
+  pluginAuthoringEnabled?: boolean;
+  /**
    * Controls how in-app updates are handled:
    * - 'auto' (default): periodic checks + banner + manual check.
    * - 'manual': no periodic check; manual "Check for Updates" still works.
@@ -902,8 +917,75 @@ export interface PluginManifest {
   // plugins/ (dev only) and is deliberately distinct from 'user': it decides
   // where the renderer fetches the UI bundle from, and only 'user' plugins live
   // in userData and can be uninstalled.
-  source?: 'bundled' | 'user' | 'dev';
+  //
+  // 'draft' is agent-authored code staged in userData/plugins-draft. It is never
+  // discovered at startup, never surfaces a view, and only runs when someone
+  // explicitly activates it — see services/pluginDraftService.ts.
+  source?: 'bundled' | 'user' | 'dev' | 'draft';
   folderName?: string; // Plugin folder name
+}
+
+/**
+ * A staged, agent-authored plugin: on disk under userData/plugins-draft, not
+ * installed. Shared because the renderer lists drafts and offers the two
+ * actions only a person may take on one — keep it, or bin it.
+ */
+export interface PluginDraft {
+  id: string;
+  name: string;
+  version: string;
+  type: string;
+  description?: string;
+  folderName: string;
+  permissions: PluginPermission[];
+  files: string[];
+  /** True when this draft is currently loaded in a worker. */
+  running: boolean;
+  /** Where the renderer would fetch the UI bundle, when the draft declares one. */
+  bundleUrl?: string;
+  /** The manifest's UI block, when it declares one — what the preview mounts. */
+  ui?: PluginUIMetadata;
+  /**
+   * What happened the last time someone previewed this draft's UI, or absent
+   * if nobody has. Running is not rendering: the bundle can fail to load and
+   * the component can throw on first paint, and neither is visible from the
+   * activation that reported success.
+   */
+  lastRender?: { status: 'ok' | 'failed'; message?: string; at: number };
+  /**
+   * What the draft's own source says it does, versus what its manifest
+   * declared. Read at list time so the bench can describe a plugin rather
+   * than count its files — see main/services/pluginDraftAnalysis.ts for what
+   * this can and cannot prove.
+   */
+  analysis?: PluginDraftAnalysis;
+  /**
+   * What it actually added to the app once it ran. Empty until activation:
+   * nothing is registered before then.
+   */
+  contributions?: {
+    tools: Array<{ name: string; description: string; parameters: string[] }>;
+    views: Array<{ id: string; title: string; icon?: string }>;
+  };
+}
+
+/** @see main/services/pluginDraftAnalysis.ts */
+export interface PluginDraftAnalysis {
+  capabilities: Array<{
+    permission: string;
+    label: string;
+    status: 'used' | 'declared-unused' | 'inert';
+    /**
+     * `gated` — PermissionGate enforces it. `ungated` — nothing in the
+     * requirements table unlocks it, so the grant is a label and the plugin
+     * reaches out directly. `inert` — a coarse alias the sandbox never matches.
+     */
+    gating: 'gated' | 'ungated' | 'inert';
+    elevated: boolean;
+    calls: string[];
+  }>;
+  /** Calls the gate will deny, because the manifest never declared them. */
+  undeclared: Array<{ call: string; requires: string[]; file: string }>;
 }
 
 /**

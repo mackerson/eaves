@@ -23,10 +23,22 @@ const inflight = new Map<string, Promise<ModelContextInfo | null>>();
  * Resolve the endpoint we'll probe / look up in the cache for this provider.
  * Threaded into both the cache key match and the budget read so a baseURL
  * change (or a multi-host setup) doesn't serve another instance's window.
+ *
+ * **Base URL only, never the credential.** `resolveProviderCredential` puts the
+ * stored string in `baseURL` for a local provider and in `apiKey` for a cloud
+ * one, so the obvious `baseURL ?? apiKey` returned an API key for every cloud
+ * provider — and this value is logged as `endpoint` on both branches below.
+ * That was inert while only Ollama and LM Studio implemented `detectContext`
+ * (the early return above fires first for everyone else), and stopped being
+ * inert the moment OpenRouter got one.
+ *
+ * Cloud providers therefore scope by nothing, which is correct: the window a
+ * hosted model reports does not vary by which key asked. Multi-host scoping
+ * only ever meant anything for a local server, and that is exactly the case
+ * where the stored string IS the base URL.
  */
 export function resolveDetectEndpoint(provider: string, baseURLOverride?: string): string | undefined {
-  const { apiKey, baseURL } = resolveProviderCredential(provider, baseURLOverride);
-  return baseURL ?? apiKey;
+  return resolveProviderCredential(provider, baseURLOverride).baseURL;
 }
 
 /**

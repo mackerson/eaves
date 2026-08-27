@@ -82,6 +82,14 @@ export interface ChannelRow {
   folder_id: string | null; // conversation_folders.id
   task_id: string | null;          // work sessions: the task being worked (v71)
   parent_channel_id: string | null; // work sessions: where to report back (v71)
+  /**
+   * Which surface owns this conversation — 'chat', 'workshop', and one day a
+   * plugin's own. Routing only (v81). What a conversation may *do* is
+   * `workshop`, deliberately a different column: see the migration.
+   */
+  surface: string | null;
+  /** Capability, not routing. Gates the plugin-authoring toolset (v80). */
+  workshop: number | null;
   // Chat-only columns: populated only on `type='direct'` (1:1 chat) rows,
   // NULL on group channels.
   agent_id: string | null;
@@ -140,6 +148,8 @@ export interface ChatRow {
   user_persona: string | null;
   pinned: number | null; // SQLite boolean
   folder_id: string | null; // conversation_folders.id
+  /** Which surface owns this conversation (v81). Routing, not capability. */
+  surface: string | null;
 }
 
 export interface ChatParticipantRow {
@@ -320,6 +330,7 @@ export interface SettingsRow {
   oobe_completed: number | null;
   workflow_review_required: number | null;
   routines_paused: number | null;
+  plugin_authoring_enabled: number | null;
   update_mode: string | null;
   api_keys_json: string | null;
   openrouter_sticky_provider: number | null;

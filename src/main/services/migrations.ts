@@ -1105,6 +1105,74 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 79,
+    description: 'Settings carry the plugin-authoring opt-in',
+    migrate: (db) => {
+      // Off for every existing row and every new one. Activating a draft runs
+      // agent-written code in a sandbox worker with real permission grants, so
+      // this defaults closed and stays closed until someone turns it on.
+      const hasColumn = (db.pragma('table_info(settings)') as Array<{ name: string }>)
+        .some(column => column.name === 'plugin_authoring_enabled');
+
+      if (!hasColumn) {
+        db.prepare(
+          'ALTER TABLE settings ADD COLUMN plugin_authoring_enabled INTEGER NOT NULL DEFAULT 0'
+        ).run();
+      }
+    },
+  },
+  {
+    version: 80,
+    description: 'Channels can be workshop sessions (agent-built plugins)',
+    migrate: (db) => {
+      // A workshop session is an ordinary direct chat with this flag set, so
+      // every chat path — messages, streaming, approval cards — works on it
+      // unchanged. A new `type` would have meant rebuilding `channels` and
+      // recreating every trigger on it, which the sync oplog rides on.
+      //
+      // Not the `tags` column, which would have needed no migration at all:
+      // tags are user-editable, and this flag decides whether a conversation
+      // gets the plugin-authoring tools. That must not be settable by hand.
+      const hasColumn = (db.pragma('table_info(channels)') as Array<{ name: string }>)
+        .some(column => column.name === 'workshop');
+
+      if (!hasColumn) {
+        db.prepare(
+          'ALTER TABLE channels ADD COLUMN workshop INTEGER NOT NULL DEFAULT 0'
+        ).run();
+      }
+    },
+  },
+  {
+    version: 81,
+    description: 'Which surface owns a conversation, separately from what it may do',
+    migrate: (db) => {
+      // `workshop` was answering two unrelated questions at once: "the chat
+      // list does not own this" and "this conversation may write and run
+      // code". They have to come apart before anything else can have its own
+      // kind of conversation, and the reason is a security one — if the column
+      // that routes a conversation is also the column that grants the
+      // plugin-authoring toolset, then declaring your kind is how you grant
+      // yourself the tools.
+      //
+      // So: `surface` routes and is extensible ('chat', 'workshop', and one
+      // day 'plugin:<id>'). `workshop` stays exactly what it is — the
+      // capability flag, written only by createWorkshopSession, never derived
+      // from anything a plugin or a user can set.
+      const hasColumn = (db.pragma('table_info(channels)') as Array<{ name: string }>)
+        .some(column => column.name === 'surface');
+
+      if (!hasColumn) {
+        db.prepare(
+          "ALTER TABLE channels ADD COLUMN surface TEXT NOT NULL DEFAULT 'chat'"
+        ).run();
+        // Every existing workshop session is, by definition, owned by the
+        // Workshop. Nothing else has a non-default surface yet.
+        db.prepare("UPDATE channels SET surface = 'workshop' WHERE workshop = 1").run();
+      }
+    },
+  },
 ];
 
 /**

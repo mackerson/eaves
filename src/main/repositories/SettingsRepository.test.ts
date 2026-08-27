@@ -98,6 +98,7 @@ describe('SettingsRepository', () => {
         oobeCompleted: false,
         workflowReviewRequired: true,
         routinesPaused: false,
+        pluginAuthoringEnabled: false,
         updateMode: 'auto',
         openrouterStickyProvider: true,
         fontFamily: 'default',
@@ -105,6 +106,19 @@ describe('SettingsRepository', () => {
         fontScale: 1,
         lineSpacing: 1,
       });
+    });
+
+    // get() names its columns explicitly, so a new column that is written but
+    // not SELECTed reads back as its falsy default forever. Asserting the
+    // default alone cannot catch that; round-tripping can.
+    it('round-trips the plugin-authoring opt-in', () => {
+      expect(repository.get().pluginAuthoringEnabled).toBe(false);
+
+      repository.update({ pluginAuthoringEnabled: true });
+      expect(repository.get().pluginAuthoringEnabled).toBe(true);
+
+      repository.update({ pluginAuthoringEnabled: false });
+      expect(repository.get().pluginAuthoringEnabled).toBe(false);
     });
 
     it('should decrypt API keys', () => {

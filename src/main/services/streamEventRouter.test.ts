@@ -12,6 +12,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
 vi.mock('./logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
+/** The user's Settings → Usage pricing overrides, as pricingResolver reads them. */
+const userOverrides: Record<string, { promptCostPer1M: number; completionCostPer1M: number }> = {};
+vi.mock('../repositories', () => ({
+  getSettingsRepository: () => ({ get: () => ({ usage: { pricingOverrides: userOverrides } }) }),
+}));
+
 import { eventBus } from './EventBus';
 import {
   routeStreamEvent,
@@ -137,7 +143,10 @@ describe('trackUsage', () => {
 describe('emitAgentSpend', () => {
   const agent = { id: 'agent-1', name: 'Ninja', provider: 'openrouter', model: 'x/y' };
 
-  beforeEach(() => { eventBus.removeAllListeners?.('agent:spend'); });
+  beforeEach(() => {
+    eventBus.removeAllListeners?.('agent:spend');
+    for (const k of Object.keys(userOverrides)) delete userOverrides[k];
+  });
 
   it('records one attributable row per inference', () => {
     const seen = capture('agent:spend');
@@ -156,6 +165,85 @@ describe('emitAgentSpend', () => {
       cost: 0.12,
       usageIsTotal: true,
     });
+  });
+
+  // The documented precedence is agent override > user setting > built-in
+  // table, and it lives in resolvePricing. Both interactive turn paths used to
+  // pre-compute metrics.cost with calculateCost — which has never heard of the
+  // user setting — and emitAgentSpend took the pre-computed figure at face
+  // value, so a rate the user corrected in Settings applied to compaction and
+  // auto-titles and to nothing that actually spends money.
+  it('applies the user\'s pricing override to a real turn', () => {
+    userOverrides['openrouter:x/y'] = { promptCostPer1M: 1000, completionCostPer1M: 2000 };
+    const seen = capture('agent:spend');
+    const m = createStreamMetrics();
+    trackUsage({ type: 'usage-total', usage: { inputTokens: 1_000_000, outputTokens: 1_000_000, totalTokens: 2_000_000 } }, m);
+
+    emitAgentSpend(agent, m, { kind: 'chat' });
+
+    expect(seen[0].cost).toBeCloseTo(3000, 5);
+    expect(seen[0].costBasis).toBe('estimated');
+  });
+
+  it('lets the agent override outrank the user setting', () => {
+    userOverrides['openrouter:x/y'] = { promptCostPer1M: 1000, completionCostPer1M: 2000 };
+    const seen = capture('agent:spend');
+    const m = createStreamMetrics();
+    trackUsage({ type: 'usage-total', usage: { inputTokens: 1_000_000, outputTokens: 0, totalTokens: 1_000_000 } }, m);
+
+    emitAgentSpend({ ...agent, promptCostPer1M: 7, completionCostPer1M: 7 }, m, { kind: 'chat' });
+
+    expect(seen[0].cost).toBeCloseTo(7, 5);
+  });
+
+  // reported ≠ estimated. OpenRouter's usage accounting is the provider's own
+  // invoiced number; trackUsage set the cost and left the basis unset, so the
+  // ledger recorded every background turn's real figure as an estimate.
+  it('keeps a provider-reported figure labelled reported', () => {
+    const seen = capture('agent:spend');
+    const m = createStreamMetrics();
+    trackUsage({ type: 'usage-total', usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 } }, m);
+    trackUsage({ type: 'provider-metadata', cost: 0.12 }, m);
+
+    emitAgentSpend(agent, m, { kind: 'compaction' });
+
+    expect(seen[0]).toMatchObject({ cost: 0.12, costBasis: 'reported' });
+  });
+
+  it('never replaces a reported figure with an estimate, however priced', () => {
+    userOverrides['openrouter:x/y'] = { promptCostPer1M: 9999, completionCostPer1M: 9999 };
+    const seen = capture('agent:spend');
+    const m = createStreamMetrics();
+    trackUsage({ type: 'usage-total', usage: { inputTokens: 1_000_000, outputTokens: 0, totalTokens: 1_000_000 } }, m);
+    trackUsage({ type: 'provider-metadata', cost: 0.12 }, m);
+
+    emitAgentSpend(agent, m, { kind: 'chat' });
+
+    expect(seen[0].cost).toBe(0.12);
+  });
+
+  // free ≠ unknown. calculateCost returns 0 for a local provider, which is a
+  // finite number, so the ledger's `local` branch was unreachable and every
+  // Ollama turn was filed as an estimate.
+  it('files a local turn as local, not as an estimate of zero', () => {
+    const seen = capture('agent:spend');
+    const m = createStreamMetrics();
+    trackUsage({ type: 'usage-total', usage: { inputTokens: 500, outputTokens: 500, totalTokens: 1000 } }, m);
+
+    emitAgentSpend({ ...agent, provider: 'ollama', model: 'qwen3:8b' }, m, { kind: 'chat' });
+
+    expect(seen[0]).toMatchObject({ cost: 0, costBasis: 'local' });
+  });
+
+  it('says unknown rather than zero for an unpriced cloud model', () => {
+    const seen = capture('agent:spend');
+    const m = createStreamMetrics();
+    trackUsage({ type: 'usage-total', usage: { inputTokens: 500, outputTokens: 500, totalTokens: 1000 } }, m);
+
+    emitAgentSpend({ ...agent, provider: 'openrouter', model: 'nobody/knows-this' }, m, { kind: 'chat' });
+
+    expect(seen[0].cost).toBeUndefined();
+    expect(seen[0].costBasis).toBe('unknown');
   });
 
   it('flags a figure that is only a floor', () => {

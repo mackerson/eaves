@@ -2,6 +2,7 @@ import { app, protocol } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { reactShimResponse } from './moduleShim';
+import { isInsideDirectory } from '../services/sandbox/pathContainment';
 import { logger } from '../services/logger';
 
 /**
@@ -18,8 +19,17 @@ import { logger } from '../services/logger';
  * URL form: `plugin://<folderName>/<entry>` e.g. `plugin://simple-memory/ui/dist/index.js`.
  * Folder names are lowercase (derived from lowercase plugin ids), matching the
  * standard-scheme host lowercasing.
+ *
+ * Drafts (agent-authored, staged in `userData/plugins-draft`) are addressed
+ * through the same scheme under a reserved host prefix:
+ * `plugin://draft.<folderName>/<entry>`. The two namespaces cannot collide —
+ * `sanitizeFolderName` folds `.` to `-`, so no folder under `plugins/` can
+ * contain a dot, and no draft can be addressed as an installed plugin.
  */
 export const PLUGIN_BUNDLE_SCHEME = 'plugin';
+
+/** Reserved host prefix that routes a bundle request to the draft tier. */
+export const DRAFT_HOST_PREFIX = 'draft.';
 
 const MIME: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
@@ -39,6 +49,7 @@ const MIME: Record<string, string> = {
 
 export function registerPluginBundleProtocol(): void {
   const pluginsRoot = path.join(app.getPath('userData'), 'plugins');
+  const draftsRoot = path.join(app.getPath('userData'), 'plugins-draft');
 
   protocol.handle(PLUGIN_BUNDLE_SCHEME, async (request) => {
     try {
@@ -49,17 +60,19 @@ export function registerPluginBundleProtocol(): void {
       if (shim) return shim;
 
       const url = new URL(request.url);
-      const folder = path.basename(decodeURIComponent(url.host)); // host = plugin folder
+      const host = decodeURIComponent(url.host); // host = plugin folder, or draft.<folder>
+      const isDraft = host.startsWith(DRAFT_HOST_PREFIX);
+      const root = isDraft ? draftsRoot : pluginsRoot;
+      const folder = path.basename(isDraft ? host.slice(DRAFT_HOST_PREFIX.length) : host);
       const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
       if (!folder || !rel) return new Response('Not found', { status: 404 });
 
-      const baseDir = path.join(pluginsRoot, folder);
+      const baseDir = path.join(root, folder);
       const resolved = path.normalize(path.join(baseDir, rel));
 
       // Containment: resolved must stay inside the plugin's own directory
       // (path.relative, not startsWith — avoids the sibling-prefix escape).
-      const within = path.relative(baseDir, resolved);
-      if (within.startsWith('..') || path.isAbsolute(within)) {
+      if (!isInsideDirectory(resolved, baseDir)) {
         return new Response('Forbidden', { status: 403 });
       }
       if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {

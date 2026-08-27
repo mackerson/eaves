@@ -20,6 +20,16 @@ export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
 
   showToast: (message: string, type: ToastType = 'info', duration: number = 4000) => {
+    // Defence in depth. Toast text is rendered as a React child, and a non-string
+    // throws in render — with only an app-level ErrorBoundary above, that takes
+    // the window down. The plugin bridge coerces before it gets here
+    // (sandbox/SandboxedPluginManager.toDisplayText), but a toast can be raised
+    // from anywhere, and no caller is worth crashing the app over.
+    if (typeof message !== 'string') {
+      // eslint-disable-next-line no-console
+      console.warn('[toast] non-string message coerced', message);
+      message = (message as unknown) === null || message === undefined ? '' : String(message);
+    }
     const id = `toast-${Date.now()}-${Math.random()}`;
     const toast: Toast = { id, message, type, duration };
 

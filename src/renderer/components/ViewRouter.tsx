@@ -8,6 +8,7 @@ import { AgentsView } from '@/views/AgentsView';
 import { ProjectsView } from '@/views/ProjectsView';
 import { SettingsView } from '@/views/SettingsView';
 import { PluginsView } from '@/views/PluginsView';
+import { WorkshopView } from '@/views/WorkshopView';
 import { ImportsView } from '@/views/ImportsView';
 import { FilesView } from '@/views/FilesView';
 import { RoutinesView } from '@/views/RoutinesView';
@@ -99,6 +100,7 @@ export function ViewRouter({ loadMemory }: { loadMemory: () => Promise<void> }) 
   }
 
   if (view === 'plugins') return <PluginsView onNavigateToView={setView} />;
+  if (view === 'workshop') return <WorkshopView />;
   if (view === 'imports') return <ImportsView onNavigateToView={setView} />;
 
   if (view === 'chatgpt-import') return <PluginImportView pluginId="chatgpt-import" />;

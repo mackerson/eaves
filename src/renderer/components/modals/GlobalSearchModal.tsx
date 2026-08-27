@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Hash, Loader2, MessageSquare, Paperclip, Search, StickyNote } from 'lucide-react';
+import { Hash, Loader2, MessageSquare, Paperclip, Search, StickyNote, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Note, File as ProjectFile } from '@/types';
 import { useAgentStore, useConversationsStore, useProjectStore, useUIStore } from '@/stores';
@@ -11,16 +11,19 @@ interface GlobalSearchModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type ResultKind = 'chat' | 'channel' | 'note' | 'file';
+type ResultKind = 'chat' | 'workshop' | 'channel' | 'note' | 'file';
 
 type SearchResult =
   | { kind: 'chat'; key: string; id: string; title: string; subtitle?: string }
+  // Same row shape as a chat; grouped apart so a build never reads as one.
+  | { kind: 'workshop'; key: string; id: string; title: string; subtitle?: string }
   | { kind: 'channel'; key: string; id: string; title: string; subtitle?: string }
   | { kind: 'note'; key: string; id: string; title: string; subtitle?: string; projectId: string; note: Note }
   | { kind: 'file'; key: string; id: string; title: string; subtitle?: string; projectId: string };
 
 const GROUPS: { kind: ResultKind; label: string; Icon: typeof Hash }[] = [
   { kind: 'chat', label: 'Chats', Icon: MessageSquare },
+  { kind: 'workshop', label: 'Workshop builds', Icon: Wrench },
   { kind: 'channel', label: 'Channels', Icon: Hash },
   { kind: 'note', label: 'Notes', Icon: StickyNote },
   { kind: 'file', label: 'Files', Icon: Paperclip },
@@ -66,8 +69,12 @@ export function GlobalSearchModal({ open, onOpenChange }: GlobalSearchModalProps
     const agents = useAgentStore.getState().agents;
     const projectName = (id: string) => projects.find((p) => p.id === id)?.name;
 
+    // allSurfaces: search spans the Workshop too. A build's transcript is
+    // where the reasoning behind a plugin lives, and it was findable by agents
+    // (transcript_search) and by nobody else. The sidebar's search stays
+    // scoped — its results populate a list the Workshop does not belong in.
     const chatsP = window.electron
-      .searchChats({ query: q })
+      .searchChats({ query: q, allSurfaces: true })
       .then((r) => (r.success && r.chats ? r.chats : []))
       .catch(() => []);
 
@@ -108,11 +115,16 @@ export function GlobalSearchModal({ open, onOpenChange }: GlobalSearchModalProps
 
     const next: SearchResult[] = [
       ...chats.slice(0, MAX_PER_GROUP).map((c): SearchResult => ({
-        kind: 'chat',
+        // A conversation another surface owns is still a hit, but it must not
+        // claim to be a chat: opening it as one lands you in a list that
+        // deliberately does not contain it.
+        kind: c.surface && c.surface !== 'chat' ? 'workshop' : 'chat',
         key: `chat:${c.id}`,
         id: c.id,
         title: c.name,
-        subtitle: agents.find((a) => a.id === c.agentId)?.name,
+        subtitle: c.surface === 'workshop'
+          ? 'Workshop build'
+          : agents.find((a) => a.id === c.agentId)?.name,
       })),
       ...channels.slice(0, MAX_PER_GROUP).map((c): SearchResult => ({
         kind: 'channel',
@@ -183,6 +195,12 @@ export function GlobalSearchModal({ open, onOpenChange }: GlobalSearchModalProps
       case 'chat':
         void useConversationsStore.getState().switchChat(result.id);
         setView('chats');
+        break;
+      case 'workshop':
+        // Same row, different home. switchChat still loads it — getChatById
+        // does not filter by surface, which is exactly why it can.
+        void useConversationsStore.getState().switchChat(result.id);
+        setView('workshop');
         break;
       case 'channel':
         void useConversationsStore.getState().switchChannel(result.id);

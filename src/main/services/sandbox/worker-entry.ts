@@ -294,8 +294,12 @@ function createPluginContext() {
 
     // UI
     ui: {
-      showNotification: (message: string, type?: string) =>
-        rpc('ui', 'showNotification', [message, type]),
+      // A desktop notification. The object form is the one most authors reach
+      // for (it mirrors the Web Notification API); a bare string is the body.
+      // The host normalizes both — see SandboxedPluginManager.toNotification.
+      showNotification: (
+        notification: string | { title?: string; body?: string; message?: string; icon?: string },
+      ) => rpc('ui', 'showNotification', [notification]),
       showToast: (message: string, duration?: number) =>
         rpc('ui', 'showToast', [message, duration]),
       registerView: (view: unknown) =>

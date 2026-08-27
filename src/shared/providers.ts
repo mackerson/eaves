@@ -61,8 +61,28 @@ export interface ModelContextInfo {
   contextWindow: number;
   maxContextLength?: number;
   loadedContextLength?: number;
+  /**
+   * The most output the *served* model will actually produce, when the
+   * provider tells us. OpenRouter publishes this per model
+   * (`top_provider.max_completion_tokens`) for all but a handful of its
+   * catalogue; local servers do not, and are bounded by their loaded window
+   * instead. Absent means "unknown", not "unlimited".
+   */
+  maxOutputTokens?: number;
   source: 'lmstudio-api' | 'ollama-api' | 'openrouter-api';
 }
+
+/**
+ * What an unset "Max Output Tokens" is allowed to resolve to.
+ *
+ * The old behaviour was a flat 4096 for every model, which clipped a reply
+ * from a model advertising sixteen times that. The new behaviour asks the
+ * provider — but a blank field should not silently authorise a 64k reply
+ * either, so a resolved-from-provider cap stops here. Set the field on the
+ * agent to go past it deliberately.
+ */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
+export const RESOLVED_MAX_OUTPUT_CEILING = 16_384;
 
 export const FULL_CAPABILITIES: ModelCapabilities = {
   temperature: true,

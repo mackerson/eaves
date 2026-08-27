@@ -61,6 +61,7 @@ import {
   ContentBlock,
   MessageMetrics,
   PluginManifest,
+  PluginDraft,
   Activity,
   UsageEvent,
   UsageFilter,
@@ -125,6 +126,18 @@ contextBridge.exposeInMainWorld('electron', {
     const listener = (_event: Electron.IpcRendererEvent, data: { channelId: string; message: Message }) => callback(data);
     ipcRenderer.on('channel-message-added', listener);
     return () => ipcRenderer.removeListener('channel-message-added', listener);
+  },
+  // A draft preview's verdict. It arrives once, seconds after a click, and
+  // never again — exactly the shape that a poll handles badly.
+  onPluginRenderReport: (
+    callback: (event: { draftId: string; status: 'ok' | 'failed'; message?: string }) => void,
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { draftId: string; status: 'ok' | 'failed'; message?: string },
+    ) => callback(data);
+    ipcRenderer.on('plugin-render-report', listener);
+    return () => ipcRenderer.removeListener('plugin-render-report', listener);
   },
   onChannelsChanged: (callback: () => void): (() => void) => {
     const listener = () => callback();
@@ -357,6 +370,19 @@ contextBridge.exposeInMainWorld('electron', {
   getPluginRegistry: (): Promise<{ plugins: Array<{ id: string; name: string; description: string; author: string; homepage: string; tier: string; latest: string; minAppVersion?: string; permissions: string[]; release: { tag: string; asset: string; url: string; sha256: string } | null }>; installed: Record<string, string> }> => ipcRenderer.invoke('marketplace:registry'),
   installPlugin: (pluginId: string): Promise<{ success: boolean; id?: string; folderName?: string; version?: string; error?: string }> => ipcRenderer.invoke('plugin:install', pluginId),
   uninstallPlugin: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:uninstall', pluginId),
+  // Agent-authored drafts. Promotion is human-only — there is deliberately no
+  // agent tool for it, so this bridge is the only way a draft gets installed.
+  listPluginDrafts: (): Promise<{ success: boolean; drafts?: PluginDraft[]; error?: string }> => ipcRenderer.invoke('plugin:list-drafts'),
+  promotePluginDraft: (pluginId: string): Promise<{ success: boolean; id?: string; folderName?: string; error?: string }> => ipcRenderer.invoke('plugin:promote-draft', pluginId),
+  discardPluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:discard-draft', pluginId),
+  readPluginDraft: (pluginId: string): Promise<{ success: boolean; draft?: PluginDraft; files?: Array<{ path: string; content: string }>; previous?: Array<{ path: string; content: string }>; previousAt?: number; error?: string }> => ipcRenderer.invoke('plugin:read-draft', pluginId),
+  activatePluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:activate-draft', pluginId),
+  deactivatePluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:deactivate-draft', pluginId),
+  previewPluginDraft: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:preview-draft', pluginId),
+  // A workshop session is a direct chat with the workshop flag; every other
+  // chat call (sendChatMessage, getChat, …) works on it unchanged.
+  startWorkshopSession: (agentId?: string): Promise<{ success: boolean; session?: Chat; error?: string }> => ipcRenderer.invoke('workshop:start-session', agentId),
+  listWorkshopSessions: (): Promise<{ success: boolean; sessions?: Chat[]; error?: string }> => ipcRenderer.invoke('workshop:list-sessions'),
   executePluginTool: (pluginId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> => ipcRenderer.invoke('execute-plugin-tool', { pluginId, toolName, args }),
   getPluginConfig: (pluginId: string): Promise<{ schema: Record<string, unknown>; values: Record<string, unknown>; pluginId: string; pluginName: string }> => ipcRenderer.invoke('get-plugin-config', pluginId),
   setPluginConfig: (pluginId: string, config: Record<string, unknown>): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('set-plugin-config', { pluginId, config }),

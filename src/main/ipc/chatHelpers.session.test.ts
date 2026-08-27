@@ -20,7 +20,7 @@ const {
   grantRepo: { listToolNames: vi.fn() },
   fileRepo: { getByProjectId: vi.fn() },
   projectRepo: { getById: vi.fn() },
-  channelRepo: { isWorkSession: vi.fn() },
+  channelRepo: { isWorkSession: vi.fn(), isWorkshopSession: vi.fn() },
   settingsRepo: { get: vi.fn() },
   connectMCPServers: vi.fn(),
   getSandboxedPluginManager: vi.fn(),
@@ -306,10 +306,15 @@ describe('buildToolset', () => {
     ]);
     projectRepo.getById.mockReturnValue({ id: 'p1', directory: '/data/projects/proj-abc12345' });
     connectMCPServers.mockResolvedValue({ clients: [], tools: {} });
-    getSandboxedPluginManager.mockReturnValue({ getRegisteredTools: () => ({}) });
+    getSandboxedPluginManager.mockReturnValue({
+      getRegisteredTools: () => ({}),
+      getDraftTools: () => ({}),
+    });
     channelRepo.isWorkSession.mockReturnValue(false);
+    channelRepo.isWorkshopSession.mockReturnValue(false);
     toolStateRepo.get.mockReturnValue(null);
     grantRepo.listToolNames.mockReturnValue(new Set());
+    settingsRepo.get.mockReturnValue({ userName: 'Robin' });
   });
 
   it('applies approval grants by clearing needsApproval on a copy (not shared builtins)', async () => {
@@ -355,12 +360,189 @@ describe('buildToolset', () => {
     const toolset = await buildToolset(agent(), project(), 'ws-1', new Map());
     expect(toolset.enabledTools.complete_work_session).toBeDefined();
   });
+
+  // The plugin-authoring tools let an agent write code and then run it, so they
+  // need BOTH the trust decision and a surface that shows the human what is
+  // happening. Absent is not the same as present-and-refusing: the model must
+  // not see them at all outside those conditions.
+  it('omits the plugin-authoring tools unless the setting is on', async () => {
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const toolset = await buildToolset(agent(), project(), 'ws-1', new Map());
+    expect(toolset.enabledTools.plugin_define).toBeUndefined();
+    expect(toolset.getActiveToolNames()).not.toContain('plugin_inspect');
+  });
+
+  it('omits them in an ordinary chat even with the setting on', async () => {
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    channelRepo.isWorkshopSession.mockReturnValue(false);
+    const toolset = await buildToolset(agent(), project(), 'ch-1', new Map());
+    expect(toolset.enabledTools.plugin_define).toBeUndefined();
+  });
+
+  it('includes them in a workshop session when the setting is on', async () => {
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const toolset = await buildToolset(agent(), project(), 'ws-1', new Map());
+    expect(Object.keys(toolset.enabledTools)).toEqual(
+      expect.arrayContaining(['plugin_inspect', 'plugin_define', 'plugin_activate', 'plugin_retract']),
+    );
+  });
+
+  // A session whose entire purpose is writing a plugin should not require the
+  // model to first discover that it can. In 'enabled' send mode nothing rides
+  // along unless it is explicitly enabled, and the four verbs are in no
+  // agent's defaultTools.
+  it('keeps the authoring verbs in front of the model even in enabled send mode', async () => {
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const toolset = await buildToolset(agent(), project(), 'ws-1', new Map());
+    expect(toolset.getActiveToolNames('enabled')).toEqual(
+      expect.arrayContaining(['plugin_inspect', 'plugin_define', 'plugin_activate', 'plugin_retract']),
+    );
+  });
+
+  // The Workshop's agent is whatever defaultAgentId points at. When that was a
+  // roleplay agent, the roleplay short-circuit intersected the toolset with an
+  // empty defaultTools allowlist and the four verbs vanished — no error, just a
+  // bench that never filled.
+  it('does not strip the authoring verbs from a roleplay agent in the workshop', async () => {
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const toolset = await buildToolset(
+      agent({ archetype: { type: 'roleplay' } as Agent['archetype'], defaultTools: [] }),
+      project(),
+      'ws-1',
+      new Map(),
+    );
+    expect(toolset.enabledTools.plugin_define).toBeDefined();
+    expect(toolset.getActiveToolNames()).toEqual(expect.arrayContaining(['plugin_define']));
+  });
+
+  // A draft is activated in the Workshop, under a person's eye. The tool it
+  // registers must not become callable from every other chat — that is a wider
+  // reach than the surface that approved it.
+  it('exposes a running draft\'s own tools in the workshop and nowhere else', async () => {
+    const draftTool = { description: 'rolls dice' };
+    getSandboxedPluginManager.mockReturnValue({
+      getRegisteredTools: () => ({}),
+      getDraftTools: () => ({ draft_roll: draftTool }),
+    });
+    settingsRepo.get.mockReturnValue({ userName: 'Robin', pluginAuthoringEnabled: true });
+
+    channelRepo.isWorkshopSession.mockReturnValue(true);
+    const inWorkshop = await buildToolset(agent(), project(), 'ws-1', new Map());
+    expect(inWorkshop.enabledTools.draft_roll).toBe(draftTool);
+
+    channelRepo.isWorkshopSession.mockReturnValue(false);
+    const ordinary = await buildToolset(agent(), project(), 'ch-1', new Map());
+    expect(ordinary.enabledTools.draft_roll).toBeUndefined();
+    expect(ordinary.allAvailableTools.draft_roll).toBeUndefined();
+  });
 });
 
 describe('runStream', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     settingsRepo.get.mockReturnValue({ userName: 'Robin' });
+  });
+
+  // runStream drives channel turns and approval resumes. The 1:1 chat path
+  // (runChatAssistantTurn) has warned about this since the field reports of
+  // mid-sentence cut-offs; these two did not, so a reply that stopped at the
+  // cap was persisted and rendered as though the agent had finished speaking.
+  // The finish reason was already sitting in streamMetrics, unread.
+  it('says so when a reply was cut off at the output limit', async () => {
+    routeStreamEvent.mockImplementation((event: any, _id: unknown, _win: unknown, metrics: any) => {
+      if (event?.finishReason) metrics.finishReason = event.finishReason;
+    });
+    streamAIResponse.mockImplementation(async function* () {
+      yield 'A very long answer that stops abruptly mid-';
+      yield { type: 'step-finish', finishReason: 'length', usage: { inputTokens: 10, outputTokens: 4096, totalTokens: 4106 } };
+      return 'A very long answer that stops abruptly mid-';
+    });
+
+    const result = await runStream({
+      agent: agent(),
+      formattedResult: { messages: [{ role: 'user', content: 'hi' }], systemPrompt: 'sys' },
+      enabledTools: {},
+      abortSignal: new AbortController().signal,
+      mainWindow: null,
+      messageCount: 2,
+    });
+
+    expect(JSON.stringify(result.contentBlocks)).toContain('cut off at the output-token limit');
+  });
+
+  it('adds no such note when the model stopped because it was finished', async () => {
+    routeStreamEvent.mockImplementation((event: any, _id: unknown, _win: unknown, metrics: any) => {
+      if (event?.finishReason) metrics.finishReason = event.finishReason;
+    });
+    streamAIResponse.mockImplementation(async function* () {
+      yield 'Done.';
+      yield { type: 'step-finish', finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 3, totalTokens: 13 } };
+      return 'Done.';
+    });
+
+    const result = await runStream({
+      agent: agent(),
+      formattedResult: { messages: [{ role: 'user', content: 'hi' }], systemPrompt: 'sys' },
+      enabledTools: {},
+      abortSignal: new AbortController().signal,
+      mainWindow: null,
+      messageCount: 2,
+    });
+
+    expect(JSON.stringify(result.contentBlocks)).not.toContain('cut off');
+  });
+
+  // The bug this pins: the turn paths used to price the turn themselves with
+  // calculateCost, which resolves agent-override → built-in table and has
+  // never heard of settings.usage.pricingOverrides. emitAgentSpend takes an
+  // already-set cost at face value (so a provider's reported figure is never
+  // overwritten), so pre-computing here made the user's own correction
+  // unreachable on exactly the turns that spend the money. The turn path must
+  // now leave the cost alone unless the provider reported one.
+  it('leaves an unreported cost for emitAgentSpend to price', async () => {
+    routeStreamEvent.mockImplementation((event: any, _id: unknown, _win: unknown, metrics: any) => {
+      if (event?.usage) Object.assign(metrics, event.usage);
+    });
+    streamAIResponse.mockImplementation(async function* () {
+      yield 'Hi';
+      yield { type: 'usage-total', usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } };
+      return 'Hi';
+    });
+
+    await runStream({
+      agent: agent({ promptCostPer1M: 1, completionCostPer1M: 1 }),
+      formattedResult: { messages: [{ role: 'user', content: 'hi' }], systemPrompt: 'sys' },
+      enabledTools: {},
+      abortSignal: new AbortController().signal,
+      mainWindow: null,
+      messageCount: 2,
+    });
+
+    const [, metricsAtEmit] = emitAgentSpend.mock.calls[emitAgentSpend.mock.calls.length - 1];
+    expect(metricsAtEmit.cost).toBeUndefined();
+    expect(metricsAtEmit.costBasis).toBeUndefined();
+  });
+
+  it('still keeps a provider-reported cost, which nothing may overwrite', async () => {
+    streamAIResponse.mockImplementation(async function* () {
+      yield 'Hi';
+      yield { type: 'provider-metadata', servedProvider: 'DeepInfra', cost: 0.031 };
+      return 'Hi';
+    });
+
+    const result = await runStream({
+      agent: agent({ promptCostPer1M: 1, completionCostPer1M: 1 }),
+      formattedResult: { messages: [{ role: 'user', content: 'hi' }], systemPrompt: 'sys' },
+      enabledTools: {},
+      abortSignal: new AbortController().signal,
+      mainWindow: null,
+      messageCount: 2,
+    });
+
+    expect(result.metrics).toMatchObject({ cost: 0.031, costBasis: 'reported' });
   });
 
   it('routes events, collects approvals, captures response-messages and cost', async () => {

@@ -85,7 +85,28 @@ describe('GlobalSearchModal', () => {
     type('one');
 
     await waitFor(() => expect(searchChats).toHaveBeenCalledTimes(1));
-    expect(searchChats).toHaveBeenCalledWith({ query: 'one' });
+    // allSurfaces: global search spans the Workshop; the sidebar's does not.
+    expect(searchChats).toHaveBeenCalledWith({ query: 'one', allSurfaces: true });
+  });
+
+  // A build is a direct chat that another surface owns. Opening it as a chat
+  // lands you in a list that deliberately does not contain it, so the result
+  // must be grouped and routed apart from one.
+  it('sends a workshop build to the Workshop, not the chat list', async () => {
+    searchChats.mockResolvedValue({
+      success: true,
+      chats: [{ id: 'chat-9', name: 'Build: a dice roller', agentId: 'a1', surface: 'workshop' }],
+    });
+    render(<GlobalSearchModal open onOpenChange={vi.fn()} />);
+    type('dice');
+
+    const hit = await screen.findByText('Build: a dice roller');
+    expect(screen.getByText('Workshop builds')).toBeTruthy(); // its own group
+    expect(screen.getByText('Workshop build')).toBeTruthy();  // and its own subtitle
+    fireEvent.click(hit);
+
+    expect(switchChat).toHaveBeenCalledWith('chat-9');
+    expect(useUIStore.getState().view).toBe('workshop');
   });
 
   it('says so plainly when nothing matches', async () => {

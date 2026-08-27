@@ -1,5 +1,10 @@
 import { BrowserWindow, ipcMain, type IpcMainEvent } from 'electron';
 import * as path from 'path';
+import {
+  ELEVATED_PERMISSIONS as ELEVATED,
+  INERT_PERMISSIONS as INERT,
+  permissionLabel,
+} from '../../shared/pluginPermissions';
 
 /**
  * Plugin-install consent, shown in a modal window owned by the main process.
@@ -32,6 +37,13 @@ export interface ConsentRequest {
   tier?: string;
   homepage: string;
   permissions: string[];
+  /**
+   * What the user is actually deciding. 'install' is a registry plugin that was
+   * downloaded and checksum-verified; 'promote' is an agent-authored draft
+   * being kept permanently, which had no download, no checksum and no registry
+   * entry. The assurances differ, so the copy has to.
+   */
+  kind?: 'install' | 'promote';
   /** Permissions already consented to, when this is an update rather than a
    *  first install. Anything outside this set is badged as newly requested. */
   priorPermissions?: string[];
@@ -43,44 +55,7 @@ export interface ConsentRequest {
  * back to its raw id, which reads as noise at exactly the moment the user is
  * being asked to make a trust decision.
  */
-const PERMISSION_LABELS: Record<string, string> = {
-  'data:agents:read': 'Read your agents',
-  'data:projects:read': 'Read your projects',
-  'data:channels:read': 'Read your channels',
-  'data:chats:read': 'Read your chats',
-  'data:settings:read': 'Read your settings',
-  'data:tasks:write': 'Create or modify tasks',
-  'data:notes:write': 'Create or modify notes',
-  'data:messages:write': 'Write messages',
-  'data:chats:write': 'Create or modify chats',
-  'data:agents:write': 'Create or modify agents',
-  'ui:views:register': 'Add its own views to the app',
-  'ui:notifications:show': 'Show notifications',
-  'events:listen': 'Observe app events',
-  'events:emit': 'Emit app events',
-  'tools:register': 'Add tools your agents can use',
-  'services:register': 'Provide services to other plugins',
-  'services:call': 'Use services from other plugins',
-  'storage:read': 'Read its own stored data',
-  'storage:write': 'Store its own data',
-  'network:http': 'Make network requests',
-  'system:filesystem': 'Read and write files on your computer',
-  // Coarse aliases — legal in a manifest, but the sandbox matches only the
-  // granular ids, so these grant nothing. Shown separately, never as capabilities.
-  'data:read': 'Read your data',
-  'data:write': 'Modify your data',
-  'ui:register': 'Add its own UI',
-  'storage:access': 'Use its own storage',
-  'network:access': 'Use the network',
-};
-
-/** The union's own "Dangerous (require explicit grant)" group. */
-const ELEVATED = new Set(['network:http', 'system:filesystem']);
-
-/** Grants the sandbox never matches — declaring one confers no access. */
-const INERT = new Set(['data:read', 'data:write', 'ui:register', 'storage:access', 'network:access']);
-
-const label = (p: string) => PERMISSION_LABELS[p] || p;
+const label = (p: string) => permissionLabel(p);
 
 function esc(s: string): string {
   return String(s)
@@ -124,13 +99,14 @@ function renderHtml(req: ConsentRequest): string {
     : '';
 
   const initial = esc((req.name.trim()[0] || '?').toUpperCase());
+  const isPromote = req.kind === 'promote';
 
   return `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
-<title>Install plugin</title>
+<title>${isPromote ? 'Keep this plugin' : 'Install plugin'}</title>
 <style>
   :root {
     --bg: #ffffff; --fg: #0f172a; --muted: #64748b; --border: #e2e8f0;
@@ -207,17 +183,28 @@ function renderHtml(req: ConsentRequest): string {
     </div>
   </div>
   <div class="body">
-    <p class="lead">${isUpdate ? 'After updating, this plugin will be able to:' : 'This plugin will be able to:'}</p>
+    <p class="lead">${
+      isPromote
+        ? 'Keeping it installs it permanently. It will be able to:'
+        : isUpdate
+          ? 'After updating, this plugin will be able to:'
+          : 'This plugin will be able to:'
+    }</p>
     ${permList}
     ${inertList}
     <div class="source">
-      Source: ${esc(req.homepage || 'unknown')}
-      <span class="assure">Downloaded over HTTPS and checksum-verified. Runs sandboxed.</span>
+      ${
+        isPromote
+          ? `Written by an agent in this app.
+             <span class="assure">Not downloaded, not from the plugin registry, and reviewed by nobody but you. Runs sandboxed.</span>`
+          : `Source: ${esc(req.homepage || 'unknown')}
+             <span class="assure">Downloaded over HTTPS and checksum-verified. Runs sandboxed.</span>`
+      }
     </div>
   </div>
   <div class="foot">
     <button id="cancel" autofocus>Cancel</button>
-    <button id="install" class="primary">${isUpdate ? 'Update' : 'Install'}</button>
+    <button id="install" class="primary">${isPromote ? 'Keep' : isUpdate ? 'Update' : 'Install'}</button>
   </div>
 <script>
   (function () {
@@ -275,7 +262,7 @@ export function showPluginConsent(req: ConsentRequest): Promise<boolean> {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    title: 'Install plugin',
+    title: req.kind === 'promote' ? 'Keep this plugin' : 'Install plugin',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

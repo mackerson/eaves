@@ -51,6 +51,12 @@ yarn rebuild-sqlite3      # Rebuild SQLite for Electron
 yarn reset:dev            # Reset dev environment to defaults
 ```
 
+**Type-checking covers two projects, and the root one is not the main process.**
+`tsc -p tsconfig.json` includes only `src/renderer/**` and `src/shared/**`; main
+and preload are compiled by `tsconfig.main.json`. Checking only the root passes
+clean while `src/main` is broken — run **both** (`npx tsc --noEmit -p tsconfig.json`
+and `yarn build:main`) before calling a change type-clean.
+
 Note: Native module rebuilds are automatic. `predev` rebuilds better-sqlite3 for Electron, `pretest` rebuilds for system Node. No manual `rebuild-sqlite3` needed when switching between dev and test.
 
 ## Architecture Overview
@@ -92,6 +98,18 @@ Architecture diagrams and invariants live in `docs/architecture/README.md` — t
 - All plugins run sandboxed in Worker Threads via `SandboxedPluginManager`
 - Plugins require `"sandboxVersion": 1` in manifest (non-sandboxed plugins are skipped)
 - Permission-gated API access (`data:agents:read`, `storage:write`, `tools:register`, etc.)
+- `PERMISSION_REQUIREMENTS` and `METHOD_SIGNATURES` in `PermissionGate.ts` are one
+  table in two halves, and the second is typed `Record<GatedMethod, string>` on
+  purpose: a gated method with no documented signature is a **compile error**.
+  The signatures are what `plugin_inspect` shows an agent — a method rendered
+  with empty parens gets its arguments guessed, and a wrong guess reached
+  `Toast.tsx` and took the whole renderer down (only the app-level
+  `ErrorBoundary` is above it)
+- **Plugin arguments crossing into the renderer are untrusted.** `toDisplayText`
+  / `toNotification` in `SandboxedPluginManager.ts` coerce them at the bridge;
+  `useToastStore` coerces again. `ui.showNotification` is a real OS
+  `Notification` and accepts `{title, body}` (or `message`, or a bare string);
+  `ui.showToast` is transient in-app text
 - `PluginWorker`: Worker thread wrapper with health monitoring
 - `PermissionGate`: Runtime permission enforcement (21 permission grants; union in `src/shared/types.ts`)
 - `ResourceMonitor`: Memory tracking, auto-termination of runaway plugins
@@ -108,12 +126,164 @@ Architecture diagrams and invariants live in `docs/architecture/README.md` — t
   at 3s and best-effort — plugin code cannot block an uninstall
 - Plugins live in separate repos (`mackerson/eaves-plugin-*`), symlinked for dev
 - `bundled-plugins.json` defines which plugins ship with packaged builds
-- Three load paths, first match wins (deduped by id):
+- Three **discovered** load paths, first match wins (deduped by id):
   `plugins/` (dev symlinks, `source: 'dev'`, dev builds only) >
   `~/.config/eaves/plugins/` (`'user'`) > `dist/plugins/` (`'bundled'`)
 - `source` is not cosmetic — it decides where the renderer fetches the UI bundle
   (`'user'` → `plugin://` in userData; `'dev'`/`'bundled'` → the served `plugins/`
   tree) and only `'user'` plugins can be uninstalled
+
+**Draft tier** (`~/.config/eaves/plugins-draft/`, `source: 'draft'`):
+Agent-authored plugins, staged by `services/pluginDraftService.ts` and run by
+`loadDraftPlugin`. A fourth tier, but **not a fourth discovery path** — three
+properties define it, and each is load-bearing:
+- **Never discovered.** `discoverPlugins()` does not scan it, so a draft only
+  runs because someone activated it this session and a restart is a clean slate
+- **Never surfaces a view, and never leaks a tool.** `getRegisteredViews()`
+  filters drafts out. Plugin UI bundles are `import()`ed into the main window's
+  JS realm — which is *why* install consent is a separate main-owned window
+  (`pluginConsentWindow.ts`) — so unconsented agent-written UI there could
+  script the gate approving it. A draft preview therefore needs its own
+  out-of-realm surface. `getRegisteredTools()` excludes drafts by the same
+  rule (which also keeps them out of the Tool Panel and `toolInventory`);
+  `getDraftTools()` hands them back, and only `buildToolset` in a workshop
+  session asks. Activation happens under a person's eye, so the tool it
+  registers is callable there and nowhere else
+- **Cannot be confused with an installed plugin.** Addressed as
+  `plugin://draft.<folder>/…`; the namespaces cannot collide because
+  `sanitizeFolderName` folds `.` to `-`. `plugin_define` and `loadDraftPlugin`
+  both refuse an id a non-draft plugin already holds
+
+Gated on **two** conditions: `Settings.pluginAuthoringEnabled` (default off) is
+the trust decision, and `isWorkshopSession(channelId)` is the blast radius. The
+tools do not appear in ordinary chats at all, so there is nowhere an agent can
+write and run code unobserved. In a workshop session the four verbs are
+**always-active** (`alsoAlwaysActive` on `computeActiveToolNames`) — in
+`'enabled'` send mode they are in no agent's `defaultTools`, and a session that
+exists to write a plugin should not make the model discover that it can. The
+roleplay short-circuit is skipped there for the same reason: its allowlist is
+normally empty, so a roleplay `defaultAgentId` used to silently strip the verbs
+and leave a bench that never filled. The setting is offered inline from the Workshop
+(shared copy in `lib/pluginAuthoringCopy.ts`) rather than only in Settings.
+Agents reach it through four tools —
+`plugin_inspect` / `plugin_define` / `plugin_activate` / `plugin_retract`
+(`services/pluginDraftTools.ts`), absent from the toolset entirely when the
+setting is off. **Four rather than one-per-capability is deliberate**: a tool
+per extension point grows without bound and needs the same validation anyway,
+whereas one primitive whose vocabulary is "a plugin" covers every capability
+the system will ever have.
+
+**Promotion** (`promoteDraft`, `plugin:promote-draft`) moves a draft into
+`userData/plugins/` as a normal `'user'` install:
+- **Human-only.** There is deliberately *no* agent tool. An agent can write a
+  plugin and run it; only a person can install one, so a prompt-injected agent
+  cannot even ask. **Keep lives only on the Workshop bench**, which shows the
+  source, the grants and the calls the code actually makes; `PluginsView` lists
+  drafts and can Discard (safe without reading) but sends you to the bench to
+  keep one — installing code the surface never showed you is the failure this
+  tier exists to prevent
+- Consent is the same main-owned modal as the marketplace, with
+  `kind: 'promote'` copy — the install wording promises "downloaded over HTTPS
+  and checksum-verified", which for an agent-authored draft is false in every
+  clause
+- Copy → load → *then* delete the draft. A rename cannot cross a filesystem
+  boundary and would destroy the draft before the install is known to load; on
+  failure the copy is rolled back and the draft survives
+- **One-way per id.** `writeDraft` refuses an id an installed plugin holds, so
+  shipping a v2 means uninstalling first. Installed code is never
+  agent-rewritable
+
+**Workshop** (`views/WorkshopView.tsx`, sidebar section, `view: 'workshop'`) is
+where a plugin gets built *and* judged. Two panes: the conversation you ask in,
+and the bench. It stacks below Tailwind's `lg` so a narrow window does not
+crush the conversation.
+
+The bench is **one panel, not a list** (`components/workshop/DraftManifest.tsx`):
+there is normally exactly one draft in flight, so a list answered a question
+nobody had. It shows the ask that started the build, the build's state
+(written / running / renders / kept), what it will be able to do, and what it
+actually registered once it ran. A selector appears only past one draft.
+
+"It will be able to" comes from `services/pluginDraftAnalysis.ts`, which reads
+the *source* against `PERMISSION_REQUIREMENTS` and separates three things a
+declared grant can be — used (with the calls named), declared-and-never-called,
+and **called-but-never-declared**, which is a live bug because the gate denies
+it. The three gating kinds are drawn differently on purpose:
+- `gated` — PermissionGate enforces it
+- `ungated` — `network:http` / `system:filesystem` unlock *nothing* in that
+  table. A plugin holding them calls `fetch` or `require('fs')` directly, which
+  the worker's module list is documented not to stop. They are labels, not
+  gates, and the panel says so
+- `inert` — a coarse alias (`data:read`, …) the sandbox never matches
+
+It is text matching, not an AST: a call in a comment counts, a dynamically-built
+one does not. The panel states that. The permission vocabulary is shared with
+the consent dialog (`shared/pluginPermissions.ts`) — two tables describing the
+same grant differently is the drift worth designing out.
+
+Code opens in a dialog (`DraftCodeDialog.tsx`), not the 320px rail, with a
+**Changes** tab: `plugin_define` overwrites wholesale and agents iterate, so
+`pluginDraftRevisions.ts` keeps the replaced version (in memory, one step deep,
+cleared on retract and promotion) and `shared/textDiff.ts` diffs it. The empty
+state offers four openings rather than a blank composer.
+
+A **workshop session** is a `direct` chat with `channels.workshop = 1` (v80).
+Being an ordinary chat is the point: messages, streaming, approval cards and
+regeneration all work on it unchanged.
+
+**Routing and capability are two columns, on purpose** (v81):
+- `surface` — which view owns the conversation (`'chat'`, `'workshop'`, one day
+  `'plugin:<id>'`). The chat list, per-agent list and tag filter all key off
+  `ownedByChat()`. Extensible
+- `workshop` — whether the conversation may write and run code. What
+  `isWorkshopSession` reads and `buildToolset` gates the authoring tools on.
+  Written only by `createWorkshopSession`
+
+Collapsing them is the trap: if the column that *routes* a conversation is also
+the column that *grants* the authoring toolset, then declaring your kind is how
+you grant yourself the tools. A plugin surface sets the first and never the
+second. Neither is a tag — tags are user-editable.
+
+**Search spans surfaces; lists do not.** `searchDirectChats(q, { allSurfaces })`
+defaults to chat-only, because the sidebar's search populates a *list*. Global
+search opts in, groups builds separately and routes a click to the Workshop —
+a build's transcript is where the reasoning behind a plugin lives, and agents
+could already reach it through `transcript_search` while its author could not.
+`getChatById` filters by neither column, which is how the Workshop opens one.
+
+The transcript composes `ChatMessageRow` + `ChatInput` directly rather than
+reusing `ChatsView` (721 lines of queueing, attachments, editing and branch
+swiping a bench has no use for). The load-bearing prop is `approvalContext` —
+it is what lets the inline tool-approval cards resume the right stream, and
+those cards are the tactile moment: define and activate both stop and ask.
+
+**Draft preview** (`windows/pluginPreviewWindow.ts` + `renderer/preview.html`) is
+a separate `BrowserWindow` with **no preload at all**, and that is the entire
+design. A plugin UI bundle is `import()`ed into the realm of the window that
+renders it; for an installed plugin that is fine, but a draft has not been
+approved and the consent dialog is reachable from the main window's realm — so
+previewing in-app would let unreviewed agent code script its own approval. With
+no bridge in that realm there is nothing to call. `preview.tsx` builds its own
+minimal `EavesAPI` (React + presentational components; **no** `electron`, **no**
+stores), so it is a second Vite entry rather than a route. Popups and navigation
+are denied; `pluginPreviewWindow.test.ts` pins all of it.
+
+**Running is not rendering**, and the difference used to be invisible to the
+agent that wrote the plugin. `services/pluginRenderReports.ts` holds the last
+preview outcome per draft (`ok` / `failed` + message / absent = never
+previewed); `plugin_inspect` reports it and the bench shows it. Cleared on
+redefine, activate and retract, so a verdict never outlives the code it
+describes. The preview window has no preload to report *with*, so the outcome
+rides out on a console line that main reads via
+`webContents.on('console-message')` — no new bridge. Main rejects markers whose
+`sourceId` is `plugin://`, which is what stops a draft forging its own verdict
+(a hardening, not a proof: a successful forgery only lies about rendering).
+
+Note a draft plugin UI needs **no build step**: `moduleShim.ts` externalizes
+React, so a hand-written ES module using `React.createElement` loads as written.
+
+Not built yet: a workshop-scoped agent session (would need a `'workshop'`
+channel type, i.e. a `channels` CHECK-constraint rebuild).
 
 **Marketplace** (`src/main/services/MarketplaceService.ts`, live):
 - Installs by **registry id, never a URL** — confined to entries in the curated

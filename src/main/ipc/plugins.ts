@@ -3,6 +3,10 @@ import { getSandboxedPluginManager, isHostOwnedEventType } from '../services/san
 import { getPluginConfigManager } from '../services/PluginConfigManager';
 import { getServiceRegistry } from '../services/ServiceRegistry';
 import { getMarketplaceListing, installPlugin, uninstallPlugin } from '../services/MarketplaceService';
+import { listDrafts, readDraft, promoteDraft } from '../services/pluginDraftService';
+import { getPreviousRevision } from '../services/pluginDraftRevisions';
+import { getChannelRepository, getAgentRepository, getUserRepository, getSettingsRepository } from '../repositories';
+import { showPluginPreview, closePluginPreview } from '../windows/pluginPreviewWindow';
 import { eventBus } from '../services/EventBus';
 import { logger } from '../services/logger';
 import {
@@ -154,6 +158,140 @@ export function registerPluginHandlers(getMainWindow?: () => BrowserWindow | nul
     if (!validation.success) return validation;
     await uninstallPlugin(validation.data);
     event.sender.send('plugin-views-changed');
+    return { success: true };
+  }));
+
+  // ── Plugin drafts: agent-authored, staged, not installed ────────────────────
+  // Promotion is human-only on purpose. Agents can write a plugin and run it;
+  // only a person can install one, so a prompt-injected agent cannot even ask.
+  // See services/pluginDraftService.ts.
+
+  ipcMain.handle('plugin:list-drafts', ipcResult('plugin:list-drafts', async () => {
+    return { success: true, drafts: listDrafts() };
+  }));
+
+  ipcMain.handle('plugin:promote-draft', ipcResult('plugin:promote-draft', async (event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:promote-draft');
+    if (!validation.success) return validation;
+    const result = await promoteDraft(validation.data);
+    event.sender.send('plugin-views-changed');
+    return { success: true, ...result };
+  }));
+
+  ipcMain.handle('plugin:discard-draft', ipcResult('plugin:discard-draft', async (event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:discard-draft');
+    if (!validation.success) return validation;
+    closePluginPreview(validation.data); // a preview of something deleted is a lie
+    await getSandboxedPluginManager().removeDraftPlugin(validation.data);
+    event.sender.send('plugin-views-changed');
+    return { success: true };
+  }));
+
+  // Read back what the agent wrote. Approving code you have not read is the
+  // gap this closes, so the Workshop shows every file verbatim.
+  ipcMain.handle('plugin:read-draft', ipcResult('plugin:read-draft', async (_event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:read-draft');
+    if (!validation.success) return validation;
+    const staged = readDraft(validation.data);
+    if (!staged) return { success: false, error: `No draft with id "${validation.data}".` };
+    // The version this one replaced, when the agent has rewritten it. Reading
+    // a file for the second time should cost less than reading it the first.
+    const previous = getPreviousRevision(validation.data);
+    return {
+      success: true,
+      draft: staged.record,
+      files: staged.files,
+      previous: previous?.files,
+      previousAt: previous?.at,
+    };
+  }));
+
+  ipcMain.handle('plugin:activate-draft', ipcResult('plugin:activate-draft', async (event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:activate-draft');
+    if (!validation.success) return validation;
+    const staged = readDraft(validation.data);
+    if (!staged) return { success: false, error: `No draft with id "${validation.data}".` };
+    await getSandboxedPluginManager().loadDraftPlugin(staged.record.folderName);
+    event.sender.send('plugin-views-changed');
+    return { success: true };
+  }));
+
+  ipcMain.handle('plugin:deactivate-draft', ipcResult('plugin:deactivate-draft', async (event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:deactivate-draft');
+    if (!validation.success) return validation;
+    const manager = getSandboxedPluginManager();
+    const manifest = manager.getPluginManifest(validation.data);
+    // Stops a draft without deleting it. Guarded so this can never be used to
+    // stop an installed plugin, which has its own disable path and its own UI.
+    if (manifest && manifest.source !== 'draft') {
+      return { success: false, error: `${validation.data} is not a draft.` };
+    }
+    if (manifest) await manager.unloadPlugin(validation.data);
+    event.sender.send('plugin-views-changed');
+    return { success: true };
+  }));
+
+  // ── Workshop sessions ───────────────────────────────────────────────────────
+  // A session is an ordinary direct chat with `workshop = 1`, so the entire
+  // chat turn path runs it unchanged. The flag keeps it out of the chat list
+  // and is what buildToolset checks before handing over the plugin tools.
+
+  ipcMain.handle('workshop:start-session', ipcResult('workshop:start-session', async (_event, agentId?: string) => {
+    const settings = getSettingsRepository().get();
+    if (!settings.pluginAuthoringEnabled) {
+      return { success: false, error: 'Plugin authoring is turned off. Enable it before starting a build.' };
+    }
+
+    const agentRepo = getAgentRepository();
+    const resolvedId = agentId || settings.defaultAgentId || agentRepo.getAll()[0]?.id;
+    const agent = resolvedId ? agentRepo.getById(resolvedId) : null;
+    if (!agent) return { success: false, error: 'No agent available to run the build.' };
+
+    const currentUser = getUserRepository().getCurrent();
+    if (!currentUser) return { success: false, error: 'No current user' };
+
+    const channelRepo = getChannelRepository();
+
+    // Reuse a session nobody has spoken in rather than stacking up another.
+    // Clicking "New build" and walking away used to leave an empty one behind
+    // permanently, all of them called "New build".
+    const empty = channelRepo.findEmptyWorkshopSession();
+    if (empty) return { success: true, session: empty };
+
+    const session = channelRepo.createWorkshopSession(
+      { name: 'New build', agentId: agent.id },
+      [
+        { id: currentUser.id, type: 'human', displayName: currentUser.name, color: currentUser.color, joinedAt: Date.now() },
+        { id: agent.id, type: 'agent', displayName: agent.name, color: agent.color, joinedAt: Date.now() },
+      ],
+    );
+    return { success: true, session };
+  }));
+
+  ipcMain.handle('workshop:list-sessions', ipcResult('workshop:list-sessions', async () => {
+    return { success: true, sessions: getChannelRepository().listWorkshopSessions() };
+  }));
+
+  // The preview renders in a window of its own, with no IPC bridge — see
+  // windows/pluginPreviewWindow.ts for why that isolation is the whole point.
+  ipcMain.handle('plugin:preview-draft', ipcResult('plugin:preview-draft', async (_event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'plugin:preview-draft');
+    if (!validation.success) return validation;
+    const draft = listDrafts().find(d => d.id === validation.data);
+    if (!draft) return { success: false, error: `No draft with id "${validation.data}".` };
+    if (!draft.bundleUrl || !draft.ui) {
+      return { success: false, error: `${draft.name} declares no UI bundle, so there is nothing to preview.` };
+    }
+    const [componentName, exportType] = Object.entries(draft.ui.components)[0] ?? [];
+    if (!componentName) {
+      return { success: false, error: `${draft.name} declares a UI bundle but no components.` };
+    }
+    showPluginPreview(draft.id, {
+      bundleUrl: draft.bundleUrl,
+      componentName,
+      exportType: exportType === 'default' ? 'default' : 'named',
+      name: draft.name,
+    });
     return { success: true };
   }));
 

@@ -656,4 +656,124 @@ describe('ChannelRepository direct-channel (chat) projection', () => {
       expect(repository.getDirectChatById(chat.id)!.participants[0].displayName).toBe('Updated');
     });
   });
+
+  /**
+   * A workshop session is a direct chat, so every listing that projects direct
+   * chats would show it unless told otherwise. It must not: it belongs to the
+   * Workshop. The one query that deliberately still finds it is by-id, which is
+   * how the Workshop loads its own session.
+   *
+   * The `workshop` flag is also what grants a conversation the plugin-authoring
+   * tools, which is why it is a column rather than a tag — the last test here
+   * pins that a user-settable field cannot stand in for it.
+   */
+  describe('workshop sessions stay off the chat surface', () => {
+    const seedWorkshop = () =>
+      repository.createWorkshopSession({ name: 'Build: a dice roller', agentId: 'agent-1' });
+
+    it('excludes them from the chat list', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+      seedWorkshop();
+
+      expect(repository.getDirectChats().map(c => c.name)).toEqual(['Ordinary']);
+    });
+
+    it('excludes them from the per-agent list', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+      seedWorkshop();
+
+      expect(repository.getDirectChatsByAgentId('agent-1').map(c => c.name)).toEqual(['Ordinary']);
+    });
+
+    // Search is the one place that deliberately spans surfaces. A build's
+    // transcript is where the reasoning behind a plugin lives, and agents
+    // could already reach it through transcript_search while the person who
+    // wrote it could not. The result says which surface it belongs to, so the
+    // UI can label it and send a click to the Workshop rather than the chat.
+    it('finds them in search, labelled with the surface that owns them', () => {
+      repository.createDirectChat({ name: 'a dice roller', agentId: 'agent-1' });
+      seedWorkshop();
+
+      // Lists stay scoped; only a caller that opts in spans surfaces.
+      expect(repository.searchDirectChats('dice roller').map(c => c.name)).toEqual(['a dice roller']);
+
+      const hits = repository.searchDirectChats('dice roller', { allSurfaces: true });
+
+      expect(hits.map(c => c.name).sort()).toEqual(['Build: a dice roller', 'a dice roller']);
+      expect(hits.find(c => c.name === 'Build: a dice roller')?.surface).toBe('workshop');
+      expect(hits.find(c => c.name === 'a dice roller')?.surface).toBe('chat');
+    });
+
+    // Routing and capability are separate columns on purpose: a future plugin
+    // surface must be able to own a conversation without that being a way to
+    // grant itself the plugin-authoring toolset.
+    it('keeps the capability flag independent of the routing column', () => {
+      const session = seedWorkshop();
+      const ordinary = repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+
+      expect(repository.isWorkshopSession(session.id)).toBe(true);
+      expect(repository.isWorkshopSession(ordinary.id)).toBe(false);
+
+      // A conversation another surface owns, with no authoring capability —
+      // the shape a plugin-owned conversation would take.
+      db.prepare("UPDATE channels SET surface = 'plugin:notes' WHERE id = ?").run(ordinary.id);
+      expect(repository.isWorkshopSession(ordinary.id)).toBe(false);
+      expect(repository.getDirectChats().map(c => c.id)).not.toContain(ordinary.id);
+    });
+
+    it('excludes them from tag filtering', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1', tags: 'build' });
+      seedWorkshop();
+
+      expect(repository.getDirectChatsByTags(['build']).map(c => c.name)).toEqual(['Ordinary']);
+    });
+
+    it('still loads one by id, which is how the Workshop opens it', () => {
+      const session = seedWorkshop();
+      expect(repository.getDirectChatById(session.id)?.name).toBe('Build: a dice roller');
+    });
+
+    it('lists them on their own surface, newest first', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+      const session = seedWorkshop();
+
+      expect(repository.listWorkshopSessions().map(c => c.id)).toEqual([session.id]);
+    });
+
+    it('answers isWorkshopSession only for a real session', () => {
+      const session = seedWorkshop();
+      const ordinary = repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+
+      expect(repository.isWorkshopSession(session.id)).toBe(true);
+      expect(repository.isWorkshopSession(ordinary.id)).toBe(false);
+      expect(repository.isWorkshopSession('nope')).toBe(false);
+    });
+
+    it('offers an unused session back rather than stacking up another', () => {
+      const first = seedWorkshop();
+      expect(repository.findEmptyWorkshopSession()?.id).toBe(first.id);
+    });
+
+    it('stops offering one back once it has been spoken in', () => {
+      const session = seedWorkshop();
+      repository.createDirectMessage({
+        chatId: session.id, senderId: 'user', senderType: 'human',
+        content: 'a dice roller', timestamp: Date.now(),
+      });
+
+      expect(repository.findEmptyWorkshopSession()).toBeNull();
+    });
+
+    it('never offers back an ordinary empty chat', () => {
+      repository.createDirectChat({ name: 'Ordinary', agentId: 'agent-1' });
+      expect(repository.findEmptyWorkshopSession()).toBeNull();
+    });
+
+    it('cannot be faked with a tag, which a user can set', () => {
+      const ordinary = repository.createDirectChat({
+        name: 'Ordinary', agentId: 'agent-1', tags: 'workshop',
+      });
+      expect(repository.isWorkshopSession(ordinary.id)).toBe(false);
+    });
+  });
 });

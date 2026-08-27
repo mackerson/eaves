@@ -1,5 +1,6 @@
 import type { Settings } from '../types';
 import { logger } from './logger';
+import { loopbackFetch } from '../utils/loopbackFetch';
 
 /**
  * Pluggable embedders. An Embedder is
@@ -28,7 +29,9 @@ class OpenAICompatibleEmbedder implements Embedder {
     this.signature = `${provider}:${model}`;
   }
   async embed(texts: string[]): Promise<number[][]> {
-    const res = await fetch(`${this.baseURL}/embeddings`, {
+    // Local embedders (Ollama / LM Studio) may be bound to the other IP
+    // family; non-loopback URLs pass straight through. See loopbackFetch.
+    const res = await loopbackFetch(`${this.baseURL}/embeddings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

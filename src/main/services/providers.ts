@@ -21,6 +21,7 @@ import type { LanguageModel } from 'ai';
 import { logger } from './logger';
 import { ProviderId, ModelCapabilities, ModelContextInfo, getProvider } from '../../shared/providers';
 import { friendlyAIErrorMessage } from '../utils/aiErrors';
+import { loopbackFetch } from '../utils/loopbackFetch';
 
 export interface FetchModelsResult {
   success: boolean;
@@ -202,7 +203,11 @@ interface OpenRouterModelMeta {
   // With sticky-provider pinning on, the served window is what a request is
   // validated against, so prefer top_provider when present.
   context_length?: number;
-  top_provider?: { context_length?: number };
+  // `max_completion_tokens` is the served backend's real output cap, and it is
+  // published for all but a handful of the catalogue. Ignoring it is what made
+  // every OpenRouter model generate at most 4096 tokens regardless of being
+  // able to do sixteen times that.
+  top_provider?: { context_length?: number; max_completion_tokens?: number };
 }
 
 const openrouterCapabilityCache = new Map<string, ModelCapabilities>();
@@ -287,7 +292,12 @@ const openrouterAdapter: ProviderAdapter = {
       const max = numericOrUndefined(meta.context_length);
       const window = served ?? max;
       if (!window) return null;
-      return { contextWindow: window, maxContextLength: max ?? window, source: 'openrouter-api' };
+      return {
+        contextWindow: window,
+        maxContextLength: max ?? window,
+        maxOutputTokens: numericOrUndefined(meta.top_provider?.max_completion_tokens),
+        source: 'openrouter-api',
+      };
     } catch (error) {
       logger.debug('[providers] OpenRouter context detect failed', {
         modelId, error: error instanceof Error ? error.message : String(error),
@@ -313,7 +323,7 @@ const ollamaAdapter: ProviderAdapter = {
     const root = baseURL || apiKey || OLLAMA_DEFAULT_ROOT;
     // .chat() — Ollama's /v1 is Chat-Completions-shaped only; Responses API
     // (the v6 default) would 404 / 400 here.
-    return createOpenAI({ baseURL: `${root}/v1`, apiKey: 'ollama' }).chat(modelId);
+    return createOpenAI({ baseURL: `${root}/v1`, apiKey: 'ollama', fetch: loopbackFetch }).chat(modelId);
   },
   getCapabilities() {
     // Local models accept the full sampling toolkit through Ollama's
@@ -324,7 +334,7 @@ const ollamaAdapter: ProviderAdapter = {
   async fetchModels({ apiKey, baseURL }) {
     const root = baseURL || apiKey || OLLAMA_DEFAULT_ROOT;
     try {
-      const response = await fetch(`${root}/api/tags`);
+      const response = await loopbackFetch(`${root}/api/tags`);
       if (!response.ok) {
         // Answering at all means it was reached — "cannot reach" would send
         // someone off to restart a server that is already up.
@@ -346,7 +356,7 @@ const ollamaAdapter: ProviderAdapter = {
   async detectContext(modelId, { apiKey, baseURL }) {
     const root = baseURL || apiKey || OLLAMA_DEFAULT_ROOT;
     try {
-      const response = await fetch(`${root}/api/show`, {
+      const response = await loopbackFetch(`${root}/api/show`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelId }),
@@ -374,7 +384,9 @@ const lmstudioAdapter: ProviderAdapter = {
   createLanguageModel(modelId, { apiKey, baseURL }) {
     const endpoint = normalizeLmStudioUrl(baseURL || apiKey || 'http://localhost:1234/v1');
     // .chat() — LM Studio's /v1 mirrors Chat Completions only.
-    return createOpenAI({ baseURL: endpoint, apiKey: 'lm-studio' }).chat(modelId);
+    // loopbackFetch so inference reaches a server bound to the other IP family;
+    // the probes below would otherwise succeed while the turn itself failed.
+    return createOpenAI({ baseURL: endpoint, apiKey: 'lm-studio', fetch: loopbackFetch }).chat(modelId);
   },
   getCapabilities() {
     return defaultCapabilitiesFor('lmstudio');
@@ -382,7 +394,7 @@ const lmstudioAdapter: ProviderAdapter = {
   async fetchModels({ apiKey, baseURL }) {
     const endpoint = normalizeLmStudioUrl(baseURL || apiKey || 'http://localhost:1234/v1');
     try {
-      const response = await fetch(`${endpoint}/models`, {
+      const response = await loopbackFetch(`${endpoint}/models`, {
         headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) {
@@ -405,7 +417,7 @@ const lmstudioAdapter: ProviderAdapter = {
   async detectContext(modelId, { apiKey, baseURL }) {
     const restRoot = lmStudioRestRoot(baseURL || apiKey || 'http://localhost:1234/v1');
     try {
-      const response = await fetch(`${restRoot}/api/v0/models`, {
+      const response = await loopbackFetch(`${restRoot}/api/v0/models`, {
         headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) return null;
@@ -427,7 +439,22 @@ const lmstudioAdapter: ProviderAdapter = {
       // generation hit the real 8k wall mid-sentence.) The null is cached
       // under the short miss TTL, so the first request's JIT load reveals the
       // real window within seconds.
-      if (!loaded && entry.state && entry.state !== 'loaded') return null;
+      if (!loaded && entry.state && entry.state !== 'loaded') {
+        // Not loaded yet, so nobody knows what window it will get — see above
+        // for why trusting `max` is worse than admitting ignorance. But the
+        // fallback for "unknown" is a 4096 guess, which trims the first
+        // message of every session down to a small-model budget and then
+        // recovers on the second, once the real request has JIT-loaded it.
+        //
+        // So JIT-load it here instead. The load was going to happen on the
+        // very next request regardless; doing it a moment earlier costs the
+        // same wall-clock and buys a correct budget for the turn that pays it.
+        const warmed = await warmLmStudioModel(restRoot, modelId);
+        if (warmed) {
+          return { contextWindow: warmed, maxContextLength: max, loadedContextLength: warmed, source: 'lmstudio-api' };
+        }
+        return null;
+      }
       const contextWindow = loaded ?? max;
       if (!contextWindow) return null;
       return { contextWindow, maxContextLength: max, loadedContextLength: loaded, source: 'lmstudio-api' };
@@ -439,6 +466,53 @@ const lmstudioAdapter: ProviderAdapter = {
     }
   },
 };
+
+/**
+ * Force a not-loaded LM Studio model to load, and report the window it got.
+ *
+ * A one-token completion is the only portable way to trigger a JIT load: the
+ * REST API exposes the loaded window but nothing to load *with*. Bounded,
+ * because a cold load of a large model is slow and a turn blocked forever is
+ * worse than a turn budgeted conservatively — on timeout the caller falls back
+ * to exactly the behaviour it had before.
+ */
+const LMSTUDIO_WARM_TIMEOUT_MS = 45_000;
+
+async function warmLmStudioModel(restRoot: string, modelId: string): Promise<number | undefined> {
+  try {
+    const warm = await loopbackFetch(`${restRoot}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 1,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(LMSTUDIO_WARM_TIMEOUT_MS),
+    });
+    if (!warm.ok) return undefined;
+
+    // Re-ask: the window is only knowable after the load.
+    const after = await loopbackFetch(`${restRoot}/api/v0/models`, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!after.ok) return undefined;
+    const data = await after.json() as { data?: LmStudioModelMeta[] };
+    const entry = data.data?.find(m => m.id === modelId);
+    const loaded = numericOrUndefined(entry?.loaded_context_length);
+    if (loaded) {
+      logger.info('[providers] JIT-loaded an LM Studio model to read its window', { modelId, loaded });
+    }
+    return loaded;
+  } catch (error) {
+    logger.debug('[providers] LM Studio warm-up failed; budgeting conservatively', {
+      modelId, error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
 
 interface LmStudioModelMeta {
   id?: string;

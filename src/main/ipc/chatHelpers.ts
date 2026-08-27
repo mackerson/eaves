@@ -8,6 +8,7 @@ import { createChannelTools } from '../services/channelTools';
 import { createTranscriptTools } from '../services/transcriptTools';
 import { createAgentSelfTools } from '../services/agentSelfTools';
 import { createWorkSessionTools } from '../services/workSessionTools';
+import { createPluginDraftTools } from '../services/pluginDraftTools';
 import { createCoreMemoryTools } from '../services/coreMemoryTools';
 import { buildMemoryContext } from '../services/memoryContext';
 import { createDiscoveryTools, ToolSessionState } from '../services/discoveryTools';
@@ -20,7 +21,6 @@ import { ContentBlocksBuilder } from '../services/ContentBlocksBuilder';
 import type { Tool } from 'ai';
 import { routeStreamEvent, emitStreamStart, emitStreamComplete, emitAgentSpend, createStreamMetrics, type StreamMetrics, type StreamEnvelope } from '../services/streamEventRouter';
 import type { Agent, Project, Settings, CurrentState, ContentBlock, RequestInfo } from '../types';
-import { calculateCost } from '../../shared/pricing';
 import { getProvider } from '../../shared/providers';
 import { estimateTokens, type ModelSizeClass, type ContextBudget } from '../services/contextBudget';
 import { substituteMustacheVars } from '../utils/substituteMustacheVars';
@@ -110,7 +110,9 @@ export async function buildToolset(
     projectDirectories
   );
 
-  // Plugin tools
+  // Plugin tools. Drafts are excluded here — see getRegisteredTools. They are
+  // added back below, for the workshop session that authorised them and
+  // nowhere else.
   const pluginManager = getSandboxedPluginManager();
   const pluginTools = pluginManager.getRegisteredTools();
 
@@ -123,6 +125,23 @@ export async function buildToolset(
   const workSessionTools = getChannelRepository().isWorkSession(channelId)
     ? createWorkSessionTools(channelId, options?.getMainWindow ?? (() => null))
     : {};
+  // Two conditions, and the second is the interesting one. The setting is the
+  // trust decision — activating a draft runs agent-written code in a sandbox
+  // worker under real permission grants. The session check is the blast radius:
+  // plugin authoring happens only in the Workshop, where the bench is showing
+  // the human what is being built. An ordinary chat never gets these tools, so
+  // there is nowhere an agent can write and run code unobserved.
+  const inWorkshop =
+    getSettingsRepository().get().pluginAuthoringEnabled &&
+    getChannelRepository().isWorkshopSession(channelId);
+  const pluginDraftTools = inWorkshop ? createPluginDraftTools() : {};
+  // A running draft's own tools follow the same rule as the verbs that made
+  // them. Activation happens in the Workshop under a person's eye; letting the
+  // tool it registered be callable from every other chat would hand agent-
+  // written code a far wider reach than the surface that approved it.
+  const draftTools = inWorkshop ? pluginManager.getDraftTools() : {};
+  /** Kept in front of the model for the whole session — see computeActiveToolNames. */
+  const workshopVerbs = Object.keys(pluginDraftTools);
 
   // Merge in priority order: builtin → agent-scoped → plugin → MCP
   const toolMetadata = new Map<string, { category: string; origin: string }>();
@@ -133,7 +152,10 @@ export async function buildToolset(
   // project's roots.
   const allAvailableTools: Record<string, unknown> = applyApprovalGrants(
     bindProjectScope(
-      { ...builtinTools, ...channelTools, ...transcriptTools, ...selfTools, ...coreMemoryTools, ...workSessionTools },
+      {
+        ...builtinTools, ...channelTools, ...transcriptTools, ...selfTools,
+        ...coreMemoryTools, ...workSessionTools, ...pluginDraftTools, ...draftTools,
+      },
       currentProject.id,
     ),
     channelId,
@@ -157,6 +179,12 @@ export async function buildToolset(
   }
   for (const toolName of Object.keys(workSessionTools)) {
     toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
+  }
+  for (const toolName of Object.keys(pluginDraftTools)) {
+    toolMetadata.set(toolName, { category: 'builtin', origin: 'eaves-core' });
+  }
+  for (const toolName of Object.keys(draftTools)) {
+    toolMetadata.set(toolName, { category: 'plugin', origin: 'plugin-draft' });
   }
 
   for (const [toolName, toolDef] of Object.entries(pluginTools)) {
@@ -184,7 +212,14 @@ export async function buildToolset(
   // (typically empty). No discovery, no list_tools — the model can't escape
   // out of empty-tool jail. Keeps the system prompt clean and prevents
   // meta-talk about tool availability.
-  if (agent.archetype?.type === 'roleplay') {
+  //
+  // Except in the Workshop. That allowlist is normally empty, so a roleplay
+  // agent — which is whatever `defaultAgentId` happens to point at — used to
+  // land in a workshop session with the four authoring verbs silently
+  // stripped: no error, no toast, just a bench that never fills. A workshop
+  // session is explicitly not an in-character chat, so it takes the ordinary
+  // path.
+  if (agent.archetype?.type === 'roleplay' && !inWorkshop) {
     const allowlist = new Set<string>(agent.defaultTools ?? []);
     const sessionState = loadSessionState(channelId, channelToolStates, allowlist);
 
@@ -243,7 +278,9 @@ export async function buildToolset(
     toolSendMode: sendMode,
     // Live read — re-evaluated per step, so enable→use lands on the next step.
     getActiveToolNames: (modeOverride) =>
-      computeActiveToolNames(allToolsForSDK, sessionState.enabledTools, modeOverride ?? sendMode),
+      computeActiveToolNames(
+        allToolsForSDK, sessionState.enabledTools, modeOverride ?? sendMode, workshopVerbs,
+      ),
     allAvailableTools,
     mcpClients,
     projectDirectories,
@@ -280,7 +317,11 @@ const ALWAYS_ACTIVE_TOOL_NAMES = [...DISCOVERY_TOOL_NAMES, 'eaves_guide'] as con
  * (see toolDeferral.ts): large-schema, rarely-called tools that would otherwise
  * be billed on every request of every turn.
  *
- * In `'enabled'` mode, nothing rides along — only what is explicitly enabled.
+ * In `'enabled'` mode, nothing rides along — only what is explicitly enabled,
+ * plus `alsoAlwaysActive`: names the *surface* guarantees regardless of the
+ * agent's configuration. The Workshop passes its four authoring verbs, because
+ * a session whose entire purpose is writing a plugin should not require the
+ * model to discover that it can.
  *
  * The enabled set is applied last and is purely additive. That is deliberate:
  * a context that already has a persisted enabled-set from the Tool Panel can
@@ -292,11 +333,12 @@ export function computeActiveToolNames(
   allTools: Record<string, unknown>,
   enabled: ReadonlySet<string>,
   sendMode: 'all' | 'enabled',
+  alsoAlwaysActive: readonly string[] = [],
 ): string[] {
   // Presence-checked like the enabled set below: a name with no tool behind it
   // would be sent to the model as a schema-less phantom it could never call.
   const names = new Set<string>(
-    ALWAYS_ACTIVE_TOOL_NAMES.filter(name => allTools[name]),
+    [...ALWAYS_ACTIVE_TOOL_NAMES, ...alsoAlwaysActive].filter(name => allTools[name]),
   );
 
   if (sendMode === 'all') {
@@ -899,23 +941,27 @@ export async function runStream(options: RunStreamOptions): Promise<StreamResult
     streamMetrics.requestInfo = options.requestInfo;
   }
 
-  // Prefer OpenRouter's real reported cost (usage accounting) over the estimate
-  // from token counts × agent pricing; fall back to the estimate otherwise.
+  // OpenRouter's usage accounting is the provider's own invoiced figure, so it
+  // wins. Everything else is settled by finalizeCost inside emitAgentSpend —
+  // computing it here is what used to make the user's settings override
+  // unreachable on exactly the turns that spend the money.
   if (typeof orReportedCost === 'number') {
     streamMetrics.cost = orReportedCost;
     streamMetrics.costBasis = 'reported';
-  } else {
-    const cost = calculateCost(
-      agent.provider, agent.model, streamMetrics.inputTokens, streamMetrics.outputTokens,
-      { promptCostPer1M: agent.promptCostPer1M, completionCostPer1M: agent.completionCostPer1M },
-      // Cache tiers, so a warm turn is not billed as if every cached token
-      // were fresh input.
-      { cachedTokens: streamMetrics.cachedTokens, cacheWriteTokens: streamMetrics.cacheWriteTokens },
+  }
+
+  // Surface a hard output-limit truncation.
+  //
+  // runStream drives *channel* turns (AgentTurnService.streamChannelTurn) and
+  // approval resumes; the 1:1 chat turn is runChatAssistantTurn, which has
+  // warned about this since the field reports of mid-sentence cut-offs. Those
+  // two paths did not, so a reply that stopped at the cap was persisted and
+  // rendered as though the agent had finished speaking. The finish reason was
+  // already collected here — nothing read it.
+  if (streamMetrics.finishReason === 'length') {
+    builder.addSystemNote(
+      '⚠️ This reply was cut off at the output-token limit. Increase "Max Output Tokens" on this agent to allow longer responses.'
     );
-    if (cost !== null) {
-      streamMetrics.cost = cost;
-      streamMetrics.costBasis = 'estimated';
-    }
   }
 
   const responseText = builder.getFullText();

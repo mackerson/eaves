@@ -1,4 +1,4 @@
-import { Agent, AgentMemory, AgentMemoryStatus, User, Message, MCPServer, Project, Task, Note, NoteLabel, NoteAIMetadata, Settings, Channel, Chat, ChatMessage, MessageMetrics, ContentBlock, ScheduleEvent, Milestone, Deadline, Routine, Workflow, File as ProjectFile, PluginManifest, Activity, UsageEvent, UsageFilter, UsageSummary, ThemeDefinition, BackupSnapshot, ConversationFolder, MemoryListResult, MemorySearchResponse, MemoryRetrieveResult, MemoryStoreResult, MemoryDeleteResult } from '../shared/types';
+import { Agent, AgentMemory, AgentMemoryStatus, User, Message, MCPServer, Project, Task, Note, NoteLabel, NoteAIMetadata, Settings, Channel, Chat, ChatMessage, MessageMetrics, ContentBlock, ScheduleEvent, Milestone, Deadline, Routine, Workflow, File as ProjectFile, PluginManifest, PluginDraft, Activity, UsageEvent, UsageFilter, UsageSummary, ThemeDefinition, BackupSnapshot, ConversationFolder, MemoryListResult, MemorySearchResponse, MemoryRetrieveResult, MemoryStoreResult, MemoryDeleteResult } from '../shared/types';
 import {
   ChatStreamEvent,
   CreateAgentRequest,
@@ -256,6 +256,18 @@ declare global {
       getPluginRegistry: () => Promise<{ plugins: Array<{ id: string; name: string; description: string; author: string; homepage: string; tier: string; latest: string; minAppVersion?: string; permissions: string[]; release: { tag: string; asset: string; url: string; sha256: string } | null }>; installed: Record<string, string> }>;
       installPlugin: (pluginId: string) => Promise<{ success: boolean; id?: string; folderName?: string; version?: string; error?: string }>;
       uninstallPlugin: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+      listPluginDrafts: () => Promise<{ success: boolean; drafts?: PluginDraft[]; error?: string }>;
+      promotePluginDraft: (pluginId: string) => Promise<{ success: boolean; id?: string; folderName?: string; error?: string }>;
+      discardPluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+      readPluginDraft: (pluginId: string) => Promise<{ success: boolean; draft?: PluginDraft; files?: Array<{ path: string; content: string }>; previous?: Array<{ path: string; content: string }>; previousAt?: number; error?: string }>;
+      activatePluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+      deactivatePluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+      previewPluginDraft: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+      startWorkshopSession: (agentId?: string) => Promise<{ success: boolean; session?: Chat; error?: string }>;
+      listWorkshopSessions: () => Promise<{ success: boolean; sessions?: Chat[]; error?: string }>;
+      onPluginRenderReport: (
+        callback: (event: { draftId: string; status: 'ok' | 'failed'; message?: string }) => void,
+      ) => () => void;
       executePluginTool: (pluginId: string, toolName: string, args: Record<string, unknown>) => Promise<unknown>;
       getPluginConfig: (pluginId: string) => Promise<{ schema: Record<string, { type: string; default?: unknown; description?: string }>; values: Record<string, unknown>; pluginId: string; pluginName: string }>;
       setPluginConfig: (pluginId: string, config: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;

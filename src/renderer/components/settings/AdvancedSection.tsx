@@ -1,6 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useSettingsStore, useToastStore } from '@/stores';
+import {
+  PLUGIN_AUTHORING_TITLE,
+  PLUGIN_AUTHORING_EXPLAINER,
+  PLUGIN_AUTHORING_WARNING_TITLE,
+  PLUGIN_AUTHORING_WARNING,
+} from '@/lib/pluginAuthoringCopy';
 
 export function AdvancedSection() {
   const workflowReviewRequired = useSettingsStore(
@@ -9,11 +15,16 @@ export function AdvancedSection() {
   const openrouterStickyProvider = useSettingsStore(
     (s) => s.settings.openrouterStickyProvider,
   );
+  const pluginAuthoringEnabled = useSettingsStore(
+    (s) => s.settings.pluginAuthoringEnabled,
+  );
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const showToast = useToastStore((s) => s.showToast);
 
   const reviewOn = workflowReviewRequired !== false;
   const stickyOn = openrouterStickyProvider !== false;
+  // Opposite default to the two above: this one is off until asked for.
+  const authoringOn = pluginAuthoringEnabled === true;
 
   const handleReviewToggle = (checked: boolean) => {
     updateSettings({ workflowReviewRequired: checked }).catch((err: unknown) => {
@@ -24,6 +35,13 @@ export function AdvancedSection() {
 
   const handleStickyToggle = (checked: boolean) => {
     updateSettings({ openrouterStickyProvider: checked }).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      showToast(`Failed to save: ${message}`, 'error');
+    });
+  };
+
+  const handleAuthoringToggle = (checked: boolean) => {
+    updateSettings({ pluginAuthoringEnabled: checked }).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : 'Save failed';
       showToast(`Failed to save: ${message}`, 'error');
     });
@@ -73,6 +91,39 @@ export function AdvancedSection() {
             <p className="text-sm mt-1 text-muted-foreground">
               Agents can now create workflows that execute arbitrary code (read/write files, call the network, run shell commands) without your approval. A prompt injection in any agent interaction could silently compromise your system. Re-enable this unless you have very good reason.
             </p>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3 pt-6 border-t border-border">
+        <div>
+          <Label>{PLUGIN_AUTHORING_TITLE}</Label>
+          <p className="text-sm text-muted-foreground">{PLUGIN_AUTHORING_EXPLAINER}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            id="plugin-authoring-enabled"
+            type="checkbox"
+            checked={authoringOn}
+            onChange={(e) => handleAuthoringToggle(e.target.checked)}
+            className="h-4 w-4"
+          />
+          <Label htmlFor="plugin-authoring-enabled" className="cursor-pointer">
+            Allow agents to write and run plugins
+          </Label>
+        </div>
+        {authoringOn && (
+          <div
+            className="p-3 rounded-md border"
+            style={{
+              background: 'rgba(220, 38, 38, 0.08)',
+              borderColor: 'rgb(220, 38, 38)',
+            }}
+          >
+            <p className="text-sm font-semibold" style={{ color: 'rgb(220, 38, 38)' }}>
+              {PLUGIN_AUTHORING_WARNING_TITLE}
+            </p>
+            <p className="text-sm mt-1 text-muted-foreground">{PLUGIN_AUTHORING_WARNING}</p>
           </div>
         )}
       </section>

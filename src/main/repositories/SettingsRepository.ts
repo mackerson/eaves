@@ -168,7 +168,8 @@ export class SettingsRepository {
       SELECT user_name, user_avatar, api_keys_json,
              theme, light_theme, dark_theme, current_chat_id, default_agent_id, system_agent_id,
              background_type, background_value, background_opacity, background_blur,
-             oobe_completed, workflow_review_required, routines_paused, update_mode, openrouter_sticky_provider,
+             oobe_completed, workflow_review_required, routines_paused, plugin_authoring_enabled,
+             update_mode, openrouter_sticky_provider,
              font_family, custom_font_family, font_scale, line_spacing, memory_embedding,
              usage_settings
       FROM settings WHERE id = 1
@@ -199,6 +200,7 @@ export class SettingsRepository {
       // Default ON for safety if the column is null/missing
       workflowReviewRequired: row.workflow_review_required === null ? true : !!row.workflow_review_required,
       routinesPaused: !!row.routines_paused,
+      pluginAuthoringEnabled: !!row.plugin_authoring_enabled,
       updateMode: (row.update_mode as UpdateMode) || 'auto',
       // Default ON if the column is null/missing (rows written before the
       // column existed).
@@ -301,6 +303,10 @@ export class SettingsRepository {
     if (settings.routinesPaused !== undefined) {
       this.db.prepare('UPDATE settings SET routines_paused = ?, updated_at = ? WHERE id = 1')
         .run(settings.routinesPaused ? 1 : 0, Date.now());
+    }
+    if (settings.pluginAuthoringEnabled !== undefined) {
+      this.db.prepare('UPDATE settings SET plugin_authoring_enabled = ?, updated_at = ? WHERE id = 1')
+        .run(settings.pluginAuthoringEnabled ? 1 : 0, Date.now());
     }
     if (settings.workflowReviewRequired !== undefined) {
       this.db.prepare('UPDATE settings SET workflow_review_required = ?, updated_at = ? WHERE id = 1')

@@ -8,10 +8,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { app } from 'electron';
+import { app, Notification } from 'electron';
 import { PluginManifest } from '../../types';
 import { PluginManifestSchema, validateWithSchema, isValidationFailure } from '../../../shared/validation';
 import { eventBus } from '../EventBus';
+import { clearRenderReport } from '../pluginRenderReports';
+import { clearRevisions } from '../pluginDraftRevisions';
 import { logger } from '../logger';
 import { getPluginConfigManager } from '../PluginConfigManager';
 
@@ -28,7 +30,7 @@ import { getEventBridge } from './EventBridge';
 import { getToolBridge } from './ToolBridge';
 import { getServiceBridge } from './ServiceBridge';
 import { getResourceMonitor } from './ResourceMonitor';
-import { readInstalledPluginId, sanitizeFolderName } from './pathContainment';
+import { isInsideDirectory, readInstalledPluginId, sanitizeFolderName } from './pathContainment';
 
 import {
   getPluginStorageRepository,
@@ -68,6 +70,16 @@ interface RegisteredTerminalView {
   pluginId: string;
 }
 
+/**
+ * Top-level property names of a tool's JSON Schema. Enough to render a call
+ * shape on the bench; the full schema is in the code, which is one click away.
+ */
+function parameterNames(inputSchema: unknown): string[] {
+  const schema = inputSchema as { properties?: Record<string, unknown> } | undefined;
+  if (!schema || typeof schema !== 'object' || !schema.properties) return [];
+  return Object.keys(schema.properties);
+}
+
 interface RegisteredTool {
   name: string;
   tool: {
@@ -86,10 +98,62 @@ interface RegisteredTool {
 /**
  * SandboxedPluginManager handles sandboxed plugin lifecycle
  */
+/**
+ * Flatten an arbitrary plugin argument into something a React child can hold.
+ *
+ * The renderer renders toast text directly, so a non-string here is not a
+ * cosmetic problem: it throws inside render, and the app-level ErrorBoundary is
+ * the only one in the tree, so the whole window is replaced by "Something went
+ * wrong". A plugin must not be able to do that with one mistyped call.
+ */
+export function toDisplayText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    // The shapes plugins actually reach for, in the order they mean things.
+    const record = value as Record<string, unknown>;
+    for (const key of ['message', 'body', 'text', 'title']) {
+      if (typeof record[key] === 'string') return record[key] as string;
+    }
+    try {
+      return JSON.stringify(value) ?? String(value);
+    } catch {
+      return '[unserializable]';
+    }
+  }
+  return String(value);
+}
+
+/**
+ * Read a notification out of whatever the plugin passed: a bare string, or the
+ * Web-Notification-shaped object (`{ title, body }`) that anyone familiar with
+ * the browser API reaches for first. `message` is accepted as an alias for
+ * `body` because the bundled event-inspector plugin already uses it.
+ */
+export function toNotification(value: unknown): { title: string; body: string } {
+  if (typeof value === 'string') return { title: '', body: value };
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const title = typeof record.title === 'string' ? record.title : '';
+    const body =
+      typeof record.body === 'string' ? record.body
+      : typeof record.message === 'string' ? record.message
+      : '';
+    // A title with no body reads better as the body of a bare notification
+    // than as a notification with an empty one.
+    if (title && !body) return { title: '', body: title };
+    if (title || body) return { title, body };
+  }
+  return { title: '', body: toDisplayText(value) };
+}
+
+
 export class SandboxedPluginManager {
   private plugins = new Map<string, LoadedPlugin>();
   private bundledPluginsDir: string;
   private userPluginsDir: string;
+  private draftPluginsDir: string;
   private sourcePluginsDir: string | null = null;
 
   // Centralized registries for views, terminal views, and tools
@@ -116,6 +180,12 @@ export class SandboxedPluginManager {
     // User plugins: {userData}/plugins/
     this.userPluginsDir = path.join(app.getPath('userData'), 'plugins');
 
+    // Draft plugins: {userData}/plugins-draft/ — agent-authored, quarantined.
+    // Deliberately absent from discoverPlugins(): a draft only ever runs
+    // because someone activated it in this session, so a restart is always a
+    // clean slate. See services/pluginDraftService.ts.
+    this.draftPluginsDir = path.join(app.getPath('userData'), 'plugins-draft');
+
     // Source plugins (dev only): {appPath}/plugins/
     if (!app.isPackaged) {
       this.sourcePluginsDir = path.join(appPath, 'plugins');
@@ -125,6 +195,7 @@ export class SandboxedPluginManager {
     logger.info('[SandboxedPluginManager] Initialized', {
       bundledPluginsDir: this.bundledPluginsDir,
       userPluginsDir: this.userPluginsDir,
+      draftPluginsDir: this.draftPluginsDir,
       sourcePluginsDir: this.sourcePluginsDir,
     });
 
@@ -711,18 +782,33 @@ export class SandboxedPluginManager {
     args: unknown[]
   ): Promise<unknown> {
     switch (method) {
-      case 'showNotification':
-        eventBus.emitEvent('plugin:ui:notification', {
-          pluginId,
-          message: args[0],
-          type: args[1],
-        });
+      case 'showNotification': {
+        // A desktop notification, not a toast — they were previously the same
+        // thing, which is why an agent reasonably reached for the Web
+        // Notification shape and passed an object where a string was expected.
+        const notice = toNotification(args[0]);
+        if (Notification.isSupported()) {
+          new Notification({ title: notice.title, body: notice.body }).show();
+        } else {
+          // No notification service (headless, some Linux setups). Say it
+          // in-app rather than dropping it silently.
+          eventBus.emitEvent('plugin:ui:toast', {
+            pluginId,
+            message: notice.title ? `${notice.title}: ${notice.body}` : notice.body,
+          });
+        }
         return { success: true };
+      }
       case 'showToast':
         eventBus.emitEvent('plugin:ui:toast', {
           pluginId,
-          message: args[0],
-          duration: args[1],
+          // Plugin arguments are untrusted at this boundary. The renderer puts
+          // this straight into a React child, so anything that is not already
+          // a string has to become one here — an object reaching Toast.tsx
+          // throws, and the only error boundary is the app-level one, so a
+          // wrong-shaped call from any plugin took the whole window down.
+          message: toDisplayText(args[0]),
+          duration: typeof args[1] === 'number' ? args[1] : undefined,
         });
         return { success: true };
       case 'registerView':
@@ -1050,6 +1136,100 @@ export class SandboxedPluginManager {
     getPluginConfigManager().deleteConfig(pluginId);
   }
 
+  /** Absolute path to the draft plugins dir (agent-authored staging). */
+  getDraftPluginsDir(): string {
+    return this.draftPluginsDir;
+  }
+
+  /**
+   * Load a staged draft from userData/plugins-draft. The counterpart of
+   * loadUserPlugin for the quarantined tier: same validation, stamped
+   * `source: 'draft'` so every surface that treats drafts differently — view
+   * registration, uninstall ownership, the bundle protocol — can tell.
+   *
+   * This is the only way a draft ever runs. Nothing calls it at startup.
+   */
+  async loadDraftPlugin(folderName: string): Promise<PluginManifest> {
+    const pluginDir = path.join(this.draftPluginsDir, folderName);
+    if (!isInsideDirectory(pluginDir, this.draftPluginsDir)) {
+      throw new Error(`Refusing to load a draft from outside the draft directory: ${folderName}`);
+    }
+    const manifestPath = path.join(pluginDir, 'plugin.json');
+    if (!fs.existsSync(manifestPath)) {
+      throw new Error(`No plugin.json in ${pluginDir}`);
+    }
+    const manifestData = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    const validation = validateWithSchema(PluginManifestSchema, manifestData);
+    if (isValidationFailure(validation)) {
+      throw new Error(`Invalid plugin manifest: ${validation.error}`);
+    }
+    const manifest = {
+      ...validation.data,
+      path: pluginDir,
+      source: 'draft',
+      folderName,
+    } as PluginManifest;
+
+    // A draft must never take over an id something else already answers to.
+    // The draft service refuses this at define time; re-check here because
+    // the installed set can change between defining and activating.
+    const existing = this.plugins.get(manifest.id);
+    if (existing && existing.manifest?.source !== 'draft') {
+      throw new Error(
+        `Cannot activate draft "${manifest.id}": that id belongs to a loaded ` +
+        `${existing.manifest?.source} plugin.`
+      );
+    }
+    if (existing) {
+      await this.unloadPlugin(manifest.id); // re-activating a draft replaces it
+    }
+    // A fresh dispatch: whatever a previous preview saw was a different run.
+    clearRenderReport(manifest.id);
+    await this.loadPlugin(manifest);
+    return manifest;
+  }
+
+  /**
+   * Stop a draft and delete its staged directory.
+   *
+   * Mirrors removeUserPlugin's ownership check rather than trusting the folder
+   * name: the name is derived from an id, which is a guess about what occupies
+   * that path, and the operation on the other side of the guess is a recursive
+   * delete. Refuses anything that is not a draft, so this can never reach an
+   * installed plugin.
+   */
+  async removeDraftPlugin(pluginId: string): Promise<void> {
+    const manifest = this.getPluginManifest(pluginId);
+    const loadedFrom = manifest?.source;
+    if (loadedFrom && loadedFrom !== 'draft') {
+      throw new Error(`Cannot retract ${loadedFrom} plugin ${pluginId} — it is not a draft`);
+    }
+    const folderName = manifest?.folderName || sanitizeFolderName(pluginId);
+
+    if (this.plugins.has(pluginId)) {
+      await this.unloadPlugin(pluginId);
+    }
+
+    const dir = path.join(this.draftPluginsDir, folderName);
+    if (isInsideDirectory(dir, this.draftPluginsDir) && fs.existsSync(dir)) {
+      const occupant = readInstalledPluginId(dir);
+      if (occupant !== pluginId) {
+        throw new Error(
+          `Refusing to retract "${pluginId}": ${dir} is ` +
+          (occupant
+            ? `occupied by a different draft ("${occupant}")`
+            : 'not identifiable as that draft (no readable plugin.json)') +
+          '. Remove the directory by hand if that is really what you want.'
+        );
+      }
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    clearRenderReport(pluginId);
+    clearRevisions(pluginId); // nothing left for a diff to be against
+    getPluginStateRepository().delete(pluginId);
+    getPluginConfigManager().deleteConfig(pluginId);
+  }
+
   /**
    * Get loaded plugin IDs
    */
@@ -1140,7 +1320,14 @@ export class SandboxedPluginManager {
   }
 
   getRegisteredViews(): RegisteredView[] {
-    const views = Array.from(this.registeredViews.values());
+    // Draft views never reach the renderer. A plugin UI bundle is import()ed
+    // into the main window's JS realm (which is why plugin-install consent is a
+    // separate main-owned window at all — see windows/pluginConsentWindow.ts),
+    // so surfacing unconsented agent-written UI there would let it script the
+    // very gate that later approves it. Drafts are exercised through their own
+    // out-of-realm preview surface, not the sidebar.
+    const views = Array.from(this.registeredViews.values())
+      .filter(view => this.plugins.get(view.pluginId)?.manifest?.source !== 'draft');
 
     // During reload, preserve cached views so UI doesn't flicker
     for (const pluginId of this.reloadingPlugins) {
@@ -1155,16 +1342,27 @@ export class SandboxedPluginManager {
     return views;
   }
 
-  /** Returns terminal views from enabled plugins only */
+  /** Returns terminal views from enabled plugins only (never drafts — see getRegisteredViews) */
   getRegisteredTerminalViews(): RegisteredTerminalView[] {
     return Array.from(this.registeredTerminalViews.values()).filter(view => {
       const plugin = this.plugins.get(view.pluginId);
-      return plugin && plugin.enabled;
+      return plugin && plugin.enabled && plugin.manifest?.source !== 'draft';
     });
   }
 
-  /** Returns tool definitions compatible with Vercel AI SDK */
-  getRegisteredTools(): Record<string, unknown> {
+  /**
+   * Returns tool definitions compatible with Vercel AI SDK.
+   *
+   * Drafts are excluded by default for the same reason their views are (see
+   * getRegisteredViews): a draft is agent-written code that nobody has
+   * approved, and it is activated inside the Workshop, where a person is
+   * watching a bench. Leaking its tools into the general toolset would let any
+   * agent in any chat call it, which is a wider blast radius than the surface
+   * that authorised it. Callers that legitimately want them — the Workshop's
+   * own toolset, and plugin_activate reporting what it just registered — ask
+   * for them explicitly.
+   */
+  getRegisteredTools(options: { includeDrafts?: boolean } = {}): Record<string, unknown> {
     const { tool } = require('ai');
     const { z } = require('zod');
     const tools: Record<string, unknown> = {};
@@ -1172,6 +1370,7 @@ export class SandboxedPluginManager {
     for (const [toolName, registeredTool] of this.registeredTools.entries()) {
       const plugin = this.plugins.get(registeredTool.pluginId);
       if (!plugin || !plugin.enabled) continue;
+      if (plugin.manifest?.source === 'draft' && !options.includeDrafts) continue;
 
       const pluginTool = registeredTool.tool;
       const zodSchema = jsonSchemaToZod(z, pluginTool.inputSchema);
@@ -1187,6 +1386,58 @@ export class SandboxedPluginManager {
     }
 
     return tools;
+  }
+
+  /**
+   * Just the tools a running draft registered — the Workshop's half of the
+   * split above. Returns nothing when no draft is running, which is the
+   * ordinary case.
+   */
+  getDraftTools(): Record<string, unknown> {
+    const all = this.getRegisteredTools({ includeDrafts: true });
+    const installed = this.getRegisteredTools();
+    const drafts: Record<string, unknown> = {};
+    for (const [name, def] of Object.entries(all)) {
+      if (!(name in installed)) drafts[name] = def;
+    }
+    return drafts;
+  }
+
+  /**
+   * What a running draft actually added to the app, as opposed to what its
+   * manifest said it would.
+   *
+   * The bench needs this to answer "what will I get if I keep this" without
+   * making a person read the source to find out. A draft's view is filtered
+   * out of getRegisteredViews on purpose — it must never reach the sidebar —
+   * but that is a rule about *rendering* it, not about naming it, and refusing
+   * to even say a view exists is how the bench ended up describing a plugin
+   * purely by its file count.
+   *
+   * Empty until the draft is activated: nothing is registered before then.
+   */
+  getDraftContributions(pluginId: string): {
+    tools: Array<{ name: string; description: string; parameters: string[] }>;
+    views: Array<{ id: string; title: string; icon?: string }>;
+  } {
+    const plugin = this.plugins.get(pluginId);
+    if (!plugin || plugin.manifest?.source !== 'draft') return { tools: [], views: [] };
+
+    const tools = Array.from(this.registeredTools.values())
+      .filter(entry => entry.pluginId === pluginId)
+      .map(entry => ({
+        name: entry.name,
+        description: entry.tool.description ?? '',
+        parameters: parameterNames(entry.tool.inputSchema),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const views = Array.from(this.registeredViews.values())
+      .filter(view => view.pluginId === pluginId)
+      .map(view => ({ id: view.id, title: view.title, icon: view.icon }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    return { tools, views };
   }
 
   async executePluginTool(pluginId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> {

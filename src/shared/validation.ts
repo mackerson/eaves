@@ -153,6 +153,7 @@ export const UpdateSettingsSchema = z.object({
   oobeCompleted: z.boolean().optional(),
   workflowReviewRequired: z.boolean().optional(),
   routinesPaused: z.boolean().optional(),
+  pluginAuthoringEnabled: z.boolean().optional(),
   updateMode: z.enum(['auto', 'manual', 'external']).optional(),
   openrouterStickyProvider: z.boolean().optional(),
   memoryEmbedding: z.object({
@@ -923,6 +924,7 @@ export const UpdateChatSchema = z.object({
 export const SearchChatsSchema = z.object({
   query: z.string().max(500),
   includeArchived: z.boolean().optional(),
+  allSurfaces: z.boolean().optional(),
 });
 
 export const GetChatsByTagsSchema = z.object({
