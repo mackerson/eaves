@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment happy-dom
+ *
  * Sections whose contents arrive over IPC — plugin views, workshop drafts —
  * compute `isExpandedByDefault` from data that is empty on the first render.
  * Getting this wrong hides a freshly installed plugin behind a shut section,

@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment happy-dom
+ *
  * The bench is where a person decides whether to install agent-written code.
  * What it says about a draft's access has to be true, and the three ways a
  * declared grant can be untrue each have to look different.

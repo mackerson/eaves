@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment happy-dom
+ *
  * The send path, because it broke in a way that looked like nothing at all.
  *
  * `sendChatMessage` only STORES a message; the renderer has to ask for the
