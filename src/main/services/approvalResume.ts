@@ -8,7 +8,7 @@ import {
   getSettingsRepository,
   getProjectRepository,
 } from '../repositories';
-import { buildToolset, buildSystemPrompt, activeToolsFor, runStream, buildRequestInfo, systemPromptPlumbing } from '../ipc/chatHelpers';
+import { buildToolset, disposeToolset, buildSystemPrompt, activeToolsFor, runStream, buildRequestInfo, systemPromptPlumbing } from '../ipc/chatHelpers';
 import { buildRoleplayNote } from '../utils/buildRoleplayNote';
 import { buildChannelBehaviorNote } from './ChannelDispatcher';
 import { DEFAULT_CHANNEL_BEHAVIOR } from '../types';
@@ -207,250 +207,261 @@ export async function resumeAfterApprovals(opts: ApprovalBatchOptions): Promise<
   if (!built) {
     return { success: false, error: 'Could not rebuild resume context' };
   }
-  const { agent, priorMessages, systemPrompt, toolset } = built;
-
-  // The SDK's convertToLanguageModelPrompt validates that every assistant
-  // tool-call has either a tool-result OR an approval-response that resolves
-  // back to the tool-call via an approvalId↔toolCallId map. That map is only
-  // populated from `tool-approval-request` content parts on assistant
-  // messages. Persisted responseMessages from a prior turn may not include
-  // that part (depends on the provider's response.messages shape), so we
-  // inject it explicitly here using the IDs we already have on the registry
-  // entry. Without this the validator throws AI_MissingToolResultsError on
-  // the resume request.
-  // Sanitize prior history first — drop unbalanced tool-calls / tool-results
-  // from earlier turns. preserveCallIds keeps THIS approval's tool-call alive
-  // even though it has no tool-result yet (the approval-response will resolve
-  // it on the resumed streamText call).
-  // Every call in the batch stays alive through sanitizing — each one is
-  // resolved by its approval-response below, not by a tool-result.
-  const preservedCallIds = new Set(resolved.map(r => r.entry.toolCallId));
-
-  // Siblings from the same assistant message whose approvals are still
-  // outstanding. When one call of several is decided on its own — which is
-  // what the inline approval card does — the rest are not part of this resume
-  // and get a synthesized result. Without this they are described as failures
-  // of unknown outcome, and an agent reading that goes looking for a race:
-  // re-reading files, re-issuing calls, reasoning about a bug that is not
-  // there. They are simply still in the queue, and they are told so.
-  const stillPending = new Set(
-    getPendingApprovalRegistry()
-      .listForContext(entry.context, entry.contextId)
-      .filter(p => p.messageId === entry.messageId && !preservedCallIds.has(p.toolCallId))
-      .map(p => p.toolCallId),
-  );
-
-  const sanitizedPrior = sanitizeResponseMessagesForReplay(
-    priorMessages,
-    preservedCallIds,
-    stillPending,
-  );
-
-  // One approval-request part per decided call, so the SDK can map each
-  // response back to the call it belongs to.
-  const enrichedPriorMessages = resolved.reduce<unknown[]>(
-    (messages, r) => injectApprovalRequestPart(messages, r.entry.toolCallId, r.entry.approvalId),
-    sanitizedPrior,
-  );
-
-  // One tool message carrying every response. This is the whole point of
-  // batching: the SDK runs the approved tools together and their results land
-  // adjacent to the calls that made them, instead of arriving one resume at a
-  // time and stranding each other.
-  const approvalMessage: ModelMessage = {
-    role: 'tool',
-    content: resolved.map(r => ({
-      type: 'tool-approval-response',
-      approvalId: r.entry.approvalId,
-      approved: r.decision.approved,
-      ...(r.decision.reason ? { reason: r.decision.reason } : {}),
-    })) as never,
-  };
-
-  const mainWindow = getMainWindow();
-
-  // ADR-001 additive envelope: every live event this resume turn produces is
-  // attributable to its container, same as any other turn.
-  const envelope: StreamEnvelope = {
-    turnId: randomUUID(),
-    agentId: entry.agentId,
-    containerId: entry.contextId,
-    context: entry.context,
-  };
-
-  // Same repair → compact → window → repair → assert pipeline the chat and
-  // channel surfaces run. Resume specifically needs the budget stages: without
-  // them it re-sends the FULL rebuilt history, so on a small local context
-  // window a tool-heavy conversation overflows the server exactly when the
-  // user approves a pending call. preserveCallIds keeps this approval's
-  // still-unresolved call alive — and exempt from the adjacency invariant,
-  // since the SDK resolves it from the approval-response appended below.
-  const assembled = await assembleReplayHistory({
-    agent,
-    containerId: entry.contextId,
-    budget: built.budget,
-    messages: enrichedPriorMessages,
-    preserveCallIds: preservedCallIds,
-    onCompacting: (phase) => emitCompaction(mainWindow, phase, envelope),
-    source: `resume:${entry.context}`,
-  });
-  let effectiveSystemPrompt = systemPrompt;
-  if (assembled.summary) {
-    effectiveSystemPrompt += summarySection(assembled.summary);
-  }
-  effectiveSystemPrompt += failureSection(built.failures ?? []);
-  let windowedPrior = assembled.messages;
-
-  // The approval-response can only resolve against the assistant message that
-  // carries this tool-call; if compaction/windowing dropped it (pathological:
-  // a single over-budget message after it), force it back in — otherwise the
-  // SDK validator throws AI_MissingToolResultsError.
-  const carriesCall = (m: unknown): boolean => {
-    const msg = m as { role?: string; content?: unknown };
-    return msg?.role === 'assistant' && Array.isArray(msg.content) &&
-      (msg.content as AssistantContentPart[]).some(p => p?.type === 'tool-call' && p.toolCallId === entry.toolCallId);
-  };
-  if (!windowedPrior.some(carriesCall)) {
-    const callMessage = enrichedPriorMessages.find(carriesCall);
-    if (callMessage) {
-      windowedPrior = [callMessage as (typeof windowedPrior)[number], ...windowedPrior];
-    }
-  }
-
-  const messagesForStream = [...windowedPrior, approvalMessage];
-
-  // Step 3: re-stream through the turn core's stream stage. runStream owns
-  // event routing (envelope-stamped), metrics/cost, response-message capture,
-  // and chained-approval collection. Reuse the same toolset so
-  // needsApproval-gated tools still gate on subsequent (unrelated) calls.
+  // buildResumeMessages opened this turn's MCP connections; from here on
+  // this function owns them. A finally rather than withToolset because the
+  // build and the use genuinely cannot share a scope — the context is built
+  // in one function and streamed in another — so the obligation is explicit
+  // and stated instead of merely remembered. It was neither before: an
+  // approval resume by an agent with a user-configured MCP server leaked a
+  // transport every time.
   try {
-    // Stamped, so a *channel* resume no longer flips the chat surface's busy
-    // state on its way past — this path serves both contexts.
-    emitStreamSentinel(mainWindow, 'start', envelope);
+    const { agent, priorMessages, systemPrompt, toolset } = built;
 
-    // Same active-tool gating as the original turn — a small-window agent must
-    // not suddenly receive every tool schema on resume.
-    const activeToolsFn = activeToolsFor(toolset, built.budget.sizeClass);
+    // The SDK's convertToLanguageModelPrompt validates that every assistant
+    // tool-call has either a tool-result OR an approval-response that resolves
+    // back to the tool-call via an approvalId↔toolCallId map. That map is only
+    // populated from `tool-approval-request` content parts on assistant
+    // messages. Persisted responseMessages from a prior turn may not include
+    // that part (depends on the provider's response.messages shape), so we
+    // inject it explicitly here using the IDs we already have on the registry
+    // entry. Without this the validator throws AI_MissingToolResultsError on
+    // the resume request.
+    // Sanitize prior history first — drop unbalanced tool-calls / tool-results
+    // from earlier turns. preserveCallIds keeps THIS approval's tool-call alive
+    // even though it has no tool-result yet (the approval-response will resolve
+    // it on the resumed streamText call).
+    // Every call in the batch stays alive through sanitizing — each one is
+    // resolved by its approval-response below, not by a tool-result.
+    const preservedCallIds = new Set(resolved.map(r => r.entry.toolCallId));
 
-    const result = await runStream({
+    // Siblings from the same assistant message whose approvals are still
+    // outstanding. When one call of several is decided on its own — which is
+    // what the inline approval card does — the rest are not part of this resume
+    // and get a synthesized result. Without this they are described as failures
+    // of unknown outcome, and an agent reading that goes looking for a race:
+    // re-reading files, re-issuing calls, reasoning about a bug that is not
+    // there. They are simply still in the queue, and they are told so.
+    const stillPending = new Set(
+      getPendingApprovalRegistry()
+        .listForContext(entry.context, entry.contextId)
+        .filter(p => p.messageId === entry.messageId && !preservedCallIds.has(p.toolCallId))
+        .map(p => p.toolCallId),
+    );
+
+    const sanitizedPrior = sanitizeResponseMessagesForReplay(
+      priorMessages,
+      preservedCallIds,
+      stillPending,
+    );
+
+    // One approval-request part per decided call, so the SDK can map each
+    // response back to the call it belongs to.
+    const enrichedPriorMessages = resolved.reduce<unknown[]>(
+      (messages, r) => injectApprovalRequestPart(messages, r.entry.toolCallId, r.entry.approvalId),
+      sanitizedPrior,
+    );
+
+    // One tool message carrying every response. This is the whole point of
+    // batching: the SDK runs the approved tools together and their results land
+    // adjacent to the calls that made them, instead of arriving one resume at a
+    // time and stranding each other.
+    const approvalMessage: ModelMessage = {
+      role: 'tool',
+      content: resolved.map(r => ({
+        type: 'tool-approval-response',
+        approvalId: r.entry.approvalId,
+        approved: r.decision.approved,
+        ...(r.decision.reason ? { reason: r.decision.reason } : {}),
+      })) as never,
+    };
+
+    const mainWindow = getMainWindow();
+
+    // ADR-001 additive envelope: every live event this resume turn produces is
+    // attributable to its container, same as any other turn.
+    const envelope: StreamEnvelope = {
+      turnId: randomUUID(),
+      agentId: entry.agentId,
+      containerId: entry.contextId,
+      context: entry.context,
+    };
+
+    // Same repair → compact → window → repair → assert pipeline the chat and
+    // channel surfaces run. Resume specifically needs the budget stages: without
+    // them it re-sends the FULL rebuilt history, so on a small local context
+    // window a tool-heavy conversation overflows the server exactly when the
+    // user approves a pending call. preserveCallIds keeps this approval's
+    // still-unresolved call alive — and exempt from the adjacency invariant,
+    // since the SDK resolves it from the approval-response appended below.
+    const assembled = await assembleReplayHistory({
       agent,
-      formattedResult: { messages: messagesForStream, systemPrompt: effectiveSystemPrompt },
-      enabledTools: toolset.enabledTools as Record<string, unknown>,
-      activeTools: activeToolsFn,
-      // Resume exposes no stop/abort surface; hand runStream an inert signal.
-      abortSignal: new AbortController().signal,
-      mainWindow,
-      messageCount: messagesForStream.length,
-      envelope,
-      // A resume is a real billed request against the same budget as any other
-      // turn, and it runs the same compaction/windowing pipeline — without this
-      // it was the one turn shape that reported no context telemetry at all.
-      // `messagesTotal` counts the prior history plus the approval response,
-      // i.e. what would have been sent had nothing been windowed away.
-      requestInfo: buildRequestInfo({
-        budget: built.budget,
-        systemPrompt: effectiveSystemPrompt,
-        messagesTotal: enrichedPriorMessages.length + 1,
-        messagesSent: messagesForStream.length,
-        activeToolNames: activeToolsFn(),
-        includeSystemPrompt: agent.debugLogging,
-      }),
+      containerId: entry.contextId,
+      budget: built.budget,
+      messages: enrichedPriorMessages,
+      preserveCallIds: preservedCallIds,
+      onCompacting: (phase) => emitCompaction(mainWindow, phase, envelope),
+      source: `resume:${entry.context}`,
     });
+    let effectiveSystemPrompt = systemPrompt;
+    if (assembled.summary) {
+      effectiveSystemPrompt += summarySection(assembled.summary);
+    }
+    effectiveSystemPrompt += failureSection(built.failures ?? []);
+    let windowedPrior = assembled.messages;
 
-    if (result.streamError) {
-      logger.warn('[approvalResume] Resume turn ended with stream error', {
-        approvalIds, error: result.streamError,
+    // The approval-response can only resolve against the assistant message that
+    // carries this tool-call; if compaction/windowing dropped it (pathological:
+    // a single over-budget message after it), force it back in — otherwise the
+    // SDK validator throws AI_MissingToolResultsError.
+    const carriesCall = (m: unknown): boolean => {
+      const msg = m as { role?: string; content?: unknown };
+      return msg?.role === 'assistant' && Array.isArray(msg.content) &&
+        (msg.content as AssistantContentPart[]).some(p => p?.type === 'tool-call' && p.toolCallId === entry.toolCallId);
+    };
+    if (!windowedPrior.some(carriesCall)) {
+      const callMessage = enrichedPriorMessages.find(carriesCall);
+      if (callMessage) {
+        windowedPrior = [callMessage as (typeof windowedPrior)[number], ...windowedPrior];
+      }
+    }
+
+    const messagesForStream = [...windowedPrior, approvalMessage];
+
+    // Step 3: re-stream through the turn core's stream stage. runStream owns
+    // event routing (envelope-stamped), metrics/cost, response-message capture,
+    // and chained-approval collection. Reuse the same toolset so
+    // needsApproval-gated tools still gate on subsequent (unrelated) calls.
+    try {
+      // Stamped, so a *channel* resume no longer flips the chat surface's busy
+      // state on its way past — this path serves both contexts.
+      emitStreamSentinel(mainWindow, 'start', envelope);
+
+      // Same active-tool gating as the original turn — a small-window agent must
+      // not suddenly receive every tool schema on resume.
+      const activeToolsFn = activeToolsFor(toolset, built.budget.sizeClass);
+
+      const result = await runStream({
+        agent,
+        formattedResult: { messages: messagesForStream, systemPrompt: effectiveSystemPrompt },
+        enabledTools: toolset.enabledTools as Record<string, unknown>,
+        activeTools: activeToolsFn,
+        // Resume exposes no stop/abort surface; hand runStream an inert signal.
+        abortSignal: new AbortController().signal,
+        mainWindow,
+        messageCount: messagesForStream.length,
+        envelope,
+        // A resume is a real billed request against the same budget as any other
+        // turn, and it runs the same compaction/windowing pipeline — without this
+        // it was the one turn shape that reported no context telemetry at all.
+        // `messagesTotal` counts the prior history plus the approval response,
+        // i.e. what would have been sent had nothing been windowed away.
+        requestInfo: buildRequestInfo({
+          budget: built.budget,
+          systemPrompt: effectiveSystemPrompt,
+          messagesTotal: enrichedPriorMessages.length + 1,
+          messagesSent: messagesForStream.length,
+          activeToolNames: activeToolsFn(),
+          includeSystemPrompt: agent.debugLogging,
+        }),
       });
-    }
 
-    const hasPendingApprovals = (result.pendingApprovals?.length ?? 0) > 0;
-    const hasContent = result.response.trim().length > 0 || result.contentBlocks.length > 0;
-
-    if (!hasContent && !hasPendingApprovals) {
-      // Empty turns never persist on any path (ADR-001). The decision itself
-      // is already recorded on the original message's tool-approval block.
-      logger.warn('[approvalResume] Empty resume turn — nothing persisted', { approvalIds });
-    } else {
-      // Legacy toolCalls mirror — same derivation ContentBlocksBuilder uses.
-      const legacyToolCalls = result.contentBlocks
-        .filter(b => b.type === 'tool-call')
-        .map(b => b.toolCall!)
-        .filter(Boolean);
-
-      // Persist continuation as a new assistant message in the same
-      // chat/channel. Empty content is fine when tool activity or a pending
-      // approval is present — those surface via contentBlocks.
-      let newMessageId: string;
-      if (entry.context === 'chat') {
-        const chatRepo = getChannelRepository();
-        const newMsg = chatRepo.createDirectMessage({
-          chatId: entry.contextId,
-          senderId: entry.agentId,
-          senderType: 'agent',
-          senderDisplayName: agent.name,
-          senderColor: agent.color,
-          // Chain onto the prior turn like every other insert path — a NULL
-          // parent would lump this row with other root-level messages when
-          // branch counts group siblings by parent_message_id.
-          parentMessageId: chatRepo.getLatestActiveMessageId(entry.contextId) ?? undefined,
-          metadata: { participantType: 'agent', resumedFromApproval: approvalLabel },
-          content: result.response,
-          contentBlocks: result.contentBlocks.length > 0 ? result.contentBlocks : undefined,
-          toolCalls: legacyToolCalls,
-          responseMessages: result.responseMessages,
-          timestamp: Date.now(),
-          metrics: result.metrics,
+      if (result.streamError) {
+        logger.warn('[approvalResume] Resume turn ended with stream error', {
+          approvalIds, error: result.streamError,
         });
-        newMessageId = newMsg.id;
+      }
+
+      const hasPendingApprovals = (result.pendingApprovals?.length ?? 0) > 0;
+      const hasContent = result.response.trim().length > 0 || result.contentBlocks.length > 0;
+
+      if (!hasContent && !hasPendingApprovals) {
+        // Empty turns never persist on any path (ADR-001). The decision itself
+        // is already recorded on the original message's tool-approval block.
+        logger.warn('[approvalResume] Empty resume turn — nothing persisted', { approvalIds });
       } else {
-        const channelRepo = getChannelRepository();
-        const newMsg = channelRepo.createMessage({
-          channelId: entry.contextId,
-          senderId: entry.agentId,
-          senderType: 'agent',
-          senderDisplayName: agent.name,
-          senderColor: agent.color,
-          metadata: {
-            participantType: 'agent',
-            dispatchedBy: 'channel-dispatcher',
-            resumedFromApproval: approvalLabel,
-          },
-          content: result.response,
-          contentBlocks: result.contentBlocks.length > 0 ? result.contentBlocks : undefined,
-          toolCalls: legacyToolCalls,
-          responseMessages: result.responseMessages,
-          timestamp: Date.now(),
-          metrics: result.metrics,
-        });
-        newMessageId = newMsg.id;
-        if (mainWindow) {
-          mainWindow.webContents.send('channel-message-added', { channelId: entry.contextId, message: newMsg });
-        }
-      }
+        // Legacy toolCalls mirror — same derivation ContentBlocksBuilder uses.
+        const legacyToolCalls = result.contentBlocks
+          .filter(b => b.type === 'tool-call')
+          .map(b => b.toolCall!)
+          .filter(Boolean);
 
-      // Chained approvals: the resumed turn can itself suspend on another
-      // needsApproval call — register against the new message so the next
-      // approval:respond can resume from it.
-      if (hasPendingApprovals && result.pendingApprovals) {
-        const registry = getPendingApprovalRegistry();
-        for (const a of result.pendingApprovals) {
-          registry.register({
-            ...a, context: entry.context, contextId: entry.contextId,
-            agentId: entry.agentId, messageId: newMessageId,
+        // Persist continuation as a new assistant message in the same
+        // chat/channel. Empty content is fine when tool activity or a pending
+        // approval is present — those surface via contentBlocks.
+        let newMessageId: string;
+        if (entry.context === 'chat') {
+          const chatRepo = getChannelRepository();
+          const newMsg = chatRepo.createDirectMessage({
+            chatId: entry.contextId,
+            senderId: entry.agentId,
+            senderType: 'agent',
+            senderDisplayName: agent.name,
+            senderColor: agent.color,
+            // Chain onto the prior turn like every other insert path — a NULL
+            // parent would lump this row with other root-level messages when
+            // branch counts group siblings by parent_message_id.
+            parentMessageId: chatRepo.getLatestActiveMessageId(entry.contextId) ?? undefined,
+            metadata: { participantType: 'agent', resumedFromApproval: approvalLabel },
+            content: result.response,
+            contentBlocks: result.contentBlocks.length > 0 ? result.contentBlocks : undefined,
+            toolCalls: legacyToolCalls,
+            responseMessages: result.responseMessages,
+            timestamp: Date.now(),
+            metrics: result.metrics,
           });
+          newMessageId = newMsg.id;
+        } else {
+          const channelRepo = getChannelRepository();
+          const newMsg = channelRepo.createMessage({
+            channelId: entry.contextId,
+            senderId: entry.agentId,
+            senderType: 'agent',
+            senderDisplayName: agent.name,
+            senderColor: agent.color,
+            metadata: {
+              participantType: 'agent',
+              dispatchedBy: 'channel-dispatcher',
+              resumedFromApproval: approvalLabel,
+            },
+            content: result.response,
+            contentBlocks: result.contentBlocks.length > 0 ? result.contentBlocks : undefined,
+            toolCalls: legacyToolCalls,
+            responseMessages: result.responseMessages,
+            timestamp: Date.now(),
+            metrics: result.metrics,
+          });
+          newMessageId = newMsg.id;
+          if (mainWindow) {
+            mainWindow.webContents.send('channel-message-added', { channelId: entry.contextId, message: newMsg });
+          }
+        }
+
+        // Chained approvals: the resumed turn can itself suspend on another
+        // needsApproval call — register against the new message so the next
+        // approval:respond can resume from it.
+        if (hasPendingApprovals && result.pendingApprovals) {
+          const registry = getPendingApprovalRegistry();
+          for (const a of result.pendingApprovals) {
+            registry.register({
+              ...a, context: entry.context, contextId: entry.contextId,
+              agentId: entry.agentId, messageId: newMessageId,
+            });
+          }
         }
       }
+
+      emitStreamSentinel(mainWindow, 'end', envelope);
+
+      return { success: true };
+    } catch (error) {
+      logger.error('[approvalResume] Failed to resume after approval', {
+        approvalIds, error: error instanceof Error ? error.message : String(error),
+      });
+      emitStreamSentinel(mainWindow, 'end', envelope);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
-
-    emitStreamSentinel(mainWindow, 'end', envelope);
-
-    return { success: true };
-  } catch (error) {
-    logger.error('[approvalResume] Failed to resume after approval', {
-      approvalIds, error: error instanceof Error ? error.message : String(error),
-    });
-    emitStreamSentinel(mainWindow, 'end', envelope);
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    await disposeToolset(built.toolset);
   }
 }
 

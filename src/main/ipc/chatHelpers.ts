@@ -89,6 +89,49 @@ function applyApprovalGrants(
   return out;
 }
 
+/**
+ * Release the per-turn resources a toolset holds.
+ *
+ * Only user-configured MCP servers are in `mcpClients`. The auto-injected
+ * filesystem servers are pooled for the process lifetime and deliberately kept
+ * out of that array by `connectMCPServers`, precisely so ending one turn does
+ * not kill a server other turns are still using.
+ *
+ * One named operation rather than the same three lines at each call site: this
+ * used to be written out once, in `runChatAssistantTurn`, and the other three
+ * places that build a toolset simply did not do it.
+ */
+export async function disposeToolset(toolset: Pick<ToolsetResult, 'mcpClients'>): Promise<void> {
+  if (!toolset.mcpClients.length) return;
+  const { disconnectMCPClients } = await import('../services/mcp');
+  disconnectMCPClients(toolset.mcpClients as Parameters<typeof disconnectMCPClients>[0]);
+}
+
+/**
+ * Build a toolset, use it, and release it — the shape that cannot leak.
+ *
+ * `buildToolset` opens a connection per user-configured MCP server, and every
+ * caller is obliged to close them when the turn ends. Three of the four did
+ * not, so a channel turn or an approval resume by an agent with any MCP server
+ * configured leaked a transport for the life of the app. The obligation is not
+ * something a call site should have to remember, so this owns both ends of it.
+ *
+ * Where build and use genuinely cannot share a scope — `approvalResume` builds
+ * its context in one function and streams in another — the caller that took
+ * ownership disposes in a `finally` instead, and says so.
+ */
+export async function withToolset<T>(
+  args: Parameters<typeof buildToolset>,
+  use: (toolset: ToolsetResult) => Promise<T>,
+): Promise<T> {
+  const toolset = await buildToolset(...args);
+  try {
+    return await use(toolset);
+  } finally {
+    await disposeToolset(toolset);
+  }
+}
+
 export async function buildToolset(
   agent: Agent,
   currentProject: Project,

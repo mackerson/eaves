@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // reconstruction from the persisted contentBlock, and the ADR-001 empty-turn
 // policy (nothing persists).
 
+const { disposedToolsets } = vi.hoisted(() => ({ disposedToolsets: [] as unknown[] }));
 vi.mock('electron', () => ({
   BrowserWindow: vi.fn(),
 }));
@@ -28,6 +29,14 @@ const buildRequestInfo = vi.fn(() => ({
   toolCount: 0,
 }));
 vi.mock('../ipc/chatHelpers', () => ({
+  // Releasing a toolset is now structural rather than remembered — see
+  // chatHelpers.disposeToolset. `disposedToolsets` records it so a test
+  // can assert the turn actually let go of its MCP connections.
+  disposeToolset: (toolset: unknown) => { disposedToolsets.push(toolset); },
+  withToolset: async (_args: unknown, use: (t: unknown) => Promise<unknown>) => {
+    const toolset = { enabledTools: {}, mcpClients: [], projectDirectories: [], builtinToolCount: 0, mcpToolCount: 0, totalToolCount: 0 };
+    try { return await use(toolset); } finally { disposedToolsets.push(toolset); }
+  },
   runStream: (...args: unknown[]) => runStream(...args),
   buildToolset: vi.fn(async () => ({
     enabledTools: {},
@@ -243,6 +252,7 @@ function decision(approved = true) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  disposedToolsets.length = 0;
   sends = [];
   agentRepo.getById.mockReturnValue(agent);
   settingsRepo.get.mockReturnValue({ userName: 'Robin' });
@@ -258,6 +268,37 @@ beforeEach(() => {
 });
 
 describe('resumeAfterApproval — chat context', () => {
+  // buildResumeMessages opens this turn's MCP connections, and the function
+  // that consumes the context owns them. Nothing released them: every approval
+  // resume by an agent with a user-configured MCP server leaked a transport
+  // for the life of the app.
+  it('releases the MCP connections the resume opened', async () => {
+    await resumeAfterApproval({
+      approvalId: APPROVAL_ID,
+      decision: decision(true),
+      registryEntry: chatEntry(),
+      getMainWindow,
+      toolStates: new Map(),
+    });
+
+    expect(disposedToolsets).toHaveLength(1);
+  });
+
+  it('releases them even when the resumed stream throws', async () => {
+    runStream.mockRejectedValueOnce(new Error('provider exploded'));
+
+    const res = await resumeAfterApproval({
+      approvalId: APPROVAL_ID,
+      decision: decision(true),
+      registryEntry: chatEntry(),
+      getMainWindow,
+      toolStates: new Map(),
+    });
+
+    expect(res.success).toBe(false);
+    expect(disposedToolsets).toHaveLength(1);
+  });
+
   it('re-streams via the turn core with the injected approval-response and envelope', async () => {
     const res = await resumeAfterApproval({
       approvalId: APPROVAL_ID,

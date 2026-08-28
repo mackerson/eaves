@@ -40,6 +40,7 @@ const {
   emitStreamAborted: vi.fn(),
 }));
 
+const { disposedToolsets } = vi.hoisted(() => ({ disposedToolsets: [] as unknown[] }));
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/eaves-test', on: vi.fn(), whenReady: () => Promise.resolve() },
   BrowserWindow: class {},
@@ -53,6 +54,14 @@ vi.mock('../repositories', () => ({
   getMessageAttachmentRepository: () => ({ getById: vi.fn(), getByAssetPointer: vi.fn() }),
 }));
 vi.mock('../ipc/chatHelpers', () => ({
+  // Releasing a toolset is now structural rather than remembered — see
+  // chatHelpers.disposeToolset. `disposedToolsets` records it so a test
+  // can assert the turn actually let go of its MCP connections.
+  disposeToolset: (toolset: unknown) => { disposedToolsets.push(toolset); },
+  withToolset: async (_args: unknown, use: (t: unknown) => Promise<unknown>) => {
+    const toolset = { enabledTools: {}, mcpClients: [], projectDirectories: [], builtinToolCount: 0, mcpToolCount: 0, totalToolCount: 0 };
+    try { return await use(toolset); } finally { disposedToolsets.push(toolset); }
+  },
   runStream,
   buildToolset,
   buildSystemPrompt,
@@ -200,6 +209,7 @@ function streamResult(over: Record<string, unknown> = {}) {
 describe('runAgentTurn — channel-broadcast', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    disposedToolsets.length = 0;
     channelRepo.getById.mockReturnValue(baseChannel);
     buildToolset.mockResolvedValue({
       enabledTools: {},
@@ -216,6 +226,50 @@ describe('runAgentTurn — channel-broadcast', () => {
       id: 'msg-out',
       ...row,
     }));
+  });
+
+  // streamChannelTurn returned runStream's promise directly, so the MCP
+  // connections buildToolset opened had no owning scope and were never closed.
+  // Every channel turn by an agent with a user-configured MCP server leaked a
+  // transport for the life of the app.
+  it('releases the MCP connections the turn opened', async () => {
+    runStream.mockResolvedValue(streamResult());
+
+    await runAgentTurn(
+      {
+        context: 'channel',
+        containerId: 'ch-1',
+        agent,
+        project,
+        settings,
+        persistence: 'channel-broadcast',
+        abortSignal: new AbortController().signal,
+        trigger: { messageId: 'm1' },
+      },
+      deps,
+    );
+
+    expect(disposedToolsets).toHaveLength(1);
+  });
+
+  it('releases them even when the stream throws', async () => {
+    runStream.mockRejectedValue(new Error('provider exploded'));
+
+    await runAgentTurn(
+      {
+        context: 'channel',
+        containerId: 'ch-1',
+        agent,
+        project,
+        settings,
+        persistence: 'channel-broadcast',
+        abortSignal: new AbortController().signal,
+        trigger: { messageId: 'm1' },
+      },
+      deps,
+    ).catch(() => undefined);
+
+    expect(disposedToolsets).toHaveLength(1);
   });
 
   it('persists a terminal broadcast reply with dispatchedBy metadata', async () => {

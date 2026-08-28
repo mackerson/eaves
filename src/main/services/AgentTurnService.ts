@@ -34,7 +34,7 @@ import {
   type StreamEnvelope,
   type StreamMetrics,
 } from './streamEventRouter';
-import { buildToolset, buildSystemPrompt, runStream, activeToolsFor, buildRequestInfo, systemPromptPlumbing } from '../ipc/chatHelpers';
+import { buildToolset, withToolset, disposeToolset, buildSystemPrompt, runStream, activeToolsFor, buildRequestInfo, systemPromptPlumbing } from '../ipc/chatHelpers';
 import { resolveTurnBudget } from './contextBudget';
 import type { StreamResult, PendingApprovalInfo } from '../ipc/chatHelpers';
 import { getChannelRepository } from '../repositories';
@@ -250,88 +250,92 @@ async function streamChannelTurn(
 
   const budget = await resolveTurnBudget(agent);
 
-  // Build toolset
-  const toolset = await buildToolset(agent, project, channelId, deps.toolStates);
+  // withToolset, not buildToolset: this path returns runStream's promise
+  // directly, so without an owning scope the MCP connections it opened were
+  // never closed. Every channel turn by an agent with a user-configured MCP
+  // server leaked a transport for the life of the app.
+  return withToolset([agent, project, channelId, deps.toolStates], async (toolset) => {
 
-  // Build system prompt with channel behavior note
-  const behaviorNote = buildChannelBehaviorNote(agent, behavior);
-  const systemPrompt = await buildSystemPrompt({
-    agent,
-    project,
-    settings,
-    participants: channel.participants,
-    participantNote: behaviorNote,
-    ...systemPromptPlumbing(toolset, budget),
-  });
+    // Build system prompt with channel behavior note
+    const behaviorNote = buildChannelBehaviorNote(agent, behavior);
+    const systemPrompt = await buildSystemPrompt({
+      agent,
+      project,
+      settings,
+      participants: channel.participants,
+      participantNote: behaviorNote,
+      ...systemPromptPlumbing(toolset, budget),
+    });
 
-  // Same repair → compact → window → assert pipeline the chat surface runs.
-  // The prose projection can't carry tool structure, so the repair passes are
-  // mostly inert here — but the empty-turn drop and the invariant assertion
-  // are not: without them a channel is just as wedgeable as a chat.
-  const assembled = await assembleReplayHistory({
-    agent,
-    containerId: channelId,
-    budget,
-    messages: perspectiveMessages,
-    onCompacting: (phase) => emitCompaction(deps.getMainWindow(), phase, envelope),
-    source: 'channel',
-  });
-  let effectiveSystemPrompt = assembled.summary
-    ? systemPrompt + summarySection(assembled.summary)
-    : systemPrompt;
-  effectiveSystemPrompt += failureSection(failures.unresolved);
-  if (currentImageParts.length > 0) {
-    // Same describe-first nudge the chat path appends on image turns — a real
-    // system instruction, suffixed so the cached prompt prefix still hits.
-    effectiveSystemPrompt += '\n\nWhen the user shares an image, start by briefly describing what you see, then address their message — this keeps the visual context available as the conversation continues.';
-  }
-  const formattedResult = MessageFormatter.formatMessages(
-    agent,
-    assembled.messages as typeof perspectiveMessages,
-    effectiveSystemPrompt,
-    settings.userName,
-  );
+    // Same repair → compact → window → assert pipeline the chat surface runs.
+    // The prose projection can't carry tool structure, so the repair passes are
+    // mostly inert here — but the empty-turn drop and the invariant assertion
+    // are not: without them a channel is just as wedgeable as a chat.
+    const assembled = await assembleReplayHistory({
+      agent,
+      containerId: channelId,
+      budget,
+      messages: perspectiveMessages,
+      onCompacting: (phase) => emitCompaction(deps.getMainWindow(), phase, envelope),
+      source: 'channel',
+    });
+    let effectiveSystemPrompt = assembled.summary
+      ? systemPrompt + summarySection(assembled.summary)
+      : systemPrompt;
+    effectiveSystemPrompt += failureSection(failures.unresolved);
+    if (currentImageParts.length > 0) {
+      // Same describe-first nudge the chat path appends on image turns — a real
+      // system instruction, suffixed so the cached prompt prefix still hits.
+      effectiveSystemPrompt += '\n\nWhen the user shares an image, start by briefly describing what you see, then address their message — this keeps the visual context available as the conversation continues.';
+    }
+    const formattedResult = MessageFormatter.formatMessages(
+      agent,
+      assembled.messages as typeof perspectiveMessages,
+      effectiveSystemPrompt,
+      settings.userName,
+    );
 
-  // Attach the current turn's images as vision parts on the final user
-  // message. Post-format on purpose: MessageFormatter's contextFormatting
-  // and instruct-template paths operate on string content. The raw-prompt
-  // path can't carry parts at all — it keeps the [Image: …] text markers
-  // appended during history expansion above.
-  if (currentImageParts.length > 0 && !formattedResult.useRawPrompt) {
-    for (let i = formattedResult.messages.length - 1; i >= 0; i--) {
-      const m = formattedResult.messages[i] as { role: string; content: unknown };
-      if (m.role === 'user') {
-        m.content = [{ type: 'text', text: m.content }, ...currentImageParts] as unknown as string;
-        break;
+    // Attach the current turn's images as vision parts on the final user
+    // message. Post-format on purpose: MessageFormatter's contextFormatting
+    // and instruct-template paths operate on string content. The raw-prompt
+    // path can't carry parts at all — it keeps the [Image: …] text markers
+    // appended during history expansion above.
+    if (currentImageParts.length > 0 && !formattedResult.useRawPrompt) {
+      for (let i = formattedResult.messages.length - 1; i >= 0; i--) {
+        const m = formattedResult.messages[i] as { role: string; content: unknown };
+        if (m.role === 'user') {
+          m.content = [{ type: 'text', text: m.content }, ...currentImageParts] as unknown as string;
+          break;
+        }
       }
     }
-  }
 
-  // Stream AI response. Register the full tool set; gate active schemas per
-  // step — deferred tools stay off the wire until enabled, and a tiny window
-  // trims to discovery + enabled. Recomputed live so a mid-turn enable lands.
-  const activeToolsFn = activeToolsFor(toolset, budget.sizeClass);
-  const activeToolNames = activeToolsFn();
-  return runStream({
-    agent,
-    formattedResult,
-    enabledTools: toolset.enabledTools as Record<string, unknown>,
-    activeTools: activeToolsFn,
-    abortSignal,
-    mainWindow: deps.getMainWindow(),
-    messageCount: chatMessages.length,
-    envelope,
-    // OpenRouter sticky pin: keep this conversation on the backend that
-    // served its last agent turn, for prompt-cache continuity.
-    preferredProvider: resolveStickyProvider(channel.messages, agent.provider),
-    requestInfo: buildRequestInfo({
-      budget,
-      systemPrompt,
-      messagesTotal: perspectiveMessages.length,
-      messagesSent: assembled.messages.length,
-      activeToolNames,
-      includeSystemPrompt: agent.debugLogging,
-    }),
+    // Stream AI response. Register the full tool set; gate active schemas per
+    // step — deferred tools stay off the wire until enabled, and a tiny window
+    // trims to discovery + enabled. Recomputed live so a mid-turn enable lands.
+    const activeToolsFn = activeToolsFor(toolset, budget.sizeClass);
+    const activeToolNames = activeToolsFn();
+    return runStream({
+      agent,
+      formattedResult,
+      enabledTools: toolset.enabledTools as Record<string, unknown>,
+      activeTools: activeToolsFn,
+      abortSignal,
+      mainWindow: deps.getMainWindow(),
+      messageCount: chatMessages.length,
+      envelope,
+      // OpenRouter sticky pin: keep this conversation on the backend that
+      // served its last agent turn, for prompt-cache continuity.
+      preferredProvider: resolveStickyProvider(channel.messages, agent.provider),
+      requestInfo: buildRequestInfo({
+        budget,
+        systemPrompt,
+        messagesTotal: perspectiveMessages.length,
+        messagesSent: assembled.messages.length,
+        activeToolNames,
+        includeSystemPrompt: agent.debugLogging,
+      }),
+    });
   });
 }
 
@@ -1032,12 +1036,10 @@ async function runChatAssistantTurn(
       metrics: streamMetrics,
     };
   } finally {
-    // Only per-turn (user-configured) servers are in here. The auto-injected
-    // filesystem servers are pooled for the process lifetime and owned by
-    // connectMCPServers, which keeps them out of this list precisely so closing
-    // a turn does not kill a server other turns are still using.
-    const { disconnectMCPClients } = await import('./mcp');
-    disconnectMCPClients(mcpClients);
+    // The same teardown the other three paths now use. This one was written
+    // out here and nowhere else, which is exactly how the others came to skip
+    // it — see disposeToolset for what is and is not in this list.
+    await disposeToolset({ mcpClients });
   }
 }
 

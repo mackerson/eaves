@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // AgentTurnService pulls a heavy import graph; stub the edges we never exercise.
+const { disposedToolsets } = vi.hoisted(() => ({ disposedToolsets: [] as unknown[] }));
 vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -15,6 +16,14 @@ vi.mock('../repositories', () => ({
   getProjectRepository: vi.fn(),
 }));
 vi.mock('../ipc/chatHelpers', () => ({
+  // Releasing a toolset is now structural rather than remembered — see
+  // chatHelpers.disposeToolset. `disposedToolsets` records it so a test
+  // can assert the turn actually let go of its MCP connections.
+  disposeToolset: (toolset: unknown) => { disposedToolsets.push(toolset); },
+  withToolset: async (_args: unknown, use: (t: unknown) => Promise<unknown>) => {
+    const toolset = { enabledTools: {}, mcpClients: [], projectDirectories: [], builtinToolCount: 0, mcpToolCount: 0, totalToolCount: 0 };
+    try { return await use(toolset); } finally { disposedToolsets.push(toolset); }
+  },
   buildToolset: vi.fn(),
   buildSystemPrompt: vi.fn(),
   runStream: vi.fn(),

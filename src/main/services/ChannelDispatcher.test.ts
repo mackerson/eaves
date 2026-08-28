@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // message:updated emissions below are negative controls — they pin that
 // storage events stay dispatch-inert.
 
+const { disposedToolsets } = vi.hoisted(() => ({ disposedToolsets: [] as unknown[] }));
 vi.mock('electron', () => ({
   BrowserWindow: vi.fn(),
   // Attachment loaders resolve the store directory via app.getPath at turn
@@ -23,6 +24,14 @@ const runStream = vi.fn();
 const buildToolset = vi.fn();
 const buildSystemPrompt = vi.fn();
 vi.mock('../ipc/chatHelpers', () => ({
+  // Releasing a toolset is now structural rather than remembered — see
+  // chatHelpers.disposeToolset. `disposedToolsets` records it so a test
+  // can assert the turn actually let go of its MCP connections.
+  disposeToolset: (toolset: unknown) => { disposedToolsets.push(toolset); },
+  withToolset: async (_args: unknown, use: (t: unknown) => Promise<unknown>) => {
+    const toolset = { enabledTools: {}, mcpClients: [], projectDirectories: [], builtinToolCount: 0, mcpToolCount: 0, totalToolCount: 0 };
+    try { return await use(toolset); } finally { disposedToolsets.push(toolset); }
+  },
   runStream: (...args: unknown[]) => runStream(...args),
   buildToolset: (...args: unknown[]) => buildToolset(...args),
   buildSystemPrompt: (...args: unknown[]) => buildSystemPrompt(...args),
