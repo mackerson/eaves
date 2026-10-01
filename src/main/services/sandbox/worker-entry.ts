@@ -518,6 +518,16 @@ function createPluginContext() {
         rpc('services', 'hasProviders', [serviceType]),
     },
 
+    // Secrets — per-plugin, sealed with the OS keychain on the host side.
+    // Fail-closed: get/set throw when OS encryption is unavailable; there is
+    // no plaintext fallback. Never log what get() returns.
+    secrets: {
+      get: (key: string) => rpc('secrets', 'get', [key]) as Promise<string | null>,
+      set: (key: string, value: string) => rpc('secrets', 'set', [key, value]),
+      delete: (key: string) => rpc('secrets', 'delete', [key]) as Promise<boolean>,
+      keys: () => rpc('secrets', 'keys', []) as Promise<string[]>,
+    },
+
     // Utils
     utils: {
       storage: {

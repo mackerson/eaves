@@ -619,6 +619,8 @@ export class SandboxedPluginManager {
         return this.handleServicesRequest(pluginId, request.method, request.args);
       case 'storage':
         return this.handleStorageRequest(pluginId, request.method, request.args);
+      case 'secrets':
+        return this.handleSecretsRequest(pluginId, request.method, request.args);
       default:
         throw new Error(`Unknown namespace: ${request.namespace}`);
     }
@@ -966,6 +968,36 @@ export class SandboxedPluginManager {
   }
 
   /**
+   * Handle secrets namespace requests.
+   *
+   * The pluginId is the host's own identity for the calling worker, never an
+   * argument — a plugin cannot name another plugin's namespace. Secret values
+   * pass straight through; they are never logged on this path.
+   */
+  private async handleSecretsRequest(
+    pluginId: string,
+    method: string,
+    args: unknown[]
+  ): Promise<unknown> {
+    const { getPluginSecretsStore } = await import('../PluginSecretsStore');
+    const store = getPluginSecretsStore();
+
+    switch (method) {
+      case 'get':
+        return store.get(pluginId, args[0] as string);
+      case 'set':
+        store.set(pluginId, args[0] as string, args[1] as string);
+        return { success: true };
+      case 'delete':
+        return store.delete(pluginId, args[0] as string);
+      case 'keys':
+        return store.keys(pluginId);
+      default:
+        throw new Error(`Unknown secrets method: ${method}`);
+    }
+  }
+
+  /**
    * Unload a plugin
    */
   async unloadPlugin(pluginId: string): Promise<void> {
@@ -1134,6 +1166,10 @@ export class SandboxedPluginManager {
     // Plugin configs are where plugin API keys and tokens live; without this
     // they outlived the uninstall in plugin-configs.json indefinitely.
     getPluginConfigManager().deleteConfig(pluginId);
+    // Same rule for sealed secrets: an uninstalled plugin's credentials must
+    // not survive it.
+    const { getPluginSecretsStore } = await import('../PluginSecretsStore');
+    getPluginSecretsStore().clearPlugin(pluginId);
   }
 
   /** Absolute path to the draft plugins dir (agent-authored staging). */
@@ -1228,6 +1264,8 @@ export class SandboxedPluginManager {
     clearRevisions(pluginId); // nothing left for a diff to be against
     getPluginStateRepository().delete(pluginId);
     getPluginConfigManager().deleteConfig(pluginId);
+    const { getPluginSecretsStore } = await import('../PluginSecretsStore');
+    getPluginSecretsStore().clearPlugin(pluginId);
   }
 
   /**

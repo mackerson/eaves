@@ -33,6 +33,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'services:call': 'Use services from other plugins',
   'storage:read': 'Read its own stored data',
   'storage:write': 'Store its own data',
+  'secrets:read': 'Read secrets it has stored (sealed with your OS keychain)',
+  'secrets:write': 'Store secrets sealed with your OS keychain',
   'network:http': 'Make network requests',
   'system:filesystem': 'Read and write files on your computer',
   // Coarse aliases — legal in a manifest, but the sandbox matches only the

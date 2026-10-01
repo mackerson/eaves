@@ -1027,6 +1027,9 @@ export type PluginPermission =
   // Storage
   | 'storage:read'
   | 'storage:write'
+  // Secrets (per-plugin, OS-encrypted via safeStorage; fail-closed)
+  | 'secrets:read'
+  | 'secrets:write'
   // Dangerous (require explicit grant)
   | 'network:http'
   | 'system:filesystem'

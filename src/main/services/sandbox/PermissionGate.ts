@@ -101,6 +101,12 @@ export const PERMISSION_REQUIREMENTS = {
   'storage.delete': ['storage:write'],
   'storage.clear': ['storage:write'],
   'storage.keys': ['storage:read'],
+
+  // Secrets namespace — per-plugin, safeStorage-sealed, fail-closed
+  'secrets.get': ['secrets:read'],
+  'secrets.keys': ['secrets:read'],
+  'secrets.set': ['secrets:write'],
+  'secrets.delete': ['secrets:write'],
 } satisfies Record<string, PluginPermission[]>;
 
 /** Every method the gate knows about. */
@@ -192,6 +198,15 @@ export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
   'storage.delete': '(key: string): Promise<void>',
   'storage.clear': '(): Promise<void>',
   'storage.keys': '(): Promise<string[]>',
+
+  'secrets.get':
+    '(key: string): Promise<string | null> — null if never set; throws when OS encryption is ' +
+    'unavailable or the stored value cannot be decrypted. Values are never returned in plaintext from disk.',
+  'secrets.keys': '(): Promise<string[]> — key names only, never values',
+  'secrets.set':
+    '(key: string, value: string): Promise<void> — sealed with the OS keychain (safeStorage); ' +
+    'throws when OS encryption is unavailable (no plaintext fallback)',
+  'secrets.delete': '(key: string): Promise<boolean>',
 };
 
 // ============================================================================

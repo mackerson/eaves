@@ -93,7 +93,8 @@ export type APINamespace =
   | 'events'
   | 'tools'
   | 'services'
-  | 'storage';
+  | 'storage'
+  | 'secrets';
 
 export interface SandboxMessage {
   type: SandboxMessageType;
