@@ -45,6 +45,10 @@ interface BrokeredSocket {
   socketId: string;
   pluginId: string;
   socket: net.Socket | tls.TLSSocket;
+  /** Connect-time host — the servername TLS verifies against on upgrade. */
+  host: string;
+  /** True while a STARTTLS handshake is in flight; writes are rejected. */
+  upgrading: boolean;
 }
 
 export class SocketBroker {
@@ -103,7 +107,7 @@ export class SocketBroker {
         raw.once('error', (error) => settle(() => reject(error)));
       });
 
-      this.sockets.set(socketId, { socketId, pluginId, socket });
+      this.sockets.set(socketId, { socketId, pluginId, socket, host, upgrading: false });
       this.attachHandlers(socketId, socket, dispatch);
       logger.info(`[SocketBroker] ${pluginId} connected ${options?.tls ? 'tls' : 'tcp'}://${host}:${port}`, { socketId });
       return { socketId };
@@ -113,8 +117,81 @@ export class SocketBroker {
     }
   }
 
+  /**
+   * STARTTLS: upgrade an existing plaintext socket to TLS in place (IMAP 143,
+   * SMTP 587, IRC). Certificate verification is mandatory and the servername
+   * is the connect-time host — the method takes no options, so there is no
+   * opt-out by construction, mirroring connect-time TLS semantics.
+   *
+   * Writes during the handshake are REJECTED, not queued: a caller cannot
+   * know whether a queued byte would leave as plaintext or ciphertext, so the
+   * broker refuses until the upgrade resolves. `close` still works mid-
+   * handshake as the abort path.
+   *
+   * After the upgrade, data/close/error events continue on the same socketId
+   * through the same dispatch. A handshake failure destroys the socket — the
+   * connection is not recoverable as plaintext.
+   */
+  async upgradeTls(pluginId: string, socketId: string, dispatch: SocketDispatch): Promise<void> {
+    const entry = this.owned(pluginId, socketId);
+    if (entry.socket instanceof tls.TLSSocket) {
+      throw new Error('Socket is already TLS');
+    }
+    if (entry.upgrading) {
+      throw new Error('TLS upgrade already in progress');
+    }
+    entry.upgrading = true;
+    const raw = entry.socket;
+    // Detach the plaintext handlers: handshake bytes must not dispatch as
+    // data, and post-upgrade events belong to the TLS socket's handlers.
+    raw.removeAllListeners('data');
+    raw.removeAllListeners('error');
+    raw.removeAllListeners('close');
+
+    try {
+      const secureSocket = await new Promise<tls.TLSSocket>((resolve, reject) => {
+        let settled = false;
+        const settle = (fn: () => void) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          fn();
+        };
+        const timer = setTimeout(() => {
+          settle(() => reject(new Error(`TLS upgrade timed out after ${DEFAULT_CONNECT_TIMEOUT_MS}ms`)));
+        }, DEFAULT_CONNECT_TIMEOUT_MS);
+
+        const secure = tls.connect(
+          { socket: raw, servername: entry.host },
+          () => settle(() => resolve(secure))
+        );
+        secure.once('error', (error) => settle(() => reject(error)));
+        // A peer that drops mid-handshake can close without an 'error'.
+        secure.once('close', () =>
+          settle(() => reject(new Error('Socket closed during TLS upgrade')))
+        );
+      });
+
+      entry.socket = secureSocket;
+      this.attachHandlers(socketId, secureSocket, dispatch);
+      logger.info(`[SocketBroker] ${pluginId} upgraded to tls://${entry.host}`, { socketId });
+    } catch (error) {
+      // The stream is mid-handshake garbage either way; kill it and free the slot.
+      raw.destroy();
+      this.untrack(pluginId, socketId);
+      this.sockets.delete(socketId);
+      dispatch('net:socket:close', { socketId, hadError: true });
+      throw error;
+    } finally {
+      entry.upgrading = false;
+    }
+  }
+
   write(pluginId: string, socketId: string, dataBase64: string): { bytesWritten: number } {
     const entry = this.owned(pluginId, socketId);
+    if (entry.upgrading) {
+      throw new Error('TLS upgrade in progress; writes are rejected until it completes');
+    }
     if (typeof dataBase64 !== 'string') {
       throw new Error('write expects base64-encoded data');
     }

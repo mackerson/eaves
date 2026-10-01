@@ -1109,6 +1109,9 @@ export class SandboxedPluginManager {
           args[0] as Parameters<typeof this.socketBroker.connect>[1],
           dispatch
         );
+      case 'upgradeTls':
+        await this.socketBroker.upgradeTls(pluginId, args[0] as string, dispatch);
+        return { success: true };
       case 'write':
         return this.socketBroker.write(pluginId, args[0] as string, args[1] as string);
       case 'end':

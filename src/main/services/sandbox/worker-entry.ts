@@ -547,6 +547,7 @@ function createPluginContext() {
     net: {
       connect: (options: { host: string; port: number; tls?: boolean; connectTimeoutMs?: number }) =>
         rpc('net', 'connect', [options]) as Promise<{ socketId: string }>,
+      upgradeTls: (socketId: string) => rpc('net', 'upgradeTls', [socketId]),
       write: (socketId: string, dataBase64: string) =>
         rpc('net', 'write', [socketId, dataBase64]) as Promise<{ bytesWritten: number }>,
       end: (socketId: string) => rpc('net', 'end', [socketId]),

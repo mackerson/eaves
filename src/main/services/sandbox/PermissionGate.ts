@@ -113,6 +113,7 @@ export const PERMISSION_REQUIREMENTS = {
   // Net namespace — host-brokered TCP/TLS sockets. Unlike network:http /
   // system:filesystem (labels the gate never matches), this one is enforced.
   'net.connect': ['net:socket'],
+  'net.upgradeTls': ['net:socket'],
   'net.write': ['net:socket'],
   'net.end': ['net:socket'],
   'net.close': ['net:socket'],
@@ -234,6 +235,11 @@ export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
     'Promise<{ socketId: string }> — TLS always verifies certificates. Incoming bytes arrive as ' +
     "events on the owning worker only: events.on('net:socket:data') with { socketId, data } " +
     '(base64), plus net:socket:close { socketId, hadError } and net:socket:error { socketId, message }',
+  'net.upgradeTls':
+    '(socketId: string): Promise<void> — STARTTLS: upgrade a plaintext socket to TLS in place ' +
+    '(IMAP 143 / SMTP 587 / IRC). Certificate verification is mandatory with no opt-out; the ' +
+    'servername is the connect-time host. Writes during the handshake are rejected; data/close/' +
+    'error events continue on the same socketId. A failed handshake closes the socket',
   'net.write': '(socketId: string, dataBase64: string): Promise<{ bytesWritten: number }> — max 1MB per write',
   'net.end': '(socketId: string): Promise<void> — flush pending writes, then half-close (FIN)',
   'net.close': '(socketId: string): Promise<void> — destroy the socket immediately',
