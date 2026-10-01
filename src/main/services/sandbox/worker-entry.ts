@@ -534,6 +534,20 @@ function createPluginContext() {
       keys: () => rpc('secrets', 'keys', []) as Promise<string[]>,
     },
 
+    // Raw TCP/TLS through the host-side SocketBroker (net:socket grant).
+    // Incoming bytes arrive as events scoped to this worker:
+    //   events.on('net:socket:data', ({ socketId, data }) => ...)  // data = base64
+    //   events.on('net:socket:close', ({ socketId, hadError }) => ...)
+    //   events.on('net:socket:error', ({ socketId, message }) => ...)
+    net: {
+      connect: (options: { host: string; port: number; tls?: boolean; connectTimeoutMs?: number }) =>
+        rpc('net', 'connect', [options]) as Promise<{ socketId: string }>,
+      write: (socketId: string, dataBase64: string) =>
+        rpc('net', 'write', [socketId, dataBase64]) as Promise<{ bytesWritten: number }>,
+      end: (socketId: string) => rpc('net', 'end', [socketId]),
+      close: (socketId: string) => rpc('net', 'close', [socketId]),
+    },
+
     // Utils
     utils: {
       storage: {

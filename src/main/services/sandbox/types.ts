@@ -94,7 +94,8 @@ export type APINamespace =
   | 'tools'
   | 'services'
   | 'storage'
-  | 'secrets';
+  | 'secrets'
+  | 'net';
 
 export interface SandboxMessage {
   type: SandboxMessageType;

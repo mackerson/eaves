@@ -429,6 +429,7 @@ export const PluginPermissionSchema = z.enum([
   // Dangerous (require explicit grant)
   'network:http',
   'system:filesystem',
+  'net:socket',
   // Coarse-grained aliases. Accepted so manifests that declare them still
   // validate and load; no grant check keys off them — only the granular ids
   // above are matched, so requesting these grants nothing.

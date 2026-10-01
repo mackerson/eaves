@@ -108,6 +108,13 @@ export const PERMISSION_REQUIREMENTS = {
   'secrets.keys': ['secrets:read'],
   'secrets.set': ['secrets:write'],
   'secrets.delete': ['secrets:write'],
+
+  // Net namespace — host-brokered TCP/TLS sockets. Unlike network:http /
+  // system:filesystem (labels the gate never matches), this one is enforced.
+  'net.connect': ['net:socket'],
+  'net.write': ['net:socket'],
+  'net.end': ['net:socket'],
+  'net.close': ['net:socket'],
 } satisfies Record<string, PluginPermission[]>;
 
 /** Every method the gate knows about. */
@@ -213,6 +220,15 @@ export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
     '(key: string, value: string): Promise<void> — sealed with the OS keychain (safeStorage); ' +
     'throws when OS encryption is unavailable (no plaintext fallback)',
   'secrets.delete': '(key: string): Promise<boolean>',
+
+  'net.connect':
+    '(options: { host: string; port: number; tls?: boolean; connectTimeoutMs?: number }): ' +
+    'Promise<{ socketId: string }> — TLS always verifies certificates. Incoming bytes arrive as ' +
+    "events on the owning worker only: events.on('net:socket:data') with { socketId, data } " +
+    '(base64), plus net:socket:close { socketId, hadError } and net:socket:error { socketId, message }',
+  'net.write': '(socketId: string, dataBase64: string): Promise<{ bytesWritten: number }> — max 1MB per write',
+  'net.end': '(socketId: string): Promise<void> — flush pending writes, then half-close (FIN)',
+  'net.close': '(socketId: string): Promise<void> — destroy the socket immediately',
 };
 
 // ============================================================================

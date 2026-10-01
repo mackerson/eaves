@@ -1041,6 +1041,9 @@ export type PluginPermission =
   // Dangerous (require explicit grant)
   | 'network:http'
   | 'system:filesystem'
+  // Raw TCP/TLS through the host-side SocketBroker (gated, unlike the two
+  // labels above — PermissionGate enforces this one)
+  | 'net:socket'
   // Coarse-grained aliases. Accepted so manifests that declare them still
   // validate and load; no grant check keys off them — the sandbox matches only
   // the granular ids above, so a plugin asking for these gets nothing.

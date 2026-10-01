@@ -29,6 +29,7 @@ import { getCallbackRegistry } from './CallbackRegistry';
 import { getEventBridge } from './EventBridge';
 import { getToolBridge } from './ToolBridge';
 import { getServiceBridge } from './ServiceBridge';
+import { getSocketBroker } from './SocketBroker';
 import { getResourceMonitor } from './ResourceMonitor';
 import { isInsideDirectory, readInstalledPluginId, sanitizeFolderName } from './pathContainment';
 
@@ -169,6 +170,7 @@ export class SandboxedPluginManager {
   private eventBridge = getEventBridge();
   private toolBridge = getToolBridge();
   private serviceBridge = getServiceBridge();
+  private socketBroker = getSocketBroker();
   private resourceMonitor = getResourceMonitor();
 
   constructor() {
@@ -279,6 +281,7 @@ export class SandboxedPluginManager {
     this.eventBridge.unregisterWorker(pluginId);
     this.toolBridge.unregisterWorker(pluginId);
     this.serviceBridge.unregisterWorker(pluginId);
+    this.socketBroker.unregisterWorker(pluginId);
     this.permissionGate.unregisterPlugin(pluginId);
 
     logger.warn(`[SandboxedPluginManager] Plugin ${pluginId} disabled after resource termination`);
@@ -551,6 +554,7 @@ export class SandboxedPluginManager {
       this.eventBridge.unregisterWorker(pluginId);
       this.toolBridge.unregisterWorker(pluginId);
       this.serviceBridge.unregisterWorker(pluginId);
+      this.socketBroker.unregisterWorker(pluginId);
       this.resourceMonitor.untrack(pluginId);
       worker.removeAllListeners();
       throw error;
@@ -621,6 +625,8 @@ export class SandboxedPluginManager {
         return this.handleStorageRequest(pluginId, request.method, request.args);
       case 'secrets':
         return this.handleSecretsRequest(pluginId, request.method, request.args);
+      case 'net':
+        return this.handleNetRequest(pluginId, request.method, request.args);
       default:
         throw new Error(`Unknown namespace: ${request.namespace}`);
     }
@@ -1005,6 +1011,42 @@ export class SandboxedPluginManager {
   }
 
   /**
+   * Handle net namespace requests — host-brokered TCP/TLS (net:socket grant).
+   * Incoming socket events are dispatched straight to the owning plugin's
+   * worker, never onto the EventBus, so no other plugin can observe them. The
+   * dispatch closure resolves the worker at delivery time, so a reload can't
+   * strand events on a dead worker reference.
+   */
+  private async handleNetRequest(
+    pluginId: string,
+    method: string,
+    args: unknown[]
+  ): Promise<unknown> {
+    const dispatch = (eventType: string, data: Record<string, unknown>) => {
+      this.plugins.get(pluginId)?.worker?.dispatchEvent(eventType, data as SerializableValue);
+    };
+
+    switch (method) {
+      case 'connect':
+        return this.socketBroker.connect(
+          pluginId,
+          args[0] as Parameters<typeof this.socketBroker.connect>[1],
+          dispatch
+        );
+      case 'write':
+        return this.socketBroker.write(pluginId, args[0] as string, args[1] as string);
+      case 'end':
+        this.socketBroker.end(pluginId, args[0] as string);
+        return { success: true };
+      case 'close':
+        this.socketBroker.close(pluginId, args[0] as string);
+        return { success: true };
+      default:
+        throw new Error(`Unknown net method: ${method}`);
+    }
+  }
+
+  /**
    * Unload a plugin
    */
   async unloadPlugin(pluginId: string): Promise<void> {
@@ -1024,6 +1066,7 @@ export class SandboxedPluginManager {
       this.eventBridge.unregisterWorker(pluginId);
       this.toolBridge.unregisterWorker(pluginId);
       this.serviceBridge.unregisterWorker(pluginId);
+      this.socketBroker.unregisterWorker(pluginId);
 
       // Cleanup permissions and callbacks
       this.permissionGate.unregisterPlugin(pluginId);
@@ -1356,6 +1399,7 @@ export class SandboxedPluginManager {
     this.eventBridge.unregisterWorker(pluginId);
     this.toolBridge.unregisterWorker(pluginId);
     this.serviceBridge.unregisterWorker(pluginId);
+    this.socketBroker.unregisterWorker(pluginId);
     this.permissionGate.unregisterPlugin(pluginId);
     this.resourceMonitor.untrack(pluginId);
 

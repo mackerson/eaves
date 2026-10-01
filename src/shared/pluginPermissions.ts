@@ -38,6 +38,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'secrets:write': 'Store secrets sealed with your OS keychain',
   'network:http': 'Make network requests',
   'system:filesystem': 'Read and write files on your computer',
+  'net:socket': 'Open raw TCP/TLS connections to servers',
   // Coarse aliases — legal in a manifest, but the sandbox matches only the
   // granular ids, so these grant nothing. Shown separately, never as capabilities.
   'data:read': 'Read your data',
@@ -48,7 +49,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
 };
 
 /** The union's own "Dangerous (require explicit grant)" group. */
-export const ELEVATED_PERMISSIONS = new Set(['network:http', 'system:filesystem']);
+export const ELEVATED_PERMISSIONS = new Set(['network:http', 'system:filesystem', 'net:socket']);
 
 /** Grants the sandbox never matches — declaring one confers no access. */
 export const INERT_PERMISSIONS = new Set([

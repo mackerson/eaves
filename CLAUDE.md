@@ -111,7 +111,11 @@ Architecture diagrams and invariants live in `docs/architecture/README.md` — t
   `Notification` and accepts `{title, body}` (or `message`, or a bare string);
   `ui.showToast` is transient in-app text
 - `PluginWorker`: Worker thread wrapper with health monitoring
-- `PermissionGate`: Runtime permission enforcement (21 permission grants; union in `src/shared/types.ts`)
+- `PermissionGate`: Runtime permission enforcement (25 permission grants; union in `src/shared/types.ts`).
+  `secrets:read/write` (safeStorage-sealed per-plugin store, fail-closed),
+  `data:messages:read` (message bodies are their own grant — chat reads return
+  shells), and `net:socket` (host-brokered TCP/TLS via `SocketBroker`, the
+  *gated* counterpart to the advisory module policy) are the newest
 - `ResourceMonitor`: Memory tracking, auto-termination of runaway plugins
 - Bridges: `EventBridge`, `ToolBridge`, `ServiceBridge` for cross-boundary RPC
 - Module blocking: **advisory only, not a security boundary.** `worker-entry.ts`
