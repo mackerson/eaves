@@ -20,7 +20,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { safeStorage } from 'electron';
+import { app, safeStorage } from 'electron';
 import { logger } from './logger';
 
 const SECRETS_FILE = 'plugin-secrets.json';
@@ -157,8 +157,6 @@ let instance: PluginSecretsStore | null = null;
 
 export function getPluginSecretsStore(): PluginSecretsStore {
   if (!instance) {
-    // Lazy so tests can construct against a temp dir without electron's app.
-    const { app } = require('electron') as typeof import('electron');
     instance = new PluginSecretsStore(app.getPath('userData'));
   }
   return instance;

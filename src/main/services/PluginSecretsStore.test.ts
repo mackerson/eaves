@@ -20,7 +20,10 @@ const { safeStorage } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('electron', () => ({ safeStorage }));
+vi.mock('electron', () => ({
+  safeStorage,
+  app: { getPath: () => '/fake/userData' },
+}));
 
 vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
