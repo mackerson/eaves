@@ -15,12 +15,6 @@
       "tier": "bundled"
     },
     {
-      "name": "plugin-marketplace",
-      "repo": "mackerson/eaves-plugin-plugin-marketplace",
-      "ref": "main",
-      "tier": "bundled"
-    },
-    {
       "name": "event-inspector",
       "repo": "mackerson/eaves-plugin-event-inspector",
       "ref": "main",
