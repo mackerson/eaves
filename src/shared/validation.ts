@@ -458,6 +458,13 @@ export const PluginManifestSchema = z.object({
   permissions: z.array(PluginPermissionSchema).optional(),
   dependencies: z.array(z.string()).optional(),
   config: z.record(z.unknown()).optional(),
+  // Secret keys the host settings UI offers to set. Values never travel in a
+  // manifest — only the PluginSecretsStore holds them, sealed.
+  secrets: z.array(z.object({
+    key: z.string().min(1).max(128),
+    label: z.string().min(1).max(100),
+    description: z.string().max(500).optional(),
+  })).max(32).optional(),
   ui: z.object({
     entry: z.string().min(1),
     components: z.record(z.enum(['default', 'named']))
@@ -1010,6 +1017,22 @@ export const ExecutePluginToolSchema = z.object({
 export const SetPluginConfigSchema = z.object({
   pluginId: PluginIdSchema,
   config: z.record(z.unknown()),
+});
+
+// Plugin secrets editor. Key bounds match PluginSecretsStore's own
+// (MAX_KEY_LENGTH / MAX_VALUE_LENGTH) so the IPC surface can't accept what
+// the store would then refuse.
+export const PluginSecretKeySchema = z.string().min(1).max(128);
+
+export const SetPluginSecretSchema = z.object({
+  pluginId: PluginIdSchema,
+  key: PluginSecretKeySchema,
+  value: z.string().min(1).max(64 * 1024),
+});
+
+export const DeletePluginSecretSchema = z.object({
+  pluginId: PluginIdSchema,
+  key: PluginSecretKeySchema,
 });
 
 // Service schemas

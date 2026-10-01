@@ -895,6 +895,22 @@ export interface PluginServiceRequirement {
   minVersion?: string;
 }
 
+/**
+ * A secret a plugin declares it needs (bot token, IMAP password, …).
+ *
+ * Declaration is what makes the host secrets editor possible: the plugin
+ * settings UI lists these keys and lets the user set/replace/delete values
+ * through the safeStorage-sealed PluginSecretsStore — write-only from the
+ * renderer's side, which only ever learns "set" / "not set". The host-side
+ * setter accepts declared keys only (same policy as config writes); the
+ * plugin itself may still store additional keys via the `secrets` RPC.
+ */
+export interface PluginSecretDeclaration {
+  key: string;
+  label: string;
+  description?: string;
+}
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -907,6 +923,7 @@ export interface PluginManifest {
   permissions?: PluginPermission[];
   dependencies?: string[];
   config?: PluginConfigSchema; // Configuration schema
+  secrets?: PluginSecretDeclaration[]; // Secret keys the settings UI offers to set (values live in PluginSecretsStore)
   ui?: PluginUIMetadata; // UI bundle metadata for dynamic loading
 
   // Service Registry fields

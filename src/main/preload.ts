@@ -386,6 +386,11 @@ contextBridge.exposeInMainWorld('electron', {
   executePluginTool: (pluginId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> => ipcRenderer.invoke('execute-plugin-tool', { pluginId, toolName, args }),
   getPluginConfig: (pluginId: string): Promise<{ schema: Record<string, unknown>; values: Record<string, unknown>; pluginId: string; pluginName: string }> => ipcRenderer.invoke('get-plugin-config', pluginId),
   setPluginConfig: (pluginId: string, config: Record<string, unknown>): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('set-plugin-config', { pluginId, config }),
+  // Secrets are write-only across this bridge: status carries key names and
+  // set/not-set, never a value.
+  getPluginSecrets: (pluginId: string): Promise<{ success?: boolean; error?: string; pluginId?: string; pluginName?: string; encryptionAvailable?: boolean; declared?: Array<{ key: string; label: string; description?: string; set: boolean }>; undeclared?: string[] }> => ipcRenderer.invoke('get-plugin-secrets', pluginId),
+  setPluginSecret: (pluginId: string, key: string, value: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('set-plugin-secret', { pluginId, key, value }),
+  deletePluginSecret: (pluginId: string, key: string): Promise<{ success: boolean; deleted?: boolean; error?: string }> => ipcRenderer.invoke('delete-plugin-secret', { pluginId, key }),
   emitPluginEvent: (event: string, data?: unknown): Promise<{ success: boolean }> => ipcRenderer.invoke('plugin:event', { event, data }),
   getEventHistory: (filterType?: string): Promise<Array<{ type: string; timestamp: number; source: string; data?: unknown }>> => ipcRenderer.invoke('get-event-history', filterType),
   subscribeToEvents: (): Promise<{ success: boolean }> => ipcRenderer.invoke('subscribe-to-events'),

@@ -27,6 +27,7 @@ import {
   LogErrorSchema,
   ReorderItemsSchema,
   DateRangeSchema,
+  PluginManifestSchema,
 } from './validation';
 
 describe('Validation Schemas', () => {
@@ -698,5 +699,38 @@ describe('MessageMetricsSchema round-trip', () => {
   it('still strips genuinely unknown keys', () => {
     const parsed = MessageMetricsObjectSchema.parse({ inputTokens: 5, bogus: 'nope' } as never);
     expect(parsed).toEqual({ inputTokens: 5 });
+  });
+});
+
+describe('PluginManifestSchema secrets declaration', () => {
+  const base = { id: 'test-plugin', name: 'Test', version: '1.0.0', type: 'tool' as const };
+
+  it('accepts a manifest with a declared secrets block', () => {
+    const parsed = PluginManifestSchema.safeParse({
+      ...base,
+      secrets: [
+        { key: 'botToken', label: 'Bot token', description: 'From the dev portal' },
+        { key: 'password', label: 'Password' },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts a manifest with no secrets block — declaration is optional', () => {
+    expect(PluginManifestSchema.safeParse(base).success).toBe(true);
+  });
+
+  it('rejects a declaration without a label — the editor has nothing to show', () => {
+    expect(PluginManifestSchema.safeParse({
+      ...base,
+      secrets: [{ key: 'botToken' }],
+    }).success).toBe(false);
+  });
+
+  it('rejects a key longer than the store accepts (128)', () => {
+    expect(PluginManifestSchema.safeParse({
+      ...base,
+      secrets: [{ key: 'k'.repeat(129), label: 'Too long' }],
+    }).success).toBe(false);
   });
 });

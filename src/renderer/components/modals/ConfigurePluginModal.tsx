@@ -18,6 +18,12 @@ interface ConfigData {
   pluginName: string;
 }
 
+interface SecretsData {
+  encryptionAvailable: boolean;
+  declared: Array<{ key: string; label: string; description?: string; set: boolean }>;
+  undeclared: string[];
+}
+
 interface ConfigurePluginModalProps {
   pluginId: string;
   open: boolean;
@@ -29,10 +35,17 @@ export function ConfigurePluginModal({ pluginId, open, onOpenChange }: Configure
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Secrets are write-only: `secrets` holds key names and set/not-set,
+  // `secretInputs` holds what the user is typing right now and is cleared the
+  // moment a value is submitted — the renderer never holds a stored value.
+  const [secrets, setSecrets] = useState<SecretsData | null>(null);
+  const [secretInputs, setSecretInputs] = useState<Record<string, string>>({});
+  const [secretBusy, setSecretBusy] = useState<string | null>(null);
   const showToast = useToastStore((state) => state.showToast);
 
   useEffect(() => {
     loadConfig();
+    loadSecrets();
   }, [pluginId]);
 
   const loadConfig = async () => {
@@ -53,6 +66,67 @@ export function ConfigurePluginModal({ pluginId, open, onOpenChange }: Configure
       onOpenChange(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSecrets = async () => {
+    try {
+      const data = await window.electron.getPluginSecrets(pluginId);
+      if (data && data.declared !== undefined) {
+        setSecrets({
+          encryptionAvailable: data.encryptionAvailable ?? false,
+          declared: data.declared ?? [],
+          undeclared: data.undeclared ?? [],
+        });
+      } else {
+        setSecrets(null);
+      }
+    } catch (error) {
+      // No secrets section rather than a dead modal — config still works.
+      console.error('Failed to load plugin secrets status:', error);
+      setSecrets(null);
+    }
+  };
+
+  const handleSetSecret = async (key: string) => {
+    const value = secretInputs[key];
+    if (!value) return;
+    try {
+      setSecretBusy(key);
+      const result = await window.electron.setPluginSecret(pluginId, key, value);
+      if (!result?.success) {
+        showToast(result?.error || 'Failed to store secret', 'error');
+        return;
+      }
+      // Drop the plaintext from renderer state as soon as the store has it.
+      setSecretInputs(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      showToast('Secret stored', 'success');
+      await loadSecrets();
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to store secret', 'error');
+    } finally {
+      setSecretBusy(null);
+    }
+  };
+
+  const handleDeleteSecret = async (key: string) => {
+    try {
+      setSecretBusy(key);
+      const result = await window.electron.deletePluginSecret(pluginId, key);
+      if (!result?.success) {
+        showToast(result?.error || 'Failed to delete secret', 'error');
+        return;
+      }
+      showToast('Secret deleted', 'success');
+      await loadSecrets();
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to delete secret', 'error');
+    } finally {
+      setSecretBusy(null);
     }
   };
 
@@ -168,6 +242,100 @@ export function ConfigurePluginModal({ pluginId, open, onOpenChange }: Configure
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Secrets: write-only. The UI shows set/not-set and takes new
+              values; a stored value is never read back into this window. */}
+          {!loading && secrets && (secrets.declared.length > 0 || secrets.undeclared.length > 0) && (
+            <div className="mt-6 pt-4 border-t border-border space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold">Secrets</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Stored sealed with your OS keychain. Values are write-only: you can replace or
+                  delete one, but it is never shown again. Changes take effect the next time the
+                  plugin reads them.
+                </p>
+              </div>
+
+              {!secrets.encryptionAvailable && (
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                  OS encryption (safeStorage) is unavailable on this system, so secrets cannot be
+                  stored. There is deliberately no plaintext fallback.
+                </p>
+              )}
+
+              {secrets.declared.map((secret) => (
+                <div key={secret.key} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`secret-${secret.key}`}>{secret.label}</Label>
+                    {secret.set ? (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        set
+                      </span>
+                    ) : (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        not set
+                      </span>
+                    )}
+                  </div>
+                  {secret.description && (
+                    <p className="text-sm text-muted-foreground">{secret.description}</p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id={`secret-${secret.key}`}
+                      type="password"
+                      autoComplete="off"
+                      value={secretInputs[secret.key] ?? ''}
+                      onChange={(e) => setSecretInputs(prev => ({ ...prev, [secret.key]: e.target.value }))}
+                      placeholder={secret.set ? 'Enter a new value to replace it' : 'Enter a value'}
+                      disabled={!secrets.encryptionAvailable || secretBusy !== null}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => handleSetSecret(secret.key)}
+                      disabled={!secrets.encryptionAvailable || !secretInputs[secret.key] || secretBusy !== null}
+                    >
+                      {secretBusy === secret.key ? 'Saving…' : secret.set ? 'Replace' : 'Set'}
+                    </Button>
+                    {secret.set && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteSecret(secret.key)}
+                        disabled={secretBusy !== null}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {secrets.undeclared.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Also stored by the plugin itself (not declared in its manifest — can be
+                    deleted here, not edited):
+                  </p>
+                  {secrets.undeclared.map((key) => (
+                    <div key={key} className="flex items-center justify-between gap-2">
+                      <code className="text-sm">{key}</code>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteSecret(key)}
+                        disabled={secretBusy !== null}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

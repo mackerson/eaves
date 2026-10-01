@@ -271,6 +271,9 @@ declare global {
       executePluginTool: (pluginId: string, toolName: string, args: Record<string, unknown>) => Promise<unknown>;
       getPluginConfig: (pluginId: string) => Promise<{ schema: Record<string, { type: string; default?: unknown; description?: string }>; values: Record<string, unknown>; pluginId: string; pluginName: string }>;
       setPluginConfig: (pluginId: string, config: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
+      getPluginSecrets: (pluginId: string) => Promise<{ success?: boolean; error?: string; pluginId?: string; pluginName?: string; encryptionAvailable?: boolean; declared?: Array<{ key: string; label: string; description?: string; set: boolean }>; undeclared?: string[] }>;
+      setPluginSecret: (pluginId: string, key: string, value: string) => Promise<{ success: boolean; error?: string }>;
+      deletePluginSecret: (pluginId: string, key: string) => Promise<{ success: boolean; deleted?: boolean; error?: string }>;
       emitPluginEvent: (event: string, data?: unknown) => Promise<{ success: boolean }>;
       getEventHistory: (filterType?: string) => Promise<Array<{ type: string; timestamp: number; source: string; data?: unknown }>>;
       subscribeToEvents: () => Promise<{ success: boolean }>;

@@ -1,6 +1,7 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, safeStorage } from 'electron';
 import { getSandboxedPluginManager, isHostOwnedEventType } from '../services/sandbox';
 import { getPluginConfigManager } from '../services/PluginConfigManager';
+import { getPluginSecretsStore } from '../services/PluginSecretsStore';
 import { getServiceRegistry } from '../services/ServiceRegistry';
 import { getMarketplaceListing, installPlugin, uninstallPlugin } from '../services/MarketplaceService';
 import { listDrafts, readDraft, promoteDraft } from '../services/pluginDraftService';
@@ -14,6 +15,8 @@ import {
   PluginEventSchema,
   ExecutePluginToolSchema,
   SetPluginConfigSchema,
+  SetPluginSecretSchema,
+  DeletePluginSecretSchema,
   ServiceTypeSchema,
   CallServiceSchema,
   TogglePluginSchema,
@@ -430,6 +433,88 @@ export function registerPluginHandlers(getMainWindow?: () => BrowserWindow | nul
     await pluginManager.reloadPlugin(validation.data.pluginId);
     event.sender.send('plugin-views-changed');
     return { success: true };
+  }));
+
+  /**
+   * The host secrets editor surface. Three handlers, one invariant: a secret
+   * VALUE crosses this boundary in exactly one direction — renderer → store.
+   * Status reports key names and set/not-set only; nothing ever reads a value
+   * back out to the renderer, so the UI cannot display (or leak) one.
+   */
+  ipcMain.handle('get-plugin-secrets', ipcResult('get-plugin-secrets', async (_event, pluginId: string) => {
+    const validation = validateIPC(PluginIdSchema, pluginId, 'get-plugin-secrets');
+    if (!validation.success) return validation;
+
+    const plugin = getSandboxedPluginManager().getPluginsWithState().find(p => p.id === validation.data);
+    if (!plugin) {
+      return { success: false, error: `Plugin ${validation.data} not found` };
+    }
+
+    // keys() touches only key names and ciphertext, so it works even when
+    // safeStorage is unavailable — the UI can still show what exists.
+    const setKeys = new Set(getPluginSecretsStore().keys(validation.data));
+    const declared = (plugin.secrets ?? []).map(d => ({
+      key: d.key,
+      label: d.label,
+      description: d.description,
+      set: setKeys.has(d.key),
+    }));
+    // Keys the plugin stored itself beyond its declaration. The user can see
+    // and delete them, but not set them — the editor writes declared keys only.
+    const declaredKeys = new Set(declared.map(d => d.key));
+    const undeclared = [...setKeys].filter(k => !declaredKeys.has(k)).sort();
+
+    return {
+      pluginId: validation.data,
+      pluginName: plugin.name,
+      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      declared,
+      undeclared,
+    };
+  }));
+
+  /**
+   * Declared keys only, mirroring rejectUndeclaredConfig: without the check,
+   * any caller could seed arbitrary keys under any plugin id. The same caveat
+   * applies as for config writes — IPC carries no caller identity, so this is
+   * schema policy, not an ownership boundary (see set-plugin-config above).
+   *
+   * No reload: plugins read secrets through the RPC at call time, so a new
+   * value takes effect on the next read.
+   */
+  ipcMain.handle('set-plugin-secret', ipcResult('set-plugin-secret', async (_event, params: { pluginId: string; key: string; value: string }) => {
+    const validation = validateIPC(SetPluginSecretSchema, params, 'set-plugin-secret');
+    if (!validation.success) return validation;
+    const { pluginId: id, key, value } = validation.data;
+
+    const plugin = getSandboxedPluginManager().getPluginsWithState().find(p => p.id === id);
+    if (!plugin) {
+      return { success: false, error: `Plugin ${id} not found` };
+    }
+    if (!(plugin.secrets ?? []).some(d => d.key === key)) {
+      logger.warn('[Plugins] Rejected secret write for undeclared key', { pluginId: id, key });
+      return { success: false, error: `Plugin ${id} does not declare a secret named '${key}'` };
+    }
+
+    // Throws when OS encryption is unavailable — fail closed, surfaced as-is.
+    getPluginSecretsStore().set(id, key, value);
+    return { success: true };
+  }));
+
+  ipcMain.handle('delete-plugin-secret', ipcResult('delete-plugin-secret', async (_event, params: { pluginId: string; key: string }) => {
+    const validation = validateIPC(DeletePluginSecretSchema, params, 'delete-plugin-secret');
+    if (!validation.success) return validation;
+    const { pluginId: id, key } = validation.data;
+
+    const plugin = getSandboxedPluginManager().getPluginsWithState().find(p => p.id === id);
+    if (!plugin) {
+      return { success: false, error: `Plugin ${id} not found` };
+    }
+
+    // Deliberately not restricted to declared keys: leftovers a plugin stored
+    // beyond its declaration are exactly what the user should be able to drop.
+    const deleted = getPluginSecretsStore().delete(id, key);
+    return { success: true, deleted };
   }));
 
   // Service Registry IPC Handlers

@@ -26,6 +26,18 @@ vi.mock('electron', () => ({
   app: {
     getPath: (name: string) => (name === 'temp' ? '/tmp' : '/tmp/eaves-plugins-test'),
   },
+  safeStorage: {
+    isEncryptionAvailable: vi.fn(() => true),
+  },
+}));
+
+const mockSecretsStore = {
+  keys: vi.fn((): string[] => []),
+  set: vi.fn(),
+  delete: vi.fn(() => true),
+};
+vi.mock('../services/PluginSecretsStore', () => ({
+  getPluginSecretsStore: () => mockSecretsStore,
 }));
 
 // Mock EventBus
@@ -775,6 +787,128 @@ describe('Plugin IPC Handlers', () => {
 
       expect(result.success).toBe(false);
       expect(mockPluginConfigManager.setConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('plugin secrets editor', () => {
+    const installSecretPlugin = () => {
+      mockPluginManager.getPluginsWithState.mockReturnValue([
+        {
+          id: 'bridge-plugin',
+          name: 'Bridge Plugin',
+          secrets: [
+            { key: 'botToken', label: 'Bot token', description: 'From the dev portal' },
+            { key: 'password', label: 'Password' },
+          ],
+        },
+      ]);
+    };
+
+    describe('get-plugin-secrets', () => {
+      it('reports declared keys with set/not-set and never a value', async () => {
+        installSecretPlugin();
+        mockSecretsStore.keys.mockReturnValue(['botToken']);
+
+        const result = await handlers.get('get-plugin-secrets')!(mockEvent, 'bridge-plugin');
+
+        expect(result.declared).toEqual([
+          { key: 'botToken', label: 'Bot token', description: 'From the dev portal', set: true },
+          { key: 'password', label: 'Password', description: undefined, set: false },
+        ]);
+        expect(result.encryptionAvailable).toBe(true);
+        expect(JSON.stringify(result)).not.toContain('hunter2');
+      });
+
+      it('lists keys the plugin stored beyond its declaration separately', async () => {
+        installSecretPlugin();
+        mockSecretsStore.keys.mockReturnValue(['botToken', 'selfStored']);
+
+        const result = await handlers.get('get-plugin-secrets')!(mockEvent, 'bridge-plugin');
+
+        expect(result.undeclared).toEqual(['selfStored']);
+      });
+
+      it('rejects a plugin that is not installed', async () => {
+        mockPluginManager.getPluginsWithState.mockReturnValue([]);
+
+        const result = await handlers.get('get-plugin-secrets')!(mockEvent, 'ghost');
+
+        expect(result.success).toBe(false);
+      });
+    });
+
+    describe('set-plugin-secret', () => {
+      it('stores a declared key through the sealed store', async () => {
+        installSecretPlugin();
+
+        const result = await handlers.get('set-plugin-secret')!(mockEvent, {
+          pluginId: 'bridge-plugin', key: 'botToken', value: 'hunter2',
+        });
+
+        expect(mockSecretsStore.set).toHaveBeenCalledWith('bridge-plugin', 'botToken', 'hunter2');
+        expect(result).toEqual({ success: true });
+      });
+
+      it('refuses a key the manifest never declared', async () => {
+        installSecretPlugin();
+
+        const result = await handlers.get('set-plugin-secret')!(mockEvent, {
+          pluginId: 'bridge-plugin', key: 'proxy', value: 'http://attacker',
+        });
+
+        expect(result.success).toBe(false);
+        expect(mockSecretsStore.set).not.toHaveBeenCalled();
+      });
+
+      it('refuses a plugin that is not installed', async () => {
+        mockPluginManager.getPluginsWithState.mockReturnValue([]);
+
+        const result = await handlers.get('set-plugin-secret')!(mockEvent, {
+          pluginId: 'ghost', key: 'botToken', value: 'x',
+        });
+
+        expect(result.success).toBe(false);
+        expect(mockSecretsStore.set).not.toHaveBeenCalled();
+      });
+
+      it('surfaces a fail-closed store error without swallowing it', async () => {
+        installSecretPlugin();
+        mockSecretsStore.set.mockImplementationOnce(() => {
+          throw new Error('Secrets write refused: OS encryption (safeStorage) is not available.');
+        });
+
+        const result = await handlers.get('set-plugin-secret')!(mockEvent, {
+          pluginId: 'bridge-plugin', key: 'botToken', value: 'x',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('safeStorage');
+      });
+    });
+
+    describe('delete-plugin-secret', () => {
+      it('deletes any stored key, declared or not', async () => {
+        installSecretPlugin();
+        mockSecretsStore.delete.mockReturnValue(true);
+
+        const result = await handlers.get('delete-plugin-secret')!(mockEvent, {
+          pluginId: 'bridge-plugin', key: 'selfStored',
+        });
+
+        expect(mockSecretsStore.delete).toHaveBeenCalledWith('bridge-plugin', 'selfStored');
+        expect(result).toEqual({ success: true, deleted: true });
+      });
+
+      it('refuses a plugin that is not installed', async () => {
+        mockPluginManager.getPluginsWithState.mockReturnValue([]);
+
+        const result = await handlers.get('delete-plugin-secret')!(mockEvent, {
+          pluginId: 'ghost', key: 'botToken',
+        });
+
+        expect(result.success).toBe(false);
+        expect(mockSecretsStore.delete).not.toHaveBeenCalled();
+      });
     });
   });
 
