@@ -1173,6 +1173,25 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 82,
+    description: 'Chats can be owned by a messaging-bridge plugin',
+    migrate: (db) => {
+      // Which plugin bridges this chat to an external network. NULL for every
+      // ordinary chat. Not the `tags` column for the same reason `workshop`
+      // is not: tags are user-editable, and this value decides where outbound
+      // agent replies are routed — it is written only by the host from the
+      // calling plugin's own identity (see handleActionsRequest createChat).
+      const hasColumn = (db.pragma('table_info(channels)') as Array<{ name: string }>)
+        .some(column => column.name === 'bridge_plugin_id');
+
+      if (!hasColumn) {
+        db.prepare(
+          'ALTER TABLE channels ADD COLUMN bridge_plugin_id TEXT'
+        ).run();
+      }
+    },
+  },
 ];
 
 /**

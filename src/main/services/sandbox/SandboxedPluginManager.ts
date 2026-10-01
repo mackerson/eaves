@@ -29,6 +29,7 @@ import { getCallbackRegistry } from './CallbackRegistry';
 import { getEventBridge } from './EventBridge';
 import { getToolBridge } from './ToolBridge';
 import { getServiceBridge } from './ServiceBridge';
+import { getSocketBroker } from './SocketBroker';
 import { getResourceMonitor } from './ResourceMonitor';
 import { isInsideDirectory, readInstalledPluginId, sanitizeFolderName } from './pathContainment';
 
@@ -169,6 +170,7 @@ export class SandboxedPluginManager {
   private eventBridge = getEventBridge();
   private toolBridge = getToolBridge();
   private serviceBridge = getServiceBridge();
+  private socketBroker = getSocketBroker();
   private resourceMonitor = getResourceMonitor();
 
   constructor() {
@@ -279,6 +281,7 @@ export class SandboxedPluginManager {
     this.eventBridge.unregisterWorker(pluginId);
     this.toolBridge.unregisterWorker(pluginId);
     this.serviceBridge.unregisterWorker(pluginId);
+    this.socketBroker.unregisterWorker(pluginId);
     this.permissionGate.unregisterPlugin(pluginId);
 
     logger.warn(`[SandboxedPluginManager] Plugin ${pluginId} disabled after resource termination`);
@@ -551,6 +554,7 @@ export class SandboxedPluginManager {
       this.eventBridge.unregisterWorker(pluginId);
       this.toolBridge.unregisterWorker(pluginId);
       this.serviceBridge.unregisterWorker(pluginId);
+      this.socketBroker.unregisterWorker(pluginId);
       this.resourceMonitor.untrack(pluginId);
       worker.removeAllListeners();
       throw error;
@@ -619,6 +623,10 @@ export class SandboxedPluginManager {
         return this.handleServicesRequest(pluginId, request.method, request.args);
       case 'storage':
         return this.handleStorageRequest(pluginId, request.method, request.args);
+      case 'secrets':
+        return this.handleSecretsRequest(pluginId, request.method, request.args);
+      case 'net':
+        return this.handleNetRequest(pluginId, request.method, request.args);
       default:
         throw new Error(`Unknown namespace: ${request.namespace}`);
     }
@@ -726,15 +734,22 @@ export class SandboxedPluginManager {
         // ChannelRepository.createDirectChat (event-silent by design — the
         // import wizard reloads the renderer on completion). Returns the Chat;
         // the plugin reads `.id`.
-        const params = args[0] as { name?: unknown; agentId?: unknown; tags?: unknown };
+        //
+        // `bridge: true` marks the chat as owned by the calling bridge plugin:
+        // outbound agent replies in it are routed to that plugin's
+        // messaging-provider `send` (see MessagingBridgeRouter). The stamped id
+        // is the host's own identity for the calling worker — a plugin cannot
+        // claim ownership on behalf of another plugin.
+        const params = args[0] as { name?: unknown; agentId?: unknown; tags?: unknown; bridge?: unknown };
         if (!params || typeof params.name !== 'string' || typeof params.agentId !== 'string') {
-          return { success: false, error: 'createChat expects { name, agentId, tags? }' };
+          return { success: false, error: 'createChat expects { name, agentId, tags?, bridge? }' };
         }
         const { getChannelRepository } = await import('../../repositories');
         return getChannelRepository().createDirectChat({
           name: params.name,
           agentId: params.agentId,
           tags: typeof params.tags === 'string' ? params.tags : undefined,
+          bridgePluginId: params.bridge === true ? pluginId : undefined,
         });
       }
       case 'bulkImportMessages': {
@@ -966,6 +981,72 @@ export class SandboxedPluginManager {
   }
 
   /**
+   * Handle secrets namespace requests.
+   *
+   * The pluginId is the host's own identity for the calling worker, never an
+   * argument — a plugin cannot name another plugin's namespace. Secret values
+   * pass straight through; they are never logged on this path.
+   */
+  private async handleSecretsRequest(
+    pluginId: string,
+    method: string,
+    args: unknown[]
+  ): Promise<unknown> {
+    const { getPluginSecretsStore } = await import('../PluginSecretsStore');
+    const store = getPluginSecretsStore();
+
+    switch (method) {
+      case 'get':
+        return store.get(pluginId, args[0] as string);
+      case 'set':
+        store.set(pluginId, args[0] as string, args[1] as string);
+        return { success: true };
+      case 'delete':
+        return store.delete(pluginId, args[0] as string);
+      case 'keys':
+        return store.keys(pluginId);
+      default:
+        throw new Error(`Unknown secrets method: ${method}`);
+    }
+  }
+
+  /**
+   * Handle net namespace requests — host-brokered TCP/TLS (net:socket grant).
+   * Incoming socket events are dispatched straight to the owning plugin's
+   * worker, never onto the EventBus, so no other plugin can observe them. The
+   * dispatch closure resolves the worker at delivery time, so a reload can't
+   * strand events on a dead worker reference.
+   */
+  private async handleNetRequest(
+    pluginId: string,
+    method: string,
+    args: unknown[]
+  ): Promise<unknown> {
+    const dispatch = (eventType: string, data: Record<string, unknown>) => {
+      this.plugins.get(pluginId)?.worker?.dispatchEvent(eventType, data as SerializableValue);
+    };
+
+    switch (method) {
+      case 'connect':
+        return this.socketBroker.connect(
+          pluginId,
+          args[0] as Parameters<typeof this.socketBroker.connect>[1],
+          dispatch
+        );
+      case 'write':
+        return this.socketBroker.write(pluginId, args[0] as string, args[1] as string);
+      case 'end':
+        this.socketBroker.end(pluginId, args[0] as string);
+        return { success: true };
+      case 'close':
+        this.socketBroker.close(pluginId, args[0] as string);
+        return { success: true };
+      default:
+        throw new Error(`Unknown net method: ${method}`);
+    }
+  }
+
+  /**
    * Unload a plugin
    */
   async unloadPlugin(pluginId: string): Promise<void> {
@@ -985,6 +1066,7 @@ export class SandboxedPluginManager {
       this.eventBridge.unregisterWorker(pluginId);
       this.toolBridge.unregisterWorker(pluginId);
       this.serviceBridge.unregisterWorker(pluginId);
+      this.socketBroker.unregisterWorker(pluginId);
 
       // Cleanup permissions and callbacks
       this.permissionGate.unregisterPlugin(pluginId);
@@ -1134,6 +1216,10 @@ export class SandboxedPluginManager {
     // Plugin configs are where plugin API keys and tokens live; without this
     // they outlived the uninstall in plugin-configs.json indefinitely.
     getPluginConfigManager().deleteConfig(pluginId);
+    // Same rule for sealed secrets: an uninstalled plugin's credentials must
+    // not survive it.
+    const { getPluginSecretsStore } = await import('../PluginSecretsStore');
+    getPluginSecretsStore().clearPlugin(pluginId);
   }
 
   /** Absolute path to the draft plugins dir (agent-authored staging). */
@@ -1228,6 +1314,8 @@ export class SandboxedPluginManager {
     clearRevisions(pluginId); // nothing left for a diff to be against
     getPluginStateRepository().delete(pluginId);
     getPluginConfigManager().deleteConfig(pluginId);
+    const { getPluginSecretsStore } = await import('../PluginSecretsStore');
+    getPluginSecretsStore().clearPlugin(pluginId);
   }
 
   /**
@@ -1311,6 +1399,7 @@ export class SandboxedPluginManager {
     this.eventBridge.unregisterWorker(pluginId);
     this.toolBridge.unregisterWorker(pluginId);
     this.serviceBridge.unregisterWorker(pluginId);
+    this.socketBroker.unregisterWorker(pluginId);
     this.permissionGate.unregisterPlugin(pluginId);
     this.resourceMonitor.untrack(pluginId);
 

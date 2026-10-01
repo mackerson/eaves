@@ -65,6 +65,17 @@ describe('ChannelRepository direct-channel (chat) projection', () => {
       expect(chat.tags).toBe('important,work');
     });
 
+    it('persists bridge ownership and reads it back (v82)', () => {
+      const bridged = repository.createDirectChat({
+        name: 'Telegram: Alice', agentId: 'agent-1', bridgePluginId: 'com.eaves.telegram',
+      });
+      expect(bridged.bridgePluginId).toBe('com.eaves.telegram');
+      expect(repository.getDirectChatById(bridged.id)?.bridgePluginId).toBe('com.eaves.telegram');
+
+      const plain = repository.createDirectChat({ name: 'Plain', agentId: 'agent-1' });
+      expect(repository.getDirectChatById(plain.id)?.bridgePluginId).toBeUndefined();
+    });
+
     it('should create chat with initial participants', () => {
       const participants: Participant[] = [
         { id: 'user', type: 'human', displayName: 'Test User', joinedAt: Date.now() },

@@ -53,6 +53,7 @@ export const PERMISSION_REQUIREMENTS = {
   'data.chats.getById': ['data:chats:read'],
   'data.chats.getByAgent': ['data:chats:read'],
   'data.chats.getCurrent': ['data:chats:read'],
+  'data.messages.getByChat': ['data:messages:read'],
   'data.settings.get': ['data:settings:read'],
   'data.settings.getCurrent': ['data:settings:read'],
 
@@ -101,6 +102,19 @@ export const PERMISSION_REQUIREMENTS = {
   'storage.delete': ['storage:write'],
   'storage.clear': ['storage:write'],
   'storage.keys': ['storage:read'],
+
+  // Secrets namespace — per-plugin, safeStorage-sealed, fail-closed
+  'secrets.get': ['secrets:read'],
+  'secrets.keys': ['secrets:read'],
+  'secrets.set': ['secrets:write'],
+  'secrets.delete': ['secrets:write'],
+
+  // Net namespace — host-brokered TCP/TLS sockets. Unlike network:http /
+  // system:filesystem (labels the gate never matches), this one is enforced.
+  'net.connect': ['net:socket'],
+  'net.write': ['net:socket'],
+  'net.end': ['net:socket'],
+  'net.close': ['net:socket'],
 } satisfies Record<string, PluginPermission[]>;
 
 /** Every method the gate knows about. */
@@ -143,12 +157,17 @@ export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
   'data.chats.getById': '(id: string): Promise<Chat | null>',
   'data.chats.getByAgent': '(agentId: string, options?: { limit?: number }): Promise<Chat[]>',
   'data.chats.getCurrent': '(): Promise<Chat | null>',
+  'data.messages.getByChat':
+    '(chatId: string, options?: { limit?: number }): Promise<ChatMessage[]> — active branch only, oldest first',
   'data.settings.get': '(): Promise<Settings>',
   'data.settings.getCurrent': '(): Promise<Settings>',
 
   'actions.createTask': '(task: { title: string; description?: string; projectId?: string }): Promise<Task>',
   'actions.createNote': '(note: { title: string; content: string; projectId?: string }): Promise<Note>',
-  'actions.createChat': '(chat: { agentId: string; title?: string }): Promise<Chat>',
+  'actions.createChat':
+    '(chat: { name: string; agentId: string; tags?: string; bridge?: boolean }): Promise<Chat> ' +
+    '— bridge: true marks the chat as owned by the calling plugin, which then receives ' +
+    "outbound agent replies via its 'messaging-provider' service",
   'actions.createAgent': '(agent: { name: string; systemPrompt?: string; model?: string }): Promise<Agent>',
   'actions.bulkImportMessages': '(chatId: string, messages: unknown[]): Promise<{ imported: number }>',
   'actions.bulkImportAttachments': '(attachments: unknown[]): Promise<{ imported: number }>',
@@ -192,6 +211,24 @@ export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
   'storage.delete': '(key: string): Promise<void>',
   'storage.clear': '(): Promise<void>',
   'storage.keys': '(): Promise<string[]>',
+
+  'secrets.get':
+    '(key: string): Promise<string | null> — null if never set; throws when OS encryption is ' +
+    'unavailable or the stored value cannot be decrypted. Values are never returned in plaintext from disk.',
+  'secrets.keys': '(): Promise<string[]> — key names only, never values',
+  'secrets.set':
+    '(key: string, value: string): Promise<void> — sealed with the OS keychain (safeStorage); ' +
+    'throws when OS encryption is unavailable (no plaintext fallback)',
+  'secrets.delete': '(key: string): Promise<boolean>',
+
+  'net.connect':
+    '(options: { host: string; port: number; tls?: boolean; connectTimeoutMs?: number }): ' +
+    'Promise<{ socketId: string }> — TLS always verifies certificates. Incoming bytes arrive as ' +
+    "events on the owning worker only: events.on('net:socket:data') with { socketId, data } " +
+    '(base64), plus net:socket:close { socketId, hadError } and net:socket:error { socketId, message }',
+  'net.write': '(socketId: string, dataBase64: string): Promise<{ bytesWritten: number }> — max 1MB per write',
+  'net.end': '(socketId: string): Promise<void> — flush pending writes, then half-close (FIN)',
+  'net.close': '(socketId: string): Promise<void> — destroy the socket immediately',
 };
 
 // ============================================================================

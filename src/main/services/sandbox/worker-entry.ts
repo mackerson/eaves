@@ -270,6 +270,12 @@ function createPluginContext() {
           rpc('data', 'chats.getByAgent', [agentId, options]),
         getCurrent: () => rpc('data', 'chats.getCurrent', []),
       },
+      // Message bodies are their own grant (data:messages:read) — chat reads
+      // above return conversation shells, this returns what was said.
+      messages: {
+        getByChat: (chatId: string, options?: { limit?: number }) =>
+          rpc('data', 'messages.getByChat', [chatId, options]),
+      },
       settings: {
         get: () => rpc('data', 'settings.get', []),
         getCurrent: () => rpc('data', 'settings.getCurrent', []),
@@ -516,6 +522,30 @@ function createPluginContext() {
 
       hasProviders: (serviceType: string) =>
         rpc('services', 'hasProviders', [serviceType]),
+    },
+
+    // Secrets — per-plugin, sealed with the OS keychain on the host side.
+    // Fail-closed: get/set throw when OS encryption is unavailable; there is
+    // no plaintext fallback. Never log what get() returns.
+    secrets: {
+      get: (key: string) => rpc('secrets', 'get', [key]) as Promise<string | null>,
+      set: (key: string, value: string) => rpc('secrets', 'set', [key, value]),
+      delete: (key: string) => rpc('secrets', 'delete', [key]) as Promise<boolean>,
+      keys: () => rpc('secrets', 'keys', []) as Promise<string[]>,
+    },
+
+    // Raw TCP/TLS through the host-side SocketBroker (net:socket grant).
+    // Incoming bytes arrive as events scoped to this worker:
+    //   events.on('net:socket:data', ({ socketId, data }) => ...)  // data = base64
+    //   events.on('net:socket:close', ({ socketId, hadError }) => ...)
+    //   events.on('net:socket:error', ({ socketId, message }) => ...)
+    net: {
+      connect: (options: { host: string; port: number; tls?: boolean; connectTimeoutMs?: number }) =>
+        rpc('net', 'connect', [options]) as Promise<{ socketId: string }>,
+      write: (socketId: string, dataBase64: string) =>
+        rpc('net', 'write', [socketId, dataBase64]) as Promise<{ bytesWritten: number }>,
+      end: (socketId: string) => rpc('net', 'end', [socketId]),
+      close: (socketId: string) => rpc('net', 'close', [socketId]),
     },
 
     // Utils

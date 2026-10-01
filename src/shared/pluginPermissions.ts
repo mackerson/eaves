@@ -18,6 +18,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'data:projects:read': 'Read your projects',
   'data:channels:read': 'Read your channels',
   'data:chats:read': 'Read your chats',
+  'data:messages:read': 'Read the messages in your chats',
   'data:settings:read': 'Read your settings',
   'data:tasks:write': 'Create or modify tasks',
   'data:notes:write': 'Create or modify notes',
@@ -33,8 +34,11 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'services:call': 'Use services from other plugins',
   'storage:read': 'Read its own stored data',
   'storage:write': 'Store its own data',
+  'secrets:read': 'Read secrets it has stored (sealed with your OS keychain)',
+  'secrets:write': 'Store secrets sealed with your OS keychain',
   'network:http': 'Make network requests',
   'system:filesystem': 'Read and write files on your computer',
+  'net:socket': 'Open raw TCP/TLS connections to servers',
   // Coarse aliases — legal in a manifest, but the sandbox matches only the
   // granular ids, so these grant nothing. Shown separately, never as capabilities.
   'data:read': 'Read your data',
@@ -45,7 +49,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
 };
 
 /** The union's own "Dangerous (require explicit grant)" group. */
-export const ELEVATED_PERMISSIONS = new Set(['network:http', 'system:filesystem']);
+export const ELEVATED_PERMISSIONS = new Set(['network:http', 'system:filesystem', 'net:socket']);
 
 /** Grants the sandbox never matches — declaring one confers no access. */
 export const INERT_PERMISSIONS = new Set([

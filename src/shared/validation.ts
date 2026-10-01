@@ -402,6 +402,7 @@ export const PluginPermissionSchema = z.enum([
   'data:projects:read',
   'data:channels:read',
   'data:chats:read',
+  'data:messages:read',
   'data:settings:read',
   // Data write access (granular)
   'data:tasks:write',
@@ -422,9 +423,13 @@ export const PluginPermissionSchema = z.enum([
   // Storage
   'storage:read',
   'storage:write',
+  // Secrets (per-plugin, OS-encrypted via safeStorage; fail-closed)
+  'secrets:read',
+  'secrets:write',
   // Dangerous (require explicit grant)
   'network:http',
   'system:filesystem',
+  'net:socket',
   // Coarse-grained aliases. Accepted so manifests that declare them still
   // validate and load; no grant check keys off them — only the granular ids
   // above are matched, so requesting these grants nothing.

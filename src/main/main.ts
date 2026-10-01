@@ -43,6 +43,7 @@ import { getAutoUpdater } from './services/AutoUpdater';
 import { registerUpdateHandlers } from './ipc/updates';
 import { ActivityPersistenceService } from './services/ActivityPersistenceService';
 import { getUsageLedgerService } from './services/UsageLedgerService';
+import { getMessagingBridgeRouter } from './services/MessagingBridgeRouter';
 import { getSettingsRepository } from './repositories';
 import { getPowerSampler } from './services/PowerSampler';
 import { getActiveWorkRegistry } from './services/ActiveWorkRegistry';
@@ -594,6 +595,11 @@ app.whenReady().then(async () => {
   // that goes unrecorded.
   getUsageLedgerService().start();
 
+  // Route outbound agent replies in bridge-owned chats to their providing
+  // plugin's messaging-provider service. A storage-side consumer (ADR-001):
+  // it never starts a turn, only forwards a finalized reply outward.
+  getMessagingBridgeRouter().start();
+
   // Real power sampling for local models, opt-in and Linux-only. Failure to
   // start is normal (wrong platform, RAPL not readable) and simply leaves
   // local energy estimated rather than measured.
@@ -807,6 +813,13 @@ async function runShutdown(): Promise<void> {
     getUsageLedgerService().stop();
   } catch (error) {
     logger.error('Error stopping usage ledger:', error);
+  }
+
+  // Stop bridge routing (drops its message:created subscription).
+  try {
+    getMessagingBridgeRouter().stop();
+  } catch (error) {
+    logger.error('Error stopping messaging bridge router:', error);
   }
 
   // Stop power sampling (kills the long-lived nvidia-smi child and the timer).

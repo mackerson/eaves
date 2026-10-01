@@ -725,14 +725,17 @@ export class ChannelRepository {
     return rows.map(row => this.mapRowToChat(row));
   }
 
-  createDirectChat(chat: { name: string; agentId: string; tags?: string }, initialParticipants: Participant[] = []): Chat {
+  createDirectChat(
+    chat: { name: string; agentId: string; tags?: string; bridgePluginId?: string },
+    initialParticipants: Participant[] = []
+  ): Chat {
     const id = `chat-${randomUUID()}`;
     const createdAt = Date.now();
 
     this.db.prepare(`
-      INSERT INTO channels (id, name, type, agent_id, created_at, tags)
-      VALUES (?, ?, 'direct', ?, ?, ?)
-    `).run(id, chat.name, chat.agentId, createdAt, chat.tags || null);
+      INSERT INTO channels (id, name, type, agent_id, created_at, tags, bridge_plugin_id)
+      VALUES (?, ?, 'direct', ?, ?, ?, ?)
+    `).run(id, chat.name, chat.agentId, createdAt, chat.tags || null, chat.bridgePluginId || null);
 
     for (const participant of initialParticipants) {
       this.addParticipant(id, participant);
@@ -746,6 +749,7 @@ export class ChannelRepository {
       messages: [],
       createdAt,
       tags: chat.tags,
+      bridgePluginId: chat.bridgePluginId,
     };
   }
 
@@ -944,6 +948,7 @@ export class ChannelRepository {
       pinned: !!row.pinned,
       folderId: row.folder_id ?? undefined,
       surface: row.surface ?? undefined,
+      bridgePluginId: row.bridge_plugin_id ?? undefined,
     };
   }
 
