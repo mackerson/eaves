@@ -143,6 +143,18 @@ describe('ChannelRepository', () => {
 
       expect(channel1.id).not.toBe(channel2.id);
     });
+
+    it('persists bridge ownership for a plugin-created channel (same column as chats, v82)', () => {
+      const bridged = repository.create({
+        name: '#eaves-dev', type: 'public', bridgePluginId: 'com.eaves.irc',
+      });
+      const plain = repository.create({ name: 'plain', type: 'public' });
+
+      const row = db.prepare('SELECT bridge_plugin_id FROM channels WHERE id = ?').get(bridged.id) as any;
+      expect(row.bridge_plugin_id).toBe('com.eaves.irc');
+      const plainRow = db.prepare('SELECT bridge_plugin_id FROM channels WHERE id = ?').get(plain.id) as any;
+      expect(plainRow.bridge_plugin_id).toBeNull();
+    });
   });
 
   describe('getAll', () => {

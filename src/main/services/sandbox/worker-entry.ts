@@ -290,6 +290,8 @@ function createPluginContext() {
         rpc('actions', 'createNote', [projectId, content]),
       createChat: (params: unknown) =>
         rpc('actions', 'createChat', [params]),
+      createChannel: (params: unknown) =>
+        rpc('actions', 'createChannel', [params]),
       createAgent: (params: unknown) =>
         rpc('actions', 'createAgent', [params]),
       bulkImportMessages: (chatId: string, messages: unknown[]) =>

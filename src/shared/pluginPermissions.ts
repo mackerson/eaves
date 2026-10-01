@@ -24,6 +24,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'data:notes:write': 'Create or modify notes',
   'data:messages:write': 'Write messages',
   'data:chats:write': 'Create or modify chats',
+  'data:channels:write': 'Create channels',
   'data:agents:write': 'Create or modify agents',
   'ui:views:register': 'Add its own views to the app',
   'ui:notifications:show': 'Show notifications',

@@ -1038,6 +1038,7 @@ export type PluginPermission =
   | 'data:notes:write'
   | 'data:messages:write'
   | 'data:chats:write'
+  | 'data:channels:write'
   | 'data:agents:write'
   // UI capabilities
   | 'ui:views:register'

@@ -752,6 +752,40 @@ export class SandboxedPluginManager {
           bridgePluginId: params.bridge === true ? pluginId : undefined,
         });
       }
+      case 'createChannel': {
+        // A real multi-participant channel, not a 1:1 chat — what a bridge
+        // wants for a room (IRC channel, Discord server channel, …).
+        // Same ownership rule as createChat: `bridge: true` stamps
+        // bridge_plugin_id with the host's own identity for the calling
+        // worker, so a plugin cannot claim a channel for another plugin.
+        //
+        // The current user joins as a participant, matching the create-channel
+        // IPC handler — a channel nobody human is in renders as an empty room
+        // the user cannot speak in.
+        const params = args[0] as { name?: unknown; projectId?: unknown; bridge?: unknown };
+        if (!params || typeof params.name !== 'string') {
+          return { success: false, error: 'createChannel expects { name, projectId?, bridge? }' };
+        }
+        const { getChannelRepository, getUserRepository } = await import('../../repositories');
+        const currentUser = getUserRepository().getCurrent();
+        const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
+        const channel = getChannelRepository().create(
+          {
+            name: params.name,
+            type: projectId ? 'project' : 'public',
+            projectId,
+            bridgePluginId: params.bridge === true ? pluginId : undefined,
+          },
+          currentUser
+            ? [{ id: currentUser.id, type: 'human', displayName: currentUser.name, color: currentUser.color, joinedAt: Date.now() }]
+            : []
+        );
+        // Same emit as channelTools' channel_create: ChannelDispatcher
+        // forwards it to the renderer as 'channels-changed' so the sidebar
+        // learns about a create that bypassed window.electron.
+        eventBus.emitEvent('channel:created', { channelId: channel.id, name: channel.name });
+        return channel;
+      }
       case 'bulkImportMessages': {
         // Two-pass, event-silent bulk insert built for imports (parent links
         // remapped via each message's originalId). Messages carry their own id

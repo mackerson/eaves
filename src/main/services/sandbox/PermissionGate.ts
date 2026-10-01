@@ -61,6 +61,7 @@ export const PERMISSION_REQUIREMENTS = {
   'actions.createTask': ['data:tasks:write'],
   'actions.createNote': ['data:notes:write'],
   'actions.createChat': ['data:chats:write'],
+  'actions.createChannel': ['data:channels:write'],
   'actions.createAgent': ['data:agents:write'],
   'actions.bulkImportMessages': ['data:messages:write'],
   'actions.bulkImportAttachments': ['data:messages:write'],
@@ -168,6 +169,10 @@ export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
     '(chat: { name: string; agentId: string; tags?: string; bridge?: boolean }): Promise<Chat> ' +
     '— bridge: true marks the chat as owned by the calling plugin, which then receives ' +
     "outbound agent replies via its 'messaging-provider' service",
+  'actions.createChannel':
+    '(channel: { name: string; projectId?: string; bridge?: boolean }): Promise<Channel> ' +
+    '— a real multi-participant channel (project-scoped when projectId is given), not a 1:1 chat. ' +
+    'bridge: true stamps the channel as owned by the calling plugin',
   'actions.createAgent': '(agent: { name: string; systemPrompt?: string; model?: string }): Promise<Agent>',
   'actions.bulkImportMessages': '(chatId: string, messages: unknown[]): Promise<{ imported: number }>',
   'actions.bulkImportAttachments': '(attachments: unknown[]): Promise<{ imported: number }>',

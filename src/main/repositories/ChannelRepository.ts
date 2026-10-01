@@ -136,14 +136,17 @@ export class ChannelRepository {
     return str.replace(/[%_\[\]\\]/g, '\\$&');
   }
 
-  create(channel: { name: string; type: Channel['type']; projectId?: string }, initialParticipants: Participant[] = []): Channel {
+  // `bridgePluginId` stamps the channel as owned by a comms-bridge plugin,
+  // same column and same trust rule as createDirectChat: callers pass the
+  // host's own identity for the requesting worker, never a plugin-supplied id.
+  create(channel: { name: string; type: Channel['type']; projectId?: string; bridgePluginId?: string }, initialParticipants: Participant[] = []): Channel {
     const id = `channel-${randomUUID()}`;
     const createdAt = Date.now();
 
     this.db.prepare(`
-      INSERT INTO channels (id, name, type, project_id, created_at, pinned)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, channel.name, channel.type, channel.projectId || null, createdAt, 0);
+      INSERT INTO channels (id, name, type, project_id, created_at, pinned, bridge_plugin_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, channel.name, channel.type, channel.projectId || null, createdAt, 0, channel.bridgePluginId || null);
 
     for (const participant of initialParticipants) {
       this.addParticipant(id, participant);
