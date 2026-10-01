@@ -728,15 +728,22 @@ export class SandboxedPluginManager {
         // ChannelRepository.createDirectChat (event-silent by design — the
         // import wizard reloads the renderer on completion). Returns the Chat;
         // the plugin reads `.id`.
-        const params = args[0] as { name?: unknown; agentId?: unknown; tags?: unknown };
+        //
+        // `bridge: true` marks the chat as owned by the calling bridge plugin:
+        // outbound agent replies in it are routed to that plugin's
+        // messaging-provider `send` (see MessagingBridgeRouter). The stamped id
+        // is the host's own identity for the calling worker — a plugin cannot
+        // claim ownership on behalf of another plugin.
+        const params = args[0] as { name?: unknown; agentId?: unknown; tags?: unknown; bridge?: unknown };
         if (!params || typeof params.name !== 'string' || typeof params.agentId !== 'string') {
-          return { success: false, error: 'createChat expects { name, agentId, tags? }' };
+          return { success: false, error: 'createChat expects { name, agentId, tags?, bridge? }' };
         }
         const { getChannelRepository } = await import('../../repositories');
         return getChannelRepository().createDirectChat({
           name: params.name,
           agentId: params.agentId,
           tags: typeof params.tags === 'string' ? params.tags : undefined,
+          bridgePluginId: params.bridge === true ? pluginId : undefined,
         });
       }
       case 'bulkImportMessages': {

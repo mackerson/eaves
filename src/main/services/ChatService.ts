@@ -210,7 +210,9 @@ export class ChatService {
         senderType: 'agent',
         senderDisplayName: agent.name,
         senderColor: agent.color,
-        metadata: { participantType: 'agent' },
+        // `system: true` keeps this notice out of outbound bridge routing —
+        // it is the host talking to the user, not the agent replying.
+        metadata: { participantType: 'agent', system: true },
         content: `[Error: ${errorMessage}]`,
         contentBlocks: [{ type: 'system' as const, content: `Error: ${errorMessage}`, timestamp: Date.now() }],
         toolCalls: [],

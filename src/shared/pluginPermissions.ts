@@ -18,6 +18,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'data:projects:read': 'Read your projects',
   'data:channels:read': 'Read your channels',
   'data:chats:read': 'Read your chats',
+  'data:messages:read': 'Read the messages in your chats',
   'data:settings:read': 'Read your settings',
   'data:tasks:write': 'Create or modify tasks',
   'data:notes:write': 'Create or modify notes',

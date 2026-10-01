@@ -53,6 +53,7 @@ export const PERMISSION_REQUIREMENTS = {
   'data.chats.getById': ['data:chats:read'],
   'data.chats.getByAgent': ['data:chats:read'],
   'data.chats.getCurrent': ['data:chats:read'],
+  'data.messages.getByChat': ['data:messages:read'],
   'data.settings.get': ['data:settings:read'],
   'data.settings.getCurrent': ['data:settings:read'],
 
@@ -149,12 +150,17 @@ export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
   'data.chats.getById': '(id: string): Promise<Chat | null>',
   'data.chats.getByAgent': '(agentId: string, options?: { limit?: number }): Promise<Chat[]>',
   'data.chats.getCurrent': '(): Promise<Chat | null>',
+  'data.messages.getByChat':
+    '(chatId: string, options?: { limit?: number }): Promise<ChatMessage[]> — active branch only, oldest first',
   'data.settings.get': '(): Promise<Settings>',
   'data.settings.getCurrent': '(): Promise<Settings>',
 
   'actions.createTask': '(task: { title: string; description?: string; projectId?: string }): Promise<Task>',
   'actions.createNote': '(note: { title: string; content: string; projectId?: string }): Promise<Note>',
-  'actions.createChat': '(chat: { agentId: string; title?: string }): Promise<Chat>',
+  'actions.createChat':
+    '(chat: { name: string; agentId: string; tags?: string; bridge?: boolean }): Promise<Chat> ' +
+    '— bridge: true marks the chat as owned by the calling plugin, which then receives ' +
+    "outbound agent replies via its 'messaging-provider' service",
   'actions.createAgent': '(agent: { name: string; systemPrompt?: string; model?: string }): Promise<Agent>',
   'actions.bulkImportMessages': '(chatId: string, messages: unknown[]): Promise<{ imported: number }>',
   'actions.bulkImportAttachments': '(attachments: unknown[]): Promise<{ imported: number }>',

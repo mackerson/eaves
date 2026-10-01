@@ -270,6 +270,12 @@ function createPluginContext() {
           rpc('data', 'chats.getByAgent', [agentId, options]),
         getCurrent: () => rpc('data', 'chats.getCurrent', []),
       },
+      // Message bodies are their own grant (data:messages:read) — chat reads
+      // above return conversation shells, this returns what was said.
+      messages: {
+        getByChat: (chatId: string, options?: { limit?: number }) =>
+          rpc('data', 'messages.getByChat', [chatId, options]),
+      },
       settings: {
         get: () => rpc('data', 'settings.get', []),
         getCurrent: () => rpc('data', 'settings.getCurrent', []),

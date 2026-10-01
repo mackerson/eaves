@@ -150,6 +150,8 @@ export interface ChatRow {
   folder_id: string | null; // conversation_folders.id
   /** Which surface owns this conversation (v81). Routing, not capability. */
   surface: string | null;
+  /** The plugin bridging this chat to an external network (v82), host-written. */
+  bridge_plugin_id: string | null;
 }
 
 export interface ChatParticipantRow {

@@ -402,6 +402,7 @@ export const PluginPermissionSchema = z.enum([
   'data:projects:read',
   'data:channels:read',
   'data:chats:read',
+  'data:messages:read',
   'data:settings:read',
   // Data write access (granular)
   'data:tasks:write',

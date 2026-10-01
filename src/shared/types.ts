@@ -211,6 +211,13 @@ export interface Chat {
    * lives and where clicking it should go — the lists themselves stay scoped.
    */
   surface?: string;
+  /**
+   * The plugin bridging this chat to an external network, when there is one.
+   * Written only by the host from the calling plugin's own identity (v82) —
+   * never from user input — because it decides where outbound agent replies
+   * are routed (see MessagingBridgeRouter).
+   */
+  bridgePluginId?: string;
 }
 
 export interface ChatMessage extends BaseMessage {
@@ -1007,6 +1014,7 @@ export type PluginPermission =
   | 'data:projects:read'
   | 'data:channels:read'
   | 'data:chats:read'
+  | 'data:messages:read'
   | 'data:settings:read'
   // Data write access (granular)
   | 'data:tasks:write'
@@ -1041,6 +1049,63 @@ export type PluginPermission =
   | 'ui:register'
   | 'storage:access'
   | 'network:access';
+
+// =================================================================
+// Messaging Provider Service Types
+// Standard serviceType contract for comms-bridge plugins (email, IRC,
+// Discord, Telegram, …). A bridge registers this service; the host routes
+// outbound agent replies in bridge-owned chats to the providing plugin's
+// `send`. Inbound lands through the existing import surface
+// (actions.createChat + actions.bulkImportMessages).
+// =================================================================
+
+export const MESSAGING_PROVIDER_SERVICE_TYPE = 'messaging-provider';
+
+/** The operations a messaging-provider must register, by name. */
+export const MESSAGING_PROVIDER_OPERATIONS = [
+  'send',
+  'listThreads',
+  'markRead',
+  'capabilities',
+] as const;
+
+export type MessagingProviderOperation = (typeof MESSAGING_PROVIDER_OPERATIONS)[number];
+
+/** What the host hands a provider's `send` for an outbound reply. */
+export interface MessagingSendParams {
+  /** The bridge-owned chat the reply was written in. */
+  chatId: string;
+  /** The Eaves message id, for the provider's own dedup/threading records. */
+  messageId: string;
+  content: string;
+  timestamp: number;
+  senderDisplayName?: string;
+}
+
+export interface MessagingSendResult {
+  success: boolean;
+  /** The remote network's id for the delivered message, if it has one. */
+  remoteId?: string;
+  message?: string;
+}
+
+/** A remote conversation as the provider sees it (`listThreads`). */
+export interface MessagingThread {
+  id: string;
+  title?: string;
+  lastMessageAt?: number;
+  unreadCount?: number;
+  /** The Eaves chat this thread is bridged into, once it is. */
+  chatId?: string;
+}
+
+/** What the provider's `capabilities` reports. */
+export interface MessagingCapabilities {
+  canSend: boolean;
+  canListThreads: boolean;
+  canMarkRead: boolean;
+  attachments?: boolean;
+}
 
 // =================================================================
 // Memory Backend Service Types
