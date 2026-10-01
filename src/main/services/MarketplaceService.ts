@@ -9,6 +9,7 @@ import { getSandboxedPluginManager } from './sandbox';
 import { isInsideDirectory, sanitizeFolderName } from './sandbox/pathContainment';
 import { getPluginGrantsRepository } from '../repositories';
 import { logger } from './logger';
+import { compareVersions } from '../../shared/version';
 
 /**
  * Plugin marketplace — V1.
@@ -21,9 +22,19 @@ import { logger } from './logger';
  * a registry id — never a URL — so install is confined to registry entries.
  */
 
-const REGISTRY_URL =
-  legacyEnv('EAVES_REGISTRY_URL') ||
+/**
+ * The registry origin, behind one configurable URL. The planned V2 swap to the
+ * mesh /directory endpoint is a change to this default (or setting
+ * EAVES_REGISTRY_URL) — nothing else in the fetch/install path knows where the
+ * registry lives. Read lazily so the env override works however the module
+ * gets loaded.
+ */
+const DEFAULT_REGISTRY_URL =
   'https://raw.githubusercontent.com/mackerson/eaves-plugin-registry/main/registry.json';
+
+export function getRegistryUrl(): string {
+  return legacyEnv('EAVES_REGISTRY_URL') || DEFAULT_REGISTRY_URL;
+}
 
 export interface RegistryRelease {
   tag: string;
@@ -41,6 +52,9 @@ export interface RegistryPlugin {
   latest: string;
   minAppVersion?: string;
   permissions: string[];
+  /** Optional browse category. Not in the registry schema yet (a registry-repo
+   *  change); typed here so clients search it as soon as the registry grows it. */
+  category?: string;
   release: RegistryRelease | null;
 }
 interface Registry {
@@ -49,8 +63,23 @@ interface Registry {
   plugins: RegistryPlugin[];
 }
 
+/**
+ * Where the registry the user is looking at actually came from. 'network' is
+ * live; 'cache' means the fetch failed and this is the last copy written to
+ * disk (its `updated` date tells the user how stale); 'none' means there is
+ * nothing to show at all. The UI renders these differently — an empty registry
+ * and an unreachable one must not look the same.
+ */
+export type RegistrySource = 'network' | 'cache' | 'none';
+export interface RegistryStatus {
+  source: RegistrySource;
+  updated: string;
+  fetchedAt: number | null;
+}
+
 const EMPTY: Registry = { schemaVersion: 1, updated: '', plugins: [] };
 let cached: Registry | null = null;
+let lastStatus: RegistryStatus = { source: 'none', updated: '', fetchedAt: null };
 
 function cachePath(): string {
   return path.join(app.getPath('userData'), 'marketplace', 'registry.json');
@@ -67,11 +96,12 @@ function isRegistry(v: unknown): v is Registry {
 export async function fetchRegistry(force = false): Promise<Registry> {
   if (cached && !force) return cached;
   try {
-    const res = await fetch(REGISTRY_URL, { redirect: 'follow' });
+    const res = await fetch(getRegistryUrl(), { redirect: 'follow' });
     if (!res.ok) throw new Error(`registry HTTP ${res.status}`);
     const data = await res.json();
     if (!isRegistry(data)) throw new Error('malformed registry');
     cached = data;
+    lastStatus = { source: 'network', updated: data.updated, fetchedAt: Date.now() };
     fs.mkdirSync(path.dirname(cachePath()), { recursive: true });
     fs.writeFileSync(cachePath(), JSON.stringify(data));
     return data;
@@ -79,18 +109,35 @@ export async function fetchRegistry(force = false): Promise<Registry> {
     logger.warn('[Marketplace] registry fetch failed, trying disk cache:', err);
     try {
       const disk = JSON.parse(fs.readFileSync(cachePath(), 'utf-8'));
-      if (isRegistry(disk)) { cached = disk; return disk; }
+      if (isRegistry(disk)) {
+        cached = disk;
+        lastStatus = { source: 'cache', updated: disk.updated, fetchedAt: null };
+        return disk;
+      }
     } catch { /* no cache */ }
+    lastStatus = { source: 'none', updated: '', fetchedAt: null };
     return EMPTY;
   }
 }
 
-/** Registry + the set of currently-installed (user-source) plugin ids/versions. */
-export async function getMarketplaceListing(): Promise<{
+/** Test seam: forget the in-memory registry and its provenance. */
+export function resetRegistryCacheForTests(): void {
+  cached = null;
+  lastStatus = { source: 'none', updated: '', fetchedAt: null };
+}
+
+/**
+ * Registry + the set of currently-installed (user-source) plugin ids/versions
+ * + where the registry copy came from (so the UI can distinguish "offline,
+ * showing the cached list" from "the registry is empty"). `force` refetches
+ * past the in-memory copy — the UI's explicit Refresh/Retry.
+ */
+export async function getMarketplaceListing(force = false): Promise<{
   plugins: RegistryPlugin[];
   installed: Record<string, string>; // id -> installed version
+  status: RegistryStatus;
 }> {
-  const reg = await fetchRegistry();
+  const reg = await fetchRegistry(force);
   const manager = getSandboxedPluginManager();
   const installed: Record<string, string> = {};
   for (const m of manager.getLoadedPlugins()) {
@@ -98,7 +145,7 @@ export async function getMarketplaceListing(): Promise<{
       installed[m.id] = (m as unknown as { version: string }).version;
     }
   }
-  return { plugins: reg.plugins, installed };
+  return { plugins: reg.plugins, installed, status: lastStatus };
 }
 
 function permsEqual(a: string[], b: string[]): boolean {
@@ -180,17 +227,6 @@ export function removeLegacyCollapsedInstall(userPluginsDir: string, id: string,
   }
   fs.rmSync(legacyDir, { recursive: true, force: true });
   logger.info(`[Marketplace] removed legacy install directory for ${id}`, { legacyDir });
-}
-
-/** Semver-ish compare of dotted versions. a<b -> -1, a==b -> 0, a>b -> 1. */
-function compareVersions(a: string, b: string): number {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
-    if (d !== 0) return d < 0 ? -1 : 1;
-  }
-  return 0;
 }
 
 /**

@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { useToastStore, useUIStore } from '@/stores';
 import { ConfigurePluginModal } from '@/components/modals/ConfigurePluginModal';
 import { ConfirmDialog } from '@/components/modals/ConfirmDialog';
+import { MarketplacePanel } from '@/components/marketplace/MarketplacePanel';
+import { getTrustedPlugins, saveTrustedPlugins } from '@/lib/pluginTrust';
 import { AlertTriangle, Shield, ShieldCheck } from 'lucide-react';
 import type { PluginDraft } from '@/../shared/types';
 
@@ -18,37 +20,15 @@ interface Plugin {
   source?: 'bundled' | 'user' | 'dev' | 'draft';
 }
 
-const TRUSTED_PLUGINS_KEY = 'eaves:trustedPlugins';
-const LEGACY_TRUSTED_PLUGINS_KEY = 'enclave:trustedPlugins';
-
-// Get trusted plugins from localStorage
-const getTrustedPlugins = (): Set<string> => {
-  try {
-    // Fall back to the pre-rename key so the profile migration doesn't quietly
-    // revoke trust the user already granted. Reading it is safe: it is the same
-    // profile and the same user's decision, only under the old name.
-    const stored =
-      localStorage.getItem(TRUSTED_PLUGINS_KEY) ??
-      localStorage.getItem(LEGACY_TRUSTED_PLUGINS_KEY);
-    return new Set(stored ? JSON.parse(stored) : []);
-  } catch {
-    return new Set();
-  }
-};
-
-// Save trusted plugins to localStorage
-const saveTrustedPlugins = (plugins: Set<string>): void => {
-  localStorage.setItem(TRUSTED_PLUGINS_KEY, JSON.stringify([...plugins]));
-  // Drop the legacy key once we've written the new one, so a later revoke
-  // can't be undone by the fallback read above resurrecting stale trust.
-  localStorage.removeItem(LEGACY_TRUSTED_PLUGINS_KEY);
-};
-
 interface PluginsViewProps {
   onNavigateToView?: (viewId: string) => void;
 }
 
 export function PluginsView({ onNavigateToView }: PluginsViewProps) {
+  // 'installed' manages what's on this machine; 'discover' browses the curated
+  // registry (MarketplacePanel). Install/uninstall over there calls back into
+  // loadPlugins so the installed list never goes stale behind the other tab.
+  const [tab, setTab] = useState<'installed' | 'discover'>('installed');
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [drafts, setDrafts] = useState<PluginDraft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,12 +188,33 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
       <div className="mb-6">
         <h2 className="text-3xl font-semibold">Plugins</h2>
         <p className="text-muted-foreground mt-2">
-          Manage installed plugins and their configurations
+          Manage installed plugins and discover new ones
         </p>
+        <div className="flex items-center gap-1 mt-4 border-b border-border">
+          {([['installed', 'Installed'], ['discover', 'Discover']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === key
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {tab === 'discover' && (
+        <div className="max-w-6xl">
+          <MarketplacePanel onInstalledChange={loadPlugins} />
+        </div>
+      )}
+
       {/* Security Warning for User Plugins */}
-      {plugins.some(p => isUserPlugin(p) && !trustedPlugins.has(p.id)) && (
+      {tab === 'installed' && plugins.some(p => isUserPlugin(p) && !trustedPlugins.has(p.id)) && (
         <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
@@ -228,7 +229,7 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
         </div>
       )}
 
-      {drafts.length > 0 && (
+      {tab === 'installed' && drafts.length > 0 && (
         <div className="max-w-4xl mb-8">
           <h3 className="text-xl font-semibold mb-1">Drafts</h3>
           <p className="text-sm text-muted-foreground mb-4">
@@ -288,6 +289,7 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
         </div>
       )}
 
+      {tab === 'installed' && (
       <div className="max-w-4xl space-y-8">
         {Object.entries(groupedPlugins).map(([category, categoryPlugins]) => (
           <div key={category}>
@@ -436,10 +438,11 @@ export function PluginsView({ onNavigateToView }: PluginsViewProps) {
 
         {plugins.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
-            No plugins installed
+            No plugins installed — find some under Discover
           </div>
         )}
       </div>
+      )}
 
       {/* Configure Plugin Modal */}
       {configuringPluginId && (

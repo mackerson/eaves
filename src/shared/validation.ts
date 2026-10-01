@@ -1022,6 +1022,10 @@ export const TogglePluginSchema = z.object({
   enabled: z.boolean(),
 });
 
+// Marketplace registry query: `force` bypasses the in-memory registry copy
+// (the UI's explicit Refresh/Retry). Absent means "cached is fine".
+export const MarketplaceRegistrySchema = z.boolean().optional();
+
 // Event filter schema
 export const EventFilterSchema = z.string().min(1).max(100);
 
