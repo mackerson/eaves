@@ -1144,6 +1144,14 @@ export interface MessagingCapabilities {
   canListThreads: boolean;
   canMarkRead: boolean;
   attachments?: boolean;
+  /**
+   * The remote network's hard limit on one outbound message, in characters
+   * (Discord 2000, Telegram 4096, IRC lines far less, …). Absent = no stated
+   * limit. The host does not chunk for the provider — a `send` that exceeds
+   * its own declared limit is the provider's to split — but declaring it lets
+   * the host (and agents) shape replies to fit.
+   */
+  maxMessageLength?: number;
 }
 
 // =================================================================
