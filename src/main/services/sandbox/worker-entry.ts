@@ -40,6 +40,8 @@ interface WorkerData {
   paths: {
     userData: string;
     avatars: string;
+    /** Per-plugin media directory (persisted attachments); exists before activate. */
+    media: string;
   };
 }
 

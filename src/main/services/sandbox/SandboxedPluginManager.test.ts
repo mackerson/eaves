@@ -337,6 +337,22 @@ describe('SandboxedPluginManager', () => {
    * an unconditional recursive delete. Install already refuses to overwrite a
    * directory another plugin claims; this is the same guard on the way out.
    */
+  describe('plugin media directory (paths.media)', () => {
+    it('creates <userData>/plugin-media/<sanitized id> before the worker starts and hands it to the worker', async () => {
+      await manager.loadPlugin(makeManifest());
+
+      const fsMock = fs as unknown as { mkdirSync: ReturnType<typeof vi.fn> };
+      expect(fsMock.mkdirSync).toHaveBeenCalledWith(
+        '/fake/userData/plugin-media/com-example-test-plugin',
+        { recursive: true },
+      );
+      const worker = createdWorkers[createdWorkers.length - 1];
+      expect((worker.config as { mediaPath: string }).mediaPath).toBe(
+        '/fake/userData/plugin-media/com-example-test-plugin',
+      );
+    });
+  });
+
   describe('removeUserPlugin ownership', () => {
     const fsMock = fs as unknown as {
       existsSync: ReturnType<typeof vi.fn>;
@@ -370,6 +386,15 @@ describe('SandboxedPluginManager', () => {
       occupiedBy(null);
       await expect(manager.removeUserPlugin('com.alice.notes')).rejects.toThrow(/not identifiable/);
       expect(fsMock.rmSync).not.toHaveBeenCalled();
+    });
+
+    it('removes the plugin media directory along with the install', async () => {
+      occupiedBy('com.alice.notes');
+      await manager.removeUserPlugin('com.alice.notes');
+      expect(fsMock.rmSync).toHaveBeenCalledWith(
+        '/fake/userData/plugin-media/com-alice-notes',
+        expect.objectContaining({ recursive: true }),
+      );
     });
 
     it('trusts the folder a loaded plugin was actually discovered in', async () => {
@@ -465,10 +490,16 @@ describe('SandboxedPluginManager', () => {
 
       // 'plugins-draft' has 'plugins' as a string prefix, so assert on the
       // full segment — the same trap isInsideDirectory exists to avoid.
+      // Retract deletes exactly two things: the draft folder and the draft's
+      // media directory. Never the install tree.
       const deleted = fsMock.rmSync.mock.calls.map(call => String(call[0]));
-      expect(deleted).toHaveLength(1);
+      expect(deleted).toHaveLength(2);
       expect(deleted[0]).toContain('plugins-draft');
       expect(deleted[0]).toContain('com-alice-sketch');
+      expect(deleted[1]).toBe('/fake/userData/plugin-media/com-alice-sketch');
+      for (const dir of deleted) {
+        expect(dir).not.toMatch(/userData[/\\]plugins[/\\]/);
+      }
     });
   });
 });

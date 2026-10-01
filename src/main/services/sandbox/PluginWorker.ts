@@ -137,6 +137,7 @@ export class PluginWorker extends EventEmitter {
             paths: {
               userData: this.config.userDataPath,
               avatars: this.config.avatarsPath,
+              media: this.config.mediaPath,
             },
           },
           resourceLimits: {

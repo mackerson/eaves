@@ -320,6 +320,12 @@ export interface WorkerConfig {
    */
   userDataPath: string;
   avatarsPath: string;
+  /**
+   * The plugin's own media directory, <userData>/plugin-media/<pluginId>/ —
+   * where a bridge stores downloaded attachments so they survive the worker.
+   * Created before the worker starts; removed on uninstall / draft retract.
+   */
+  mediaPath: string;
 }
 
 export interface WorkerHealth {

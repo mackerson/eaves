@@ -511,6 +511,12 @@ export class SandboxedPluginManager {
     const configManager = getPluginConfigManager();
     const userDataPath = app.getPath('userData');
 
+    // The plugin's media directory must exist before the worker starts — a
+    // path handed to a plugin that it first has to mkdir itself is a trap
+    // every bridge falls into separately.
+    const mediaPath = this.pluginMediaDir(manifest.id);
+    fs.mkdirSync(mediaPath, { recursive: true });
+
     return {
       pluginId: manifest.id,
       manifestPath: path.join(pluginPath, 'plugin.json'),
@@ -519,7 +525,28 @@ export class SandboxedPluginManager {
       config: configManager.getConfig(manifest.id),
       userDataPath,
       avatarsPath: path.join(userDataPath, 'avatars'),
+      mediaPath,
     };
+  }
+
+  /** <userData>/plugin-media/<sanitized id> — stable across tiers and reloads. */
+  private pluginMediaDir(pluginId: string): string {
+    return path.join(app.getPath('userData'), 'plugin-media', sanitizeFolderName(pluginId));
+  }
+
+  /**
+   * Drop a plugin's media directory — the uninstall/retract counterpart of
+   * clearing its secrets and config: persisted attachments must not outlive
+   * the plugin that fetched them.
+   */
+  private removePluginMediaDir(pluginId: string): void {
+    const mediaRoot = path.join(app.getPath('userData'), 'plugin-media');
+    const dir = this.pluginMediaDir(pluginId);
+    // sanitizeFolderName cannot produce a traversal, but the operation on the
+    // other side is a recursive delete — check containment anyway.
+    if (isInsideDirectory(dir, mediaRoot) && fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
 
   /**
@@ -1269,6 +1296,8 @@ export class SandboxedPluginManager {
     // not survive it.
     const { getPluginSecretsStore } = await import('../PluginSecretsStore');
     getPluginSecretsStore().clearPlugin(pluginId);
+    // And for its media directory — attachments it downloaded go with it.
+    this.removePluginMediaDir(pluginId);
   }
 
   /** Absolute path to the draft plugins dir (agent-authored staging). */
@@ -1365,6 +1394,7 @@ export class SandboxedPluginManager {
     getPluginConfigManager().deleteConfig(pluginId);
     const { getPluginSecretsStore } = await import('../PluginSecretsStore');
     getPluginSecretsStore().clearPlugin(pluginId);
+    this.removePluginMediaDir(pluginId);
   }
 
   /**
