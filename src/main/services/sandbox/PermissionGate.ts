@@ -174,8 +174,11 @@ export const METHOD_SIGNATURES: Record<GatedMethod, string> = {
     '— a real multi-participant channel (project-scoped when projectId is given), not a 1:1 chat. ' +
     'bridge: true stamps the channel as owned by the calling plugin',
   'actions.createAgent': '(agent: { name: string; systemPrompt?: string; model?: string }): Promise<Agent>',
-  'actions.bulkImportMessages': '(chatId: string, messages: unknown[]): Promise<{ imported: number }>',
-  'actions.bulkImportAttachments': '(attachments: unknown[]): Promise<{ imported: number }>',
+  // Both bulk imports return the created row ids, in input order.
+  'actions.bulkImportMessages': '(chatId: string, messages: unknown[]): Promise<string[]>',
+  'actions.bulkImportAttachments':
+    '(attachments: PluginImportAttachment[]): Promise<string[]> — each attachment is ' +
+    '{ messageId, filename, storedPath, mimeType, size, attachmentType: "file" | "image" | "audio" | "video", originalPath?, metadata? }',
 
   'ui.showNotification':
     "(notification: string | { title: string; body?: string; icon?: string }): Promise<void> " +

@@ -25,6 +25,7 @@ import {
 } from './types';
 import { serializeError, sanitizeForSerialization, RequestCorrelator } from './protocol';
 import { isInsideDirectory } from './pathContainment';
+import type { PluginImportAttachment } from '../../../shared/types';
 
 // ============================================================================
 // Worker Data
@@ -296,7 +297,7 @@ function createPluginContext() {
         rpc('actions', 'createAgent', [params]),
       bulkImportMessages: (chatId: string, messages: unknown[]) =>
         rpc('actions', 'bulkImportMessages', [chatId, messages]),
-      bulkImportAttachments: (attachments: unknown[]) =>
+      bulkImportAttachments: (attachments: PluginImportAttachment[]) =>
         rpc('actions', 'bulkImportAttachments', [attachments]),
     },
 

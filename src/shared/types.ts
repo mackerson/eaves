@@ -1120,6 +1120,24 @@ export interface MessagingThread {
   chatId?: string;
 }
 
+/**
+ * What a plugin hands `actions.bulkImportAttachments`. Field names match
+ * MessageAttachment exactly (the rows become `message_attachments` rows via
+ * MessageAttachmentRepository.bulkCreate, which assigns id/createdAt) —
+ * `messageId` is the deterministic id the preceding bulkImportMessages used,
+ * so the FK resolves.
+ */
+export interface PluginImportAttachment {
+  messageId: string;
+  filename: string;
+  originalPath?: string;
+  storedPath: string;
+  mimeType: string;
+  size: number;
+  attachmentType: 'file' | 'image' | 'audio' | 'video';
+  metadata?: Record<string, unknown>;
+}
+
 /** What the provider's `capabilities` reports. */
 export interface MessagingCapabilities {
   canSend: boolean;

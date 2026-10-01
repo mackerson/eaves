@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { app, Notification } from 'electron';
-import { PluginManifest } from '../../types';
+import { PluginManifest, PluginImportAttachment } from '../../types';
 import { PluginManifestSchema, validateWithSchema, isValidationFailure } from '../../../shared/validation';
 import { eventBus } from '../EventBus';
 import { clearRenderReport } from '../pluginRenderReports';
@@ -804,15 +804,30 @@ export class SandboxedPluginManager {
       case 'bulkImportAttachments': {
         // Attachment rows already carry the deterministic messageId the bulk
         // message insert used, so FKs resolve (import runs messages first).
-        const attachments = args[0] as Array<Record<string, unknown>>;
+        const attachments = args[0];
         if (!Array.isArray(attachments)) {
           return { success: false, error: 'bulkImportAttachments expects an array of attachments' };
         }
+        // Plugin input is untrusted: check the PluginImportAttachment shape
+        // here rather than casting through unknown into the INSERT.
+        const isImportAttachment = (a: unknown): a is PluginImportAttachment => {
+          const row = a as Partial<PluginImportAttachment> | null;
+          return !!row && typeof row === 'object'
+            && typeof row.messageId === 'string'
+            && typeof row.filename === 'string'
+            && typeof row.storedPath === 'string'
+            && typeof row.mimeType === 'string'
+            && typeof row.size === 'number'
+            && ['file', 'image', 'audio', 'video'].includes(row.attachmentType as string);
+        };
+        if (!attachments.every(isImportAttachment)) {
+          return {
+            success: false,
+            error: 'bulkImportAttachments: each attachment needs { messageId, filename, storedPath, mimeType, size, attachmentType }',
+          };
+        }
         const { getMessageAttachmentRepository } = await import('../../repositories');
-        const repo = getMessageAttachmentRepository();
-        return repo.bulkCreate(
-          attachments as unknown as Parameters<typeof repo.bulkCreate>[0]
-        );
+        return getMessageAttachmentRepository().bulkCreate(attachments);
       }
       default:
         // sendMessage / switchProject / switchChannel / switchChat were
