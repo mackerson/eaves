@@ -367,7 +367,7 @@ contextBridge.exposeInMainWorld('electron', {
   enablePlugin: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('enable-plugin', pluginId),
   disablePlugin: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('disable-plugin', pluginId),
   togglePlugin: (pluginId: string, enabled: boolean): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('toggle-plugin', { pluginId, enabled }),
-  getPluginRegistry: (): Promise<{ plugins: Array<{ id: string; name: string; description: string; author: string; homepage: string; tier: string; latest: string; minAppVersion?: string; permissions: string[]; release: { tag: string; asset: string; url: string; sha256: string } | null }>; installed: Record<string, string> }> => ipcRenderer.invoke('marketplace:registry'),
+  getPluginRegistry: (force?: boolean): Promise<{ plugins: Array<{ id: string; name: string; description: string; author: string; homepage: string; tier: string; latest: string; minAppVersion?: string; permissions: string[]; category?: string; release: { tag: string; asset: string; url: string; sha256: string } | null }>; installed: Record<string, string>; status: { source: 'network' | 'cache' | 'none'; updated: string; fetchedAt: number | null } }> => ipcRenderer.invoke('marketplace:registry', force),
   installPlugin: (pluginId: string): Promise<{ success: boolean; id?: string; folderName?: string; version?: string; error?: string }> => ipcRenderer.invoke('plugin:install', pluginId),
   uninstallPlugin: (pluginId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('plugin:uninstall', pluginId),
   // Agent-authored drafts. Promotion is human-only — there is deliberately no

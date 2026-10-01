@@ -18,6 +18,7 @@ import {
   CallServiceSchema,
   TogglePluginSchema,
   EventFilterSchema,
+  MarketplaceRegistrySchema,
 } from '../../shared/validation';
 import { validateIPC, ipcResult } from '../utils/ipcValidation';
 import { rejectUndeclaredConfig } from './pluginConfigPolicy';
@@ -141,8 +142,10 @@ export function registerPluginHandlers(getMainWindow?: () => BrowserWindow | nul
   // The renderer passes only a registry id — never a URL — so install is
   // confined to curated registry entries. See MarketplaceService.
 
-  ipcMain.handle('marketplace:registry', ipcResult('marketplace:registry', async () => {
-    return getMarketplaceListing();
+  ipcMain.handle('marketplace:registry', ipcResult('marketplace:registry', async (_event, force?: boolean) => {
+    const validation = validateIPC(MarketplaceRegistrySchema, force, 'marketplace:registry');
+    if (!validation.success) return validation;
+    return getMarketplaceListing(validation.data === true);
   }));
 
   ipcMain.handle('plugin:install', ipcResult('plugin:install', async (event, pluginId: string) => {
