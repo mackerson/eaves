@@ -7,6 +7,61 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 and versions follow [semantic versioning](https://semver.org/) with the caveat
 above: in 0.x, a minor bump can carry breaking changes.
 
+## [0.5.2] — 2026-11-17
+
+Agents can now write plugins, under a person's eye, and the plugin platform
+grew the pieces a messaging bridge needs. The database schema moves from v78
+to v82; **LAN sync peers must all run this version** — the sync handshake does
+not yet compare schema versions, and `channels` gained columns.
+
+### Added
+
+- **Workshop.** A sidebar section where an agent writes a plugin while you
+  watch: the bench shows the source, the grants it asks for and the calls the
+  code actually makes. Off by default — opt in from the Workshop or Settings.
+- **Draft plugins.** Agent-authored plugins live in a quarantined tier: never
+  discovered at startup, never given a view in the main window, and their
+  tools are callable only in the workshop session that activated them.
+  Previews render out of the main window's realm.
+- **Keeping a draft is a human action.** There is no agent tool for it;
+  promotion goes through the same main-owned consent window as an install.
+- **Discover tab.** Browsing, searching and installing from the registry is now
+  part of the Plugins view, with permission chips on every card. It says
+  whether the listing is live or a cached copy, and can be refreshed.
+- **Plugin secrets.** A per-plugin store sealed with the OS keychain behind
+  `secrets:read` / `secrets:write`, and a Secrets section in a plugin's
+  Configure modal. Values are write-only from the UI.
+- **Gated sockets for plugins.** `net:socket` gives host-brokered TCP/TLS, with
+  `net.upgradeTls` for STARTTLS. Certificate verification has no opt-out.
+- **Messaging-provider contract** for bridge plugins, with host-routed outbound
+  replies, a declared `maxMessageLength`, `actions.createChannel` (behind
+  `data:channels:write`) and a standard per-plugin media directory.
+- `EAVES_USER_DATA_DIR` lets a dev build run against a throwaway profile.
+
+### Changed
+
+- **Message bodies are their own plugin grant.** `data:chats:read` now returns
+  conversation shells only; reading transcripts needs `data:messages:read`.
+  Plugins that read messages through the chat grant must request the new one.
+- **The marketplace plugin is no longer bundled**; the Discover tab replaces it.
+- Development and the test suite run on Windows with plain Node — no Git Bash.
+
+### Fixed
+
+- **Replies cut off mid-sentence.** Every model's output was capped at 4096
+  tokens regardless of what the provider allows. The cap now comes from the
+  agent's setting, then the provider's published limit, then the old default.
+- **MCP connections leaked on every channel turn and approval resume** for
+  agents with an MCP server configured.
+- **Pricing overrides from Settings were ignored for chat and channel turns**,
+  which is nearly all spend.
+- A local model server bound to only one IP family is found on retry.
+- A plugin passing the wrong shape to a toast or notification no longer takes
+  down the whole window.
+- Sidebar sections open when their contents arrive, not before.
+- Windows: attachment paths are repaired after the Enclave → Eaves move, shell
+  tools no longer run inside WSL, and a timed-out script returns.
+
 ## [0.5.1] — 2026-08-22
 
 ### Fixed
