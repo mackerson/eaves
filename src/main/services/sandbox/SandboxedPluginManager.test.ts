@@ -19,6 +19,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
+import * as path from 'path';
 import { EventEmitter } from 'events';
 import type { PluginManifest } from '../../../shared/types';
 
@@ -343,12 +344,12 @@ describe('SandboxedPluginManager', () => {
 
       const fsMock = fs as unknown as { mkdirSync: ReturnType<typeof vi.fn> };
       expect(fsMock.mkdirSync).toHaveBeenCalledWith(
-        '/fake/userData/plugin-media/com-example-test-plugin',
+        path.join('/fake/userData', 'plugin-media', 'com-example-test-plugin'),
         { recursive: true },
       );
       const worker = createdWorkers[createdWorkers.length - 1];
       expect((worker.config as { mediaPath: string }).mediaPath).toBe(
-        '/fake/userData/plugin-media/com-example-test-plugin',
+        path.join('/fake/userData', 'plugin-media', 'com-example-test-plugin'),
       );
     });
   });
@@ -392,7 +393,7 @@ describe('SandboxedPluginManager', () => {
       occupiedBy('com.alice.notes');
       await manager.removeUserPlugin('com.alice.notes');
       expect(fsMock.rmSync).toHaveBeenCalledWith(
-        '/fake/userData/plugin-media/com-alice-notes',
+        path.join('/fake/userData', 'plugin-media', 'com-alice-notes'),
         expect.objectContaining({ recursive: true }),
       );
     });
@@ -496,7 +497,7 @@ describe('SandboxedPluginManager', () => {
       expect(deleted).toHaveLength(2);
       expect(deleted[0]).toContain('plugins-draft');
       expect(deleted[0]).toContain('com-alice-sketch');
-      expect(deleted[1]).toBe('/fake/userData/plugin-media/com-alice-sketch');
+      expect(deleted[1]).toBe(path.join('/fake/userData', 'plugin-media', 'com-alice-sketch'));
       for (const dir of deleted) {
         expect(dir).not.toMatch(/userData[/\\]plugins[/\\]/);
       }
