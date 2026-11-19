@@ -11,8 +11,8 @@ above: in 0.x, a minor bump can carry breaking changes.
 
 Agents can now write plugins, under a person's eye, and the plugin platform
 grew the pieces a messaging bridge needs. The database schema moves from v78
-to v82; **LAN sync peers must all run this version** — the sync handshake does
-not yet compare schema versions, and `channels` gained columns.
+to v82; **LAN sync peers must all run this version** — devices on different
+schema versions refuse to sync until the older one is updated.
 
 ### Added
 
